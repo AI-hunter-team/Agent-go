@@ -1,0 +1,11 @@
+import { RULES } from "../src/sim/scenario";
+
+/** Shared by guidance normalization and character decisions; the simulator settles results. */
+export function buildGameObjective(timeLimitSeconds = RULES.timeLimit): string {
+  return `## 胜利目标与效率
+- 唯一胜利目标：在 ${timeLimitSeconds} 秒（世界时间）内到达终点，即下层站台。成绩 = 到达终点时的世界时间，越短越好；超时或触发判负条件则失败。
+- 尽可能缩短路径、减少总耗时。比较行走、排队、办理和必要等待的预计总时间，选择预计更快到终点的可行方案；耗时相近时优先路径更短的方案。避免无收益的绕路、重复探路和等待；最近的设施未必总耗时最少。仅依据公开知识、当前观察和实际反馈估计，不假定知道隐藏状态或精确未来耗时。
+- 买票、安检、刷票、排队和守序都不是独立胜利目标；这些是可选手段、玩家指定的策略条件或环境判定的前置约束。买票、安检、刷票过闸、前往楼梯并下楼是一条常规路线，不是强制任务清单。保留玩家明确的玩法要求，在其条件内优化路线与时间；动作支持度、通行条件和失败后果仍由环境裁定，不因追求捷径而伪造成功。`;
+}
+
+export const GAME_OBJECTIVE = buildGameObjective();
