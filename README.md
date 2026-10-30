@@ -59,6 +59,8 @@ npm run build
 
 `npm run build` 生成 `dist/` 静态前端。模型 API 是独立 Node 进程，静态前端发布不会自动包含 API；本版先用于本机验证，不作为公网服务直接部署。
 
+[GitHub Actions CI](.github/workflows/ci.yml) 在指向 `main` 的 PR、`main` 更新及手动触发时，使用 Node.js 24 在 Ubuntu/Windows 上执行锁定安装、类型检查、测试和构建；不调用真实模型或部署。运行结果以 Actions 为准，平台分支保护需另行核实。
+
 ## 已实现
 
 - React + TypeScript + Vite，Canvas 2D 地图；Express 模型代理。
