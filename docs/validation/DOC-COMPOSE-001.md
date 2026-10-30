@@ -5,7 +5,7 @@
 ## 版本与范围
 
 - [任务简报](../tasks/DOC-COMPOSE-001.md)；执行：本次 Codex 会话，2026-10-30（Asia/Shanghai）。
-- 基线 `main` / `e8efed5e66e4a63ca1a1e867166f04b76c3ac2f9`，分支 `codex/docs-compose-guide`，验证时为提交前工作区。
+- 基线 `main` / `e8efed5e66e4a63ca1a1e867166f04b76c3ac2f9`，分支 `codex/docs-compose-guide`；初始文档实现提交 `240346dc748a7fd6dd648b8ff9359529a209293c`。本报告后续补记 PR 及 GitHub 分支渲染检查，不改教程内容。
 - 仅修改 `README.md`，新增 `docs/DOCKER.md` 及本任务的简报和验证报告；未改任何业务代码、构建配置、依赖或工作流。
 - 教程逐项核对的部署实现来自 `66d7ede44f8824bb99326998a51fd98b1e644c6c`：Compose 环境变量、端口、网关映射、生产 Dockerfile 和 API 配置 UI。
 
@@ -19,12 +19,13 @@
 | diff 检查 | `git diff --check` 与暂存后的 `git diff --cached --check` 均通过 |
 | 本地 npm/业务测试 | 跳过：纯文档，不改程序/依赖/工作流，按开发流程不要求重跑 |
 | 真实 Docker/模型 | 本次未运行；教程只引用 PR #5 已存在的实际 CI，明确其版本及限制 |
+| GitHub 分支文档 | 通过 GitHub Contents API 的 HTML 响应核实 README 的教程入口及完整教程各章节已渲染；核实 PR #6 目标为 main、仅有预期四个文档文件 |
 | GitHub 发布后页面 | 待 main 上的 README 入口与完整教程实际可见后核验，不提前声称已发布 |
 
 ## 结论与交接
 
 - 实现完成：教程及首页入口已整理；软件检查范围：文档、命令、链接及 diff。
 - 实际验收：本次检查 GitHub 文档，不新增容器/真实模型验收结论。
-- 已合入：未合入，按用户要求提交 PR 供审核；默认首页需待用户审核合并后才会更新。人工审查未进行，不编造审核批准。
+- 已合入：未合入，已按用户要求提交 [PR #6](https://github.com/AI-hunter-team/Agent-go/pull/6) 供审核；默认首页需待用户审核合并后才会更新。人工审查未进行，不编造审核批准。远端自动 CI 的实时状态见 [PR Checks](https://github.com/AI-hunter-team/Agent-go/pull/6/checks)。
 - 用户本轮要求修正 GitHub 首页教程；只提交这 4 个文档文件，功能 PR #1 保持独立。后续 #1 合并时需要将教程中的临时部署分支说明同步为正式 main 入口。
 - 回退：撤回本任务文档提交，无代码、模型状态或数据库影响。
