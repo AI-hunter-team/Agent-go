@@ -25,7 +25,7 @@ MVP 必须证明（方案 1.1 第十一章）：
 | 前端 | Vite + React 18 | 面板与报告用 React；地图用 Canvas 2D 绘制 |
 | 模拟 | 纯 TS 模块，运行在浏览器 | 无 DOM 依赖，可在 Node/Vitest 中独立测试 |
 | 后端 | Node 20+，Express | 只做模型代理与会话记忆；API Key 只存在服务端 |
-| 模型 | Anthropic SDK `@anthropic-ai/sdk`，默认 `claude-opus-5-5` | 通过 `AGENT_MODEL` 环境变量可替换；服务端保留 Provider 接口，后续可接其他模型做对比 |
+| 模型 | 兼容 OpenAI 的 Chat Completions（模板默认 `gpt-6-luna`）；保留 Anthropic SDK | `AGENT_PROVIDER` 选择协议，`AGENT_MODEL` 选择模型，`OPENAI_BASE_URL` 配置兼容接口 |
 | 测试 | Vitest | 模拟器规则、确定性、离线 Agent 通关 |
 | 运行 | `npm run dev` 同时启动 Vite(5173) 与 API(8787)，Vite 代理 `/api` | |
 
@@ -44,7 +44,7 @@ MVP 必须证明（方案 1.1 第十一章）：
                              │ HTTP JSON
 ┌──────────────── Node 服务 (server/) ───────────────────┐
 │ /api/guidance/normalize  指导整理（赛前一次）           │
-│ /api/agent/decide        单次决策（≤1024 token）        │
+│ /api/agent/decide        单次决策（思考预算 1024 token） │
 │ /api/creative/classify   创造性意图归类（封闭清单）     │
 │ /api/session/:id DELETE  局后清空局内记忆               │
 │ SessionStore（内存）：system 提示词 + 本局消息历史       │
@@ -179,17 +179,27 @@ docs/           产品/技术方案、导航/开发流程、路线图/工作记�
 
 - 触发决策 ⇒ GameRunner 停止调用 `step()`，界面显示“思考中”；收到有效动作后恢复。
 - 新决策返回后：若是新动作则替换当前动作；若模型认为维持现状，可调用 `wait` 或 `join_queue` 当前队伍（视为保持）。
-- **单次决策 ≤ 1024 token（方案 1.1）**：请求参数 `max_tokens: 1024`。在 Opus 5.5 上思考不能关闭、也不接受 `budget_tokens`，`max_tokens` 是唯一的硬上限，它覆盖“思考 + 说明 + 工具调用”的全部输出，因此思考链必然 ≤ 1024 token。同时设置 `output_config.effort: "low"` 让模型倾向简短思考。
-- 若 `stop_reason == "max_tokens"` 且未产生工具调用，算一次决策失败。
+- **单次思考预算 ≤ 1024 token（方案 1.1）**：`DECISION_THINKING_TOKENS` 只针对思考，工具与说明另计。`DECISION_MAX_TOKENS` 默认 4096，作为独立的总输出保护值；不再以总输出 1024 代替思考预算。
+- Luna 兼容协议和保留的 Anthropic adaptive 路径使用 low 强度、提示中的数值预算及返回的思考用量检查。思考超限则动作不执行；未返回明细则保留未知。此检查发生在响应后，不能保证供应商生成时不超过预算，也不能阻止已产生的超限计费。
+- Anthropic 的 `stop_reason == "max_tokens"` 或兼容 API 的 `finish_reason == "length"` 都视为截断，动作不执行。
 - 决策失败处理：同一触发重试 1 次（追加“请直接调用一个工具”的提示）；仍失败则执行保底动作 `wait 2s` 并记入复盘；连续 3 次失败 ⇒ 本局终止（模型不可用）。
 - 单局决策上限 60 次（MVP 取值）。用尽后不再调用模型，当前动作继续执行到底，空闲则原地等待（复盘中注明）。
 
 ### 7.4 模型调用细节（服务端）
 
+`server/llm.ts` 按环境配置选择协议，实现共同的 `LlmService`。兼容 API 模式由 `server/openai.ts` 使用服务端原生 `fetch` 调用 `${OPENAI_BASE_URL}/chat/completions`，不引入额外 SDK。所有模型请求超时 20 秒，无传输层自动重试。
+
+- Luna 强制 `tool_choice: "required"`、`parallel_tool_calls: false`，并在应用侧再次检查恰好一个工具及合法参数。多个调用全部拒绝，下一轮仍逐一回答其工具 ID，避免破坏会话协议。
+- `max_completion_tokens` 默认 4096，限制总输出，独立于 1024 思考预算；输入/输出、缓存命中及推理 token 明细按接口 `usage` 记录。缺少明细时保留未知，不伪造思考摘要。完整思考总数只在所有决策均有明细时显示。
+- 指导整理与意图分类使用 `response_format.json_schema`、`strict: true`，并校验必需字段。应用侧不发起模型切换，响应模型名写入日志。
+- API Key 仅从服务端 `.env` 读取，错误信息会遮蔽该密钥；不允许鉴权请求跟随重定向。
+
+保留的 Anthropic 调用方式：
+
 ```ts
 client.beta.messages.create({
   model: AGENT_MODEL,                    // 默认 claude-opus-5-5
-  max_tokens: 1024,                      // 单次决策硬上限
+  max_tokens: 4096,                      // 总输出保护值，思考预算单独为 1024
   thinking: { type: "adaptive", display: "summarized" },
   output_config: { effort: "low" },
   system: [...固定规则与地图, ...整理后的玩家指导],   // 带 cache_control，跨决策复用缓存
@@ -274,10 +284,13 @@ GET  /api/health                                            → { llm: boolean, 
 `.env`（不入库，提供 `.env.example`）：
 
 ```
-ANTHROPIC_API_KEY=
-AGENT_MODEL=claude-opus-5-5
-DECISION_MAX_TOKENS=1024
-AGENT_FALLBACK=default   # off 关闭服务端拒答兜底
+AGENT_PROVIDER=openai
+OPENAI_BASE_URL=https://lax.toklens.ai/v1
+OPENAI_API_KEY=
+AGENT_MODEL=gpt-6-luna
+DECISION_THINKING_TOKENS=1024
+DECISION_MAX_TOKENS=4096
+AGENT_FALLBACK=off
 PORT=8787
 ```
 
@@ -285,7 +298,7 @@ PORT=8787
 
 | 风险 | 应对 |
 |---|---|
-| 1024 token 内模型未给出工具调用 | effort low + 提示“先行动后解释” + 重试 1 次 + 保底动作 |
+| 思考超预算或总输出截断 | effort low + 思考预算提示及 usage 检查 + 重试 1 次 + 保底动作；接口没有独立数值硬上限时不能保证生成长度 |
 | 每次决策现实等待数秒 | 思考中显示状态与思考摘要；system 提示词做缓存 |
 | 创造性归类不一致 | 封闭枚举 + 结构化输出；离线关键词兜底 |
 | 参数手感 | 所有数值集中在 `scenario.ts`，便于调参 |
@@ -300,7 +313,7 @@ PORT=8787
 
 - 队列、设施、移动合并在 `src/sim/world.ts`，没有单独的 queues.ts。
 - `src/agent/runner.ts` 负责暂停、预算、重试和报告；没有额外的报告模型调用。
-- 模型层为 `server/claude.ts`（局内决策）与 `server/structured.ts`（赛前整理/意图归类）；模型参数配置在前者。
+- 模型入口为 `server/llm.ts`；`server/openai.ts` 实现兼容 API，`server/claude.ts` 与 `server/structured.ts` 保留 Anthropic 支持并共享工具和结构化协议。
 - 会话创建接口是 `POST /api/session { guidance, normalized }`；不接受客户端自定义世界规则作为 system 提示词。
 - 创造性归类接口是 `POST /api/creative/classify { intent, observation }`。
 - 导航图按节点可直达关系构造可见性边，使用 Dijkstra；程序只选几何路径，不选择策略目的地。
@@ -318,12 +331,12 @@ PORT=8787
 
 ### 模型预算与错误处理
 
-- `max_tokens <= 1024` 限制每次角色决策请求的全部输出，不只是可见说明；这比单独限制思考更严格，可能更容易截断。
-- 同一决策机会允许一次重试，两次请求分别受 1024 限制；累计用量包含二者。每局上限 60 个决策机会，最多 120 次角色决策请求（SDK 自动重试已关闭）。
+- 思考预算默认为 1024，总输出保护值默认为 4096，分别配置；不把工具输出算进思考额度。服务端检查已报告的思考用量，未知时明确保留未知，不宣称硬上限已经验证。
+- 同一决策机会允许一次重试，两次请求分别检查思考预算；累计用量包含二者。每局上限 60 个决策机会，最多 120 次角色决策请求（传输层不自动重试）。
 - 三次连续决策失败终止本局，无成绩，但这属于技术失败，不等同于角色违规死亡。
 - API SDK 超时 20 秒，浏览器请求超时 30 秒。终止对局立即结束前端对局并清理会话，迟到动作不执行；已经发给供应商的请求未必立即取消或免于计费。
 - 赛前整理允许 4096 输出 token；环境意图归类独立请求允许 1024。报告的 token 累计只覆盖局内角色决策，不包含这两类辅助调用，也不提供金额账单。
-- 拒答回退默认开启，实际模型记录在日志里。做严格模型比较应关闭回退；服务端回退内部的用量以供应商 usage/账单为准。
+- 当前 Luna 模板关闭模型回退；Anthropic 可显式开启拒答回退。模型名按接口响应记录，供应商内部路由不能由本应用独立验证。
 - 复盘仅显示模型返回的简短说明或摘要，不要求输出私有的完整思考链。
 
 ### 交付限制
@@ -332,7 +345,7 @@ PORT=8787
 - 报告支持 JSON 导出、轨迹和同种子再运行，但不是存档式逐帧回放；刷新页面会丢失未导出的报告。
 - 种子固定初始条件和随机序列；不同动作会影响队伍及事件消费顺序，不保证所有后续状态完全一样。
 - 本地可信客户端执行模拟；Express 监听 127.0.0.1。未实现账号、鉴权、计费限流、竞技防作弊或公网部署加固，不应直接开放到公网。
-- 真实模型整局未测试，因此默认模型能否在 1024 token 下稳定给出有效动作、不同自然语言指导的行为差异与实际费用仍待真实接口验收。
+- Luna 真实整局测试通过 `npm run test:model` 单独执行，结果见验收记录与 `docs/model-tests/`。有限样本不能证明所有种子和指导稳定通过，金额仍以供应商账单为准。
 
 ## 15. 浏览器三维展示升级（3D-MIG-001）
 

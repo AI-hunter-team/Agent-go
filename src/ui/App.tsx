@@ -1,6 +1,8 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { HeuristicAgent } from "../agent/heuristicAgent";
-import { Api, RemoteAgent, offlineClassifier, remoteClassifier } from "../agent/remoteAgent";
+import { Api, RemoteAgent, offlineClassifier } from "../agent/remoteAgent";
+import type { OperationDebug } from "../shared/debug";
+import { ModelConfigPanel } from "./ModelConfigPanel";
 import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS, RULES } from "../sim/scenario";
@@ -35,6 +37,8 @@ export function App() {
   const session = useGameSession();
   const [health, setHealth] = useState<{ llm: boolean; model: string | null }>({ llm: false, model: null });
   const [agentKind, setAgentKind] = useState<AgentChoice>("offline");
+  const [showModelConfig, setShowModelConfig] = useState(false);
+  const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
   const [seed, setSeed] = useState(1);
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
@@ -86,10 +90,14 @@ export function App() {
     if (busy) return;
     const request = ++requests.current;
     setError(null); setBusy("正在整理指导…");
+    const runId = crypto.randomUUID();
+    preparationRef.current = null;
     try {
-      const result = agentKind === "llm" && guidance.trim() ? (await Api.normalize(guidance)).guidance : null;
+      const started = performance.now();
+      const result = agentKind === "llm" && guidance.trim() ? await Api.normalize(guidance, runId) : null;
       if (request !== requests.current) return;
-      setNormalized(result); setIntent("confirm");
+      if (result) preparationRef.current = { runId, durationMs: performance.now() - started, server: result.debug ?? null };
+      setNormalized(result?.guidance ?? null); setIntent("confirm");
     } catch (failure) { if (request === requests.current) setError(`整理指导失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
@@ -97,15 +105,23 @@ export function App() {
     if (busy) return;
     const request = ++requests.current;
     setError(null); setBusy("正在开局…");
+    const preparation = preparationRef.current;
+    const runId = preparation?.runId ?? crypto.randomUUID();
     try {
-      const agent = agentKind === "llm" ? await RemoteAgent.create(guidance, normalized) : new HeuristicAgent();
+      const agent = agentKind === "llm" ? await RemoteAgent.create(guidance, normalized, runId) : new HeuristicAgent();
       if (request !== requests.current) { await agent.dispose(); return; }
-      session.start(agent, agentKind === "llm" ? remoteClassifier : offlineClassifier, { guidance: agentKind === "llm" ? guidance : "", normalizedGuidance: agentKind === "llm" ? normalized : null });
+      session.start(agent, agent instanceof RemoteAgent ? agent.classify : offlineClassifier, {
+        runId,
+        preparation: agentKind === "llm" && preparation ? { durationMs: preparation.durationMs, server: preparation.server } : undefined,
+        guidance: agentKind === "llm" ? guidance : "",
+        normalizedGuidance: agentKind === "llm" ? normalized : null,
+      });
+      preparationRef.current = null;
       setIntent("playing"); setCamera((value) => ({ mode: "follow", reset: value.reset + 1 }));
     } catch (failure) { if (request === requests.current) setError(`开局失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
-  const edit = () => { requests.current++; setIntent("setup"); setError(null); session.preview(seed); };
+  const edit = () => { requests.current++; preparationRef.current = null; setIntent("setup"); setError(null); session.preview(seed); };
   const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
   const applyAsset = (path: string) => {
     if (path && (!path.startsWith("/models/") || path.includes("..") || !/\.(gltf|glb)$/i.test(path))) { setAssetError("请输入 /models/ 下的 .glb 或 .gltf 文件路径。"); return; }
@@ -149,7 +165,13 @@ export function App() {
         <div className={styles.ticketHeading}><span>METRO / JOURNEY</span><span>NO. {String(seed).padStart(4, "0")}</span></div>
         <div className={styles.sidebarBody}>
           {error && <div className="error" role="alert">{error}</div>}
-          {intent === "setup" && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} />}
+          {intent === "setup" && showModelConfig && <ModelConfigPanel health={health} onClose={() => setShowModelConfig(false)} onEnabled={(value) => {
+            setHealth(value);
+            setAgentKind(value.llm ? "llm" : "offline");
+            preparationRef.current = null;
+            setError(null);
+          }} />}
+          {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
           {intent === "confirm" && <section className="card"><span className={styles.eyebrow}>READY TO DEPART</span><h2>确认这次出发</h2><p className="muted">{agentKind === "llm" ? "角色将依据以下指导自主行动。" : "离线规则 Agent 按默认守序方案行动。"}</p><GuidanceCard guidance={agentKind === "llm" ? guidance : ""} normalized={normalized} /><div className="row"><button className="primary" disabled={busy !== null} onClick={start}>{busy ?? "出发"} <span aria-hidden="true">→</span></button><button className="ghost" disabled={busy !== null} onClick={() => setIntent("setup")}>返回修改</button></div></section>}
           {intent === "playing" && runner && <>
             <section className={styles.runHeading}><span className={styles.eyebrow}>本次行程 / {agentKind === "llm" ? "大模型" : "离线规则"}</span><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {RULES.timeLimit}s</span></div><div className={styles.steps}>{[[player.hasTicket, "01", "购票"], [player.screened, "02", "安检"], [player.onPlatform, "03", "过闸"]].map(([done, number, name]) => <div key={String(number)} className={done ? styles.stepDone : ""}><span>{done ? "✓" : number}</span>{name}</div>)}</div></section>

@@ -8,12 +8,14 @@
 .agents/
 
 # Runtime and generated outputs
-node_modules/
+node_modules
 dist/
 build/
 .next/
 coverage/
 *.log
+logs/
+*.jsonl
 tmp/
 temp/
 

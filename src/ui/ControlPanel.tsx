@@ -14,6 +14,7 @@ interface SetupProps {
   onGuidance: (g: string) => void;
   busy: string | null;
   onPrepare: () => void;
+  onConfigureModel: () => void;
 }
 
 export function SetupPanel(p: SetupProps) {
@@ -36,7 +37,10 @@ export function SetupPanel(p: SetupProps) {
             离线规则 Agent
           </button>
         </div>
-        {!p.llmAvailable && <small className="muted">模型服务暂不可用，当前可使用离线规则 Agent 体验。</small>}
+        <div className="row between">
+          <small className="muted">{p.llmAvailable ? "模型已就绪，可更换接口和模型。" : "配置你自己的 API，验证后即可开启大模型。"}</small>
+          <button className="ghost" onClick={p.onConfigureModel}>模型 API 配置</button>
+        </div>
       </div>
 
       <label className="field">

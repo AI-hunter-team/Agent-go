@@ -53,3 +53,25 @@ p { margin: 10px 0; line-height: 1.8; }
 .tooltip { background: var(--ink); color: var(--card); font-size: 10px; line-height: 1.7; padding: 7px 11px; max-width: 220px; z-index: 120; }.tooltip svg { fill: var(--ink); }
 html:has([data-reduced-motion=true]) *, html:has([data-reduced-motion=true]) *::before, html:has([data-reduced-motion=true]) *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; scroll-behavior: auto !important; } }
+
+.model-config { overflow-wrap: anywhere; }
+.model-config h2 { margin: 0; }
+.model-config .field > label { font-weight: 600; }
+.model-config fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.model-config input, .model-config select { width: 100%; min-width: 0; }
+.model-config select { text-overflow: ellipsis; }
+.key-input { display: flex; gap: 8px; }
+.key-input input { flex: 1; }
+.key-input button { flex-shrink: 0; }
+.config-steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 16px 0; font-size: 12px; }
+.config-steps li { flex: 1; padding: 8px 4px; border-bottom: 2px solid var(--line); color: var(--ink-soft); text-align: center; }
+.config-steps li.on { border-color: var(--green); color: #2f4a36; }
+.config-status { color: #2f4a36; font-size: 13px; }
+.config-model-selection { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.config-success { background: #e3ebe4; border: 1px solid var(--green); border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 13px; color: #2f4a36; }
+
+.debug-panel { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; font-size: 12px; }
+.debug-panel summary { cursor: pointer; padding: 6px 0; overflow-wrap: anywhere; }
+.debug-panel table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.debug-panel th, .debug-panel td { text-align: left; border-bottom: 1px solid var(--line); padding: 5px; }
+.debug-panel pre { max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--paper); padding: 8px; }
