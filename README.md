@@ -96,7 +96,7 @@ Copy-Item .env.example .env
 
 - 模板默认 `AGENT_PROVIDER=openai`、`OPENAI_BASE_URL=https://lax.toklens.ai/v1`、`AGENT_MODEL=gpt-6-luna`，使用兼容 OpenAI 的 Chat Completions 协议，由 Node 服务端发出请求。
 - Luna 默认使用 `reasoning_effort=none` 降低生成等待，其他兼容模型默认 `low`；可用 `OPENAI_REASONING_EFFORT=low` 恢复更多推理。兼容接口默认通过 HTTP SSE 流式接收（`OPENAI_STREAM=0` 可关闭），强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
-- 流式接收不等于提前执行：服务端等完整动作、结束标记和最终用量返回后才校验并交给模拟器；浏览器仍通过 HTTP JSON 获取完整决策。首段数据时间与完整动作等待分别记录，换成 WebSocket 不保证降低上游排队或生成耗时。当前 `gpt-6-luna` 的 `none` 已在配置的兼容接口做小请求与完整对局验证；复杂策略质量、上游偶发空响应及稳定时延仍需独立验收，详见 [LLM-LATENCY-001](docs/validation/LLM-LATENCY-001.md)。
+- 流式接收不等于提前执行：服务端等完整动作与结束标记、完成流聚合后才校验并交给模拟器；末尾用量会保留，缺失用量记为未知；浏览器仍通过 HTTP JSON 获取完整决策。首段数据时间与完整动作等待分别记录，换成 WebSocket 不保证降低上游排队或生成耗时。当前 `gpt-6-luna` 的 `none` 已在配置的兼容接口做小请求与完整对局验证；复杂策略质量、上游偶发空响应及稳定时延仍需独立验收，详见 [LLM-LATENCY-001](docs/validation/LLM-LATENCY-001.md)。
 - 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
 - 使用 Anthropic 时设置 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_API_KEY`、`AGENT_MODEL=claude-opus-5-5`；也支持 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL` 与 `AGENT_FORCE_LLM=1`。
 - `GET /api/health` 只检查凭据是否配置，**不代表额度、认证或模型可用性已验证**。

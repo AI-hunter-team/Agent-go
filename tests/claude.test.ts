@@ -148,6 +148,15 @@ describe("conversation memory", () => {
 });
 
 describe("prompts and tools", () => {
+  test.each(["", "先去南侧售票机观察"])("opening route is autonomous with guidance %j", (guidance) => {
+    const { rules } = buildSystemPrompt(guidance, null);
+    expect(rules).toContain("从入口的第一步起");
+    expect(rules).toContain("导航点是可选目的地");
+    expect(rules).toContain("facilities 为空");
+    expect(rules).toContain("join_queue 直接前往设施队尾");
+    expect(rules).toContain("视野外的实时信息仍然未知");
+  });
+
   test("explicit player strategies are not overridden by the default orderly route", () => {
     const custom = buildSystemPrompt("先安检，再尝试翻闸机", null);
     expect(custom.rules).not.toContain("## 系统默认指导");
