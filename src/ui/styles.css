@@ -22,7 +22,8 @@ body {
 }
 
 .app {
-  min-width: 1360px;
+  max-width: 1600px;
+  margin: 0 auto;
   padding: 16px 20px 32px;
 }
 
@@ -112,11 +113,15 @@ main {
 }
 
 .stage {
-  flex: none;
+  flex: 1;
+  min-width: 0;
 }
 
 .map {
   display: block;
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 2 / 1;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #f4efe4;
@@ -542,4 +547,16 @@ details summary {
 
 .row.between {
   justify-content: space-between;
+}
+
+@media (max-width: 1100px) {
+  main { flex-direction: column; }
+  .stage, aside { width: 100%; max-width: none; min-width: 0; }
+  header { flex-wrap: wrap; }
+  .status { flex-wrap: wrap; }
+}
+@media (max-width: 560px) {
+  .app { padding: 12px; }
+  .status { gap: 6px; }
+  .segmented { flex-wrap: wrap; }
 }
