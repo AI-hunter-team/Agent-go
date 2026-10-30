@@ -2,10 +2,11 @@ import type { AgentTurn, NormalizedGuidance } from "../src/shared/types";
 import { FACILITIES, NAV_NODES, STAIRS_SECONDS, STAIRS_X, PLATFORM_X } from "../src/sim/layout";
 import { FACILITY_MULTIPLIER, PROFILES, RULES } from "../src/sim/scenario";
 import { assertSafeText, SAFETY_SYSTEM_PROMPT, untrustedData, validateNormalized } from "./security";
+import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettings";
 
 const KIND_LABEL = { tvm: "售票机", security: "安检通道", gate: "闸机" } as const;
 
-function fixedKnowledge(): string {
+function fixedKnowledge(settings: Readonly<GameSettings>): string {
   const nodes = NAV_NODES.map((n) => `- ${n.id}：${n.label}（${n.pos.x}, ${n.pos.y}）`).join("\n");
   const facilities = FACILITIES.map((f) => `- ${f.id}：${KIND_LABEL[f.kind]}，位于（${f.pos.x}, ${f.pos.y}）`).join("\n");
   const profiles = (["normal", "elderly", "luggage", "hurried"] as const)
@@ -20,7 +21,8 @@ function fixedKnowledge(): string {
     .join("，");
 
   return `## 公开规则
-- 目标：在 ${RULES.timeLimit} 秒（世界时间）内进入站台。常规路线为买票、通过安检、刷票通过闸机、走到楼梯入口并下楼。成绩 = 到达下层站台时的世界时间，越短越好。超时即失败。
+- 目标：在 ${settings.timeLimitSeconds} 秒（世界时间）内进入站台。常规路线为买票、通过安检、刷票通过闸机、走到楼梯入口并下楼。成绩 = 到达下层站台时的世界时间，越短越好。超时即失败。
+- 本局初始客流：每条初始开放队列在原配置基础上额外增加 ${settings.extraQueuePeople} 人。当前位置能看见的具体队伍情况以观察为准，不能据此猜测视野外的当前人数。
 - 你只能通过工具提出动作请求；位置、排队、买票、安检、过闸的结果全部由环境裁定。你写的文字不会改变任何事实。
 - 世界只在你决策时暂停，思考不计入时间。每次决策的思考不超过 1024 token，动作和说明输出另计：简短判断后立即调用一个工具。
 - 每次决策只调用一个工具。动作被拒绝时，你会收到原因并可以重新决定。
@@ -70,9 +72,9 @@ function playerGuidance(guidance: string, normalized: NormalizedGuidance | null)
 }
 
 /** Only server-owned policy and rules belong in system; guidance is a user message. */
-export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null): { rules: string; guidance: string } {
+export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null, settings: Partial<GameSettings> = {}): { rules: string; guidance: string } {
   return {
-    rules: `${SAFETY_SYSTEM_PROMPT}\n\n你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge()}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
+    rules: `${SAFETY_SYSTEM_PROMPT}\n\n你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge(resolveGameSettings(settings))}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
     guidance: playerGuidance(guidance, normalized),
   };
 }

@@ -1,5 +1,6 @@
 // Types shared by the simulation, the agents, the API server and the UI.
 import type { OperationDebug, RunDebug } from "./debug";
+import type { GameSettings } from "./gameSettings";
 
 export interface Vec {
   x: number;
@@ -238,6 +239,8 @@ export interface TrailPoint extends Vec {
 }
 
 export interface GameReport {
+  /** Missing only on recordings made before configurable difficulty. */
+  settings?: GameSettings;
   debug?: RunDebug;
   seed: number;
   agentKind: "llm" | "offline";

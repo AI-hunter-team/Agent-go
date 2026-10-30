@@ -27,6 +27,13 @@ function fake(responses: unknown[]) {
 }
 
 describe("OpenAI-compatible model", () => {
+  test("configured model receives the same custom deadline and crowd settings as the simulation", async () => {
+    const settings = { timeLimitSeconds: 90, extraQueuePeople: 3 };
+    const { service, requests } = fake([completion()]);
+    await service.decide(new SessionStore().create("", null, undefined, settings), { ...turn(), observation: new Engine(1, settings).observe() });
+    expect(requests[0].body.messages[0].content).toContain("90 秒（世界时间）");
+    expect(requests[0].body.messages[0].content).toContain("额外增加 3 人");
+  });
   test("uses the configured endpoint, one required tool and a total completion cap", async () => {
     const { service, requests } = fake([completion()]);
     const result = await service.decide(new SessionStore().create("", null), turn());

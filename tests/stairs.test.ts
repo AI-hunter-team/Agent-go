@@ -15,6 +15,7 @@ describe("stairs after the gate", () => {
     const e = new Engine(1);
     Object.assign(e.player, { hasTicket: true, screened: true, pos: { x: 43.4, y: 15 } });
     const gate = e.world.facility("G3")!;
+    e.world.setStatus("G3", "open", null);
     gate.serving = { personId: "player", remaining: 0.1, recheck: false };
     e.player.activity = { kind: "service", facility: "G3" };
     e.step();

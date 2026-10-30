@@ -92,7 +92,7 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       passedGate: p.passedGate,
       queue: q ? { facility: q.facility.def.id, position: q.index + 1, length: q.facility.queue.length } : null,
       elapsed: round1(world.t),
-      timeLeft: round1(Math.max(0, RULES.timeLimit - world.t)),
+      timeLeft: round1(Math.max(0, world.timeLimitSeconds - world.t)),
     },
     facilities: visibleFacilities(world, p.pos).map((f) => observeFacility(world, f, p.pos)),
     guards: guards.guards

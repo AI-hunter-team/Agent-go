@@ -148,6 +148,15 @@ describe("conversation memory", () => {
 });
 
 describe("prompts and tools", () => {
+  test("decision requests use the frozen game difficulty rather than the default deadline", async () => {
+    const settings = { timeLimitSeconds: 90, extraQueuePeople: 3 };
+    const { client, calls } = fakeClient([{ content: [toolUse("custom-deadline", "wait", { seconds: 1, reason: "观察" })] as never }]);
+    const session = new SessionStore().create("", null, undefined, settings);
+    await new ClaudeDecider(client, cfg).decide(session, { ...turn(), observation: new Engine(1, settings).observe() });
+    const rules = (calls[0].system as { text: string }[])[0].text;
+    expect(rules).toContain("90 秒（世界时间）");
+    expect(rules).toContain("额外增加 3 人");
+  });
   test("explicit player strategies are not overridden by the default orderly route", () => {
     const custom = buildSystemPrompt("先安检，再尝试翻闸机", null);
     expect(custom.rules).not.toContain("## 系统默认指导");

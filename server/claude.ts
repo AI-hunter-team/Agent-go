@@ -58,7 +58,7 @@ export class ClaudeDecider {
     );
     session.pendingToolUseIds = [];
 
-    const prompt = buildSystemPrompt(session.guidance, session.normalized);
+    const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings);
     const started = Date.now();
     const fail = (error: string, extra: Partial<DecisionResult> = {}): DecisionResult => ({
       action: null,

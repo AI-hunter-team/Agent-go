@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { extname, resolve } from "node:path";
 import { configFromEnv } from "./claude";
 import { countChars, guidanceError } from "../src/shared/guidance";
+import { gameSettingsError } from "../src/shared/gameSettings";
 import type {
   AgentTurn,
   CreativeClassification,
@@ -122,16 +123,18 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
   );
 
   app.post("/api/session", wrap((req, res) => {
-    const { guidance = "", normalized = null } = req.body ?? {};
+    const { guidance = "", normalized = null, settings } = req.body ?? {};
     const err = guidanceError(guidance);
     if (err) return void res.status(400).json({ error: err });
     assertSafeText(guidance);
     validateNormalized(normalized);
+    const settingsError = gameSettingsError(settings);
+    if (settingsError) return void res.status(400).json({ error: settingsError });
     const binding = runtime(req);
-    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined);
+    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
-    void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, model: llm?.model ?? null, modelParameters, guidance, normalized });
+    void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });
     res.json({ sessionId: s.id });
   }));
 

@@ -1,5 +1,7 @@
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import { Rng } from "./rng";
+import { FACILITIES } from "./layout";
+import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
 // All tunable MVP numbers live here (docs/MVP技术方案.md §5). They are starting
 // values for playtesting, not confirmed product rules.
@@ -7,7 +9,7 @@ import { Rng } from "./rng";
 export const DT = 0.1;
 
 export const RULES = {
-  timeLimit: 180,
+  timeLimit: DEFAULT_GAME_SETTINGS.timeLimitSeconds,
   visionRange: 12,
   guardRange: 12,
   guardFovDeg: 110,
@@ -108,7 +110,8 @@ const INITIAL_QUEUES: { facility: string; kinds: NpcSpawn["kind"][] }[] = [
   { facility: "G4", kinds: ["elderly", "normal", "normal"] },
 ];
 
-export function buildScenario(seed: number): Scenario {
+export function buildScenario(seed: number, input: Partial<GameSettings> = {}): Scenario {
+  const settings = resolveGameSettings(input);
   const rng = new Rng(seed);
   const spawns: NpcSpawn[] = [];
 
@@ -127,9 +130,18 @@ export function buildScenario(seed: number): Scenario {
     t += rng.range(2, 5);
   }
 
+  const initialStatus: Record<string, FacilityStatus> = { G3: "broken" };
+  const crowd = new Rng(seed ^ 0x4d43f9a1);
+  for (const f of FACILITIES) {
+    if (initialStatus[f.id] && initialStatus[f.id] !== "open") continue;
+    for (let i = 0; i < settings.extraQueuePeople; i++) {
+      spawns.push({ t: 0, kind: crowd.pick(kinds), hasCard: f.kind !== "tvm", irritable: crowd.chance(0.5), startQueue: f.id });
+    }
+  }
+
   return {
     seed,
-    initialStatus: { G3: "broken" },
+    initialStatus,
     spawns,
     events: [
       { t: 25, type: "status", facility: "TVM-1", status: "broken", note: "故障停用", broadcast: null },

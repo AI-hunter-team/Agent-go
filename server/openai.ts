@@ -95,7 +95,7 @@ export class OpenAILlmService implements LlmService {
     } else {
       session.chatMessages.push({ role: "user", content });
     }
-    const prompt = buildSystemPrompt(session.guidance, session.normalized);
+    const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings);
     try {
       const response = await this.client.complete({
         model: this.model,

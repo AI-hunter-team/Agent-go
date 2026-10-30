@@ -88,6 +88,17 @@ describe("API without a model", () => {
 });
 
 describe("API with a model", () => {
+  test("session stores validated difficulty and rejects invalid settings before creating a game", async () => {
+    const { call, sessions } = await start(fakeLlm);
+    const settings = { timeLimitSeconds: 90, extraQueuePeople: 3 };
+    for (const invalid of [{ ...settings, timeLimitSeconds: 10 }, { ...settings, extraQueuePeople: 99 }, { ...settings, grantTicket: true }, null]) {
+      expect((await call("POST", "/api/session", { guidance: "", settings: invalid })).status).toBe(400);
+    }
+    expect(sessions.size).toBe(0);
+    const result = await call("POST", "/api/session", { guidance: "", settings });
+    expect(result.status).toBe(200);
+    expect(sessions.get(result.body.sessionId)?.settings).toEqual(settings);
+  });
   test("blocks injected guidance, forged normalization, observations and intent before model calls", async () => {
     const llm = { ...fakeLlm, normalize: vi.fn(fakeLlm.normalize), decide: vi.fn(fakeLlm.decide), classify: vi.fn(fakeLlm.classify) };
     const { call, sessions } = await start(llm);
