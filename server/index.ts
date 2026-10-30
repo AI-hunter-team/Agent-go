@@ -1,8 +1,29 @@
 import "dotenv/config";
-import { createApp } from "./app";
+import Anthropic from "@anthropic-ai/sdk";
+import { createApp, type LlmService } from "./app";
+import { ClaudeDecider, configFromEnv } from "./claude";
 import { SessionStore } from "./sessions";
+import { classifyIntent, normalizeGuidance } from "./structured";
 
-const app = createApp({ llm: null, sessions: new SessionStore() });
+function createLlm(): LlmService | null {
+  const hasCredentials = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.AGENT_FORCE_LLM);
+  if (!hasCredentials) return null;
+  const client = new Anthropic();
+  const cfg = configFromEnv();
+  const decider = new ClaudeDecider(client, cfg);
+  return {
+    model: cfg.model,
+    decide: (session, turn) => decider.decide(session, turn),
+    normalize: (text) => normalizeGuidance(client, cfg, text),
+    classify: (intent, observation) => classifyIntent(client, cfg, intent, observation),
+  };
+}
+
+const llm = createLlm();
+const app = createApp({ llm, sessions: new SessionStore() });
 
 const port = Number(process.env.PORT ?? 8787);
-app.listen(port, () => console.log(`API listening on http://localhost:${port}`));
+app.listen(port, () => {
+  console.log(`API listening on http://localhost:${port}`);
+  console.log(llm ? `Model agent enabled: ${llm.model}` : "No model credentials: offline agent only");
+});
