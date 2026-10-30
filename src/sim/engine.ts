@@ -12,7 +12,7 @@ import type {
 import { CreativeSystem } from "./creative";
 import { GuardSystem } from "./guards";
 import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
-import { nodeById } from "./nav";
+import { findPath, nodeById } from "./nav";
 import { NpcDirector } from "./npc";
 import { buildObservation, visibleFacilities } from "./observation";
 import { DT, RULES, STATUS_LABEL, buildScenario } from "./scenario";
@@ -189,6 +189,7 @@ export class Engine {
       case "move_to": {
         const target = resolveTarget(action.target);
         if (!target) return { ok: false, text: `未知地点 ${action.target}。可用：${NAV_NODES.map((n) => n.id).join("、")}，或设施编号` };
+        if (!findPath(p.pos, target.pos)) return { ok: false, text: "目标不可步行到达，保留当前动作与队列位次" };
         const left = this.leaveIfQueued();
         const err = w.walkTo(p, target.pos, target.label);
         if (err) return { ok: false, text: left + err };
@@ -200,6 +201,7 @@ export class Engine {
         const current = w.queuePosition(p);
         if (current?.facility.def.id === action.facility) return { ok: true, text: `继续在 ${action.facility} 排队` };
         if (p.activity.kind === "to_queue" && p.activity.facility === action.facility) return { ok: true, text: `继续走向 ${action.facility} 队尾` };
+        if (!findPath(p.pos, queueSlot(f.def, f.queue.length))) return { ok: false, text: "目标队列不可步行到达，保留当前动作与队列位次" };
         const left = this.leaveIfQueued();
         const err = w.joinQueue(p, action.facility);
         if (err) return { ok: false, text: left + err };
@@ -207,6 +209,7 @@ export class Engine {
       }
       case "leave_queue": {
         const err = w.leaveQueue(p);
+        if (!err) this.notify("arrived", "已离队，可以选择下一步行动");
         return err ? { ok: false, text: err } : { ok: true, text: "已离开队伍" };
       }
       case "wait": {
@@ -239,7 +242,7 @@ function resolveTarget(id: string): { pos: Vec; label: string } | null {
   if (node) return { pos: node.pos, label: node.label };
   const f = FACILITIES.find((d) => d.id === id);
   if (f) {
-    const beside = queueSlot(f, 2);
+    const beside = queueSlot(f, f.kind === "gate" ? 0 : 2);
     return { pos: { x: beside.x, y: beside.y + 1.2 }, label: `${f.label}附近` };
   }
   return null;

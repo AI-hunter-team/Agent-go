@@ -63,3 +63,12 @@ describe("observation", () => {
     expect(summarizeObservation(buildObservation(world, guards))).not.toContain("\n");
   });
 });
+
+test("seeing a machine does not reveal passengers outside sight", () => {
+  const { world, guards } = worldWithPlayerAt(19, 15);
+  const hidden = world.addPerson("luggage", { x: 1, y: 1 });
+  world.facility("TVM-2")!.queue.push(hidden.id);
+  const view = buildObservation(world, guards).facilities.find((f) => f.id === "TVM-2")!;
+  expect(view.queue).not.toContain("携带大件行李");
+  expect(view.queueLength).toBe(4);
+});

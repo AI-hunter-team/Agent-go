@@ -32,6 +32,9 @@ function observeFacility(world: World, f: Facility, from: Vec): FacilityObservat
   const m = multiplierOf(f.def.id);
   const base = PROFILES.normal[f.def.kind];
   const serving = f.serving ? world.persons.get(f.serving.personId) : undefined;
+  const visibleQueue = f.queue.map((id) => world.persons.get(id)).filter(
+    (person): person is Person => Boolean(person && playerCanSee(from, person.pos)),
+  );
   return {
     id: f.def.id,
     kind: f.def.kind,
@@ -39,9 +42,9 @@ function observeFacility(world: World, f: Facility, from: Vec): FacilityObservat
     distance: round1(dist(from, f.def.head)),
     efficiency: efficiencyLabel(f.def.id),
     serviceRange: [round1(base[0] * m), round1(base[1] * m)],
-    queueLength: f.queue.length,
-    queue: f.queue.map((id) => traitOf(world.persons.get(id))),
-    serving: f.serving ? traitOf(serving) + (f.serving.recheck ? "（复检中）" : "") : null,
+    queueLength: visibleQueue.length,
+    queue: visibleQueue.map(traitOf),
+    serving: f.serving && serving && playerCanSee(from, serving.pos) ? traitOf(serving) + (f.serving.recheck ? "（复检中）" : "") : null,
     note: f.note,
   };
 }

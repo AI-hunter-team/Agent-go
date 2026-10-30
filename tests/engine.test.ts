@@ -123,3 +123,22 @@ describe("engine", () => {
     expect(e.player.activity.kind).toBe("service");
   });
 });
+
+test("leaving a queue triggers the next decision rather than idling until timeout", () => {
+  const e = new Engine(1);
+  const f = e.world.facility("TVM-2")!;
+  f.queue.push("player");
+  e.player.activity = { kind: "queued", facility: "TVM-2" };
+  e.takeTriggers();
+  expect(e.applyAction({ type: "leave_queue", reason: "" }).ok).toBe(true);
+  expect(e.takeTriggers().some((t) => t.kind === "arrived")).toBe(true);
+});
+
+test("an unreachable target does not silently discard a queue position", () => {
+  const e = new Engine(1);
+  const f = e.world.facility("TVM-2")!;
+  f.queue.push("player");
+  e.player.activity = { kind: "queued", facility: "TVM-2" };
+  expect(e.applyAction({ type: "join_queue", facility: "G1", reason: "" }).ok).toBe(false);
+  expect(f.queue).toContain("player");
+});
