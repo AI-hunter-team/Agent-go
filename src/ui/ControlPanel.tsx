@@ -14,6 +14,7 @@ interface SetupProps {
   onGuidance: (g: string) => void;
   busy: string | null;
   onPrepare: () => void;
+  onConfigureModel: () => void;
 }
 
 export function SetupPanel(p: SetupProps) {
@@ -26,7 +27,7 @@ export function SetupPanel(p: SetupProps) {
         目标：限时 180 秒内买票、安检、刷票过闸。成绩看过闸用时。角色进场后自主行动，你只能观看。
       </p>
 
-      <label className="field">
+      <div className="field">
         <span>角色由谁驱动</span>
         <div className="segmented">
           <button className={p.agentKind === "llm" ? "on" : ""} disabled={!p.llmAvailable} onClick={() => p.onAgentKind("llm")}>
@@ -36,8 +37,11 @@ export function SetupPanel(p: SetupProps) {
             离线规则 Agent
           </button>
         </div>
-        {!p.llmAvailable && <small className="muted">服务端未配置 ANTHROPIC_API_KEY，只能使用离线规则 Agent（非大模型）。</small>}
-      </label>
+        <div className="row between">
+          <small className="muted">{p.llmAvailable ? "模型已就绪，可更换接口和模型。" : "配置你自己的 API，验证后即可开启大模型。"}</small>
+          <button className="ghost" onClick={p.onConfigureModel}>模型 API 配置</button>
+        </div>
+      </div>
 
       <label className="field">
         <span>

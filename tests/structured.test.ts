@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, test } from "vitest";
 import { classifyIntent, normalizeGuidance } from "../server/structured";
 
-const cfg = { model: "claude-opus-5-5", maxTokens: 1024, fallback: false };
+const cfg = { model: "claude-opus-5-5", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false };
 
 function fakeClient(text: string, stop_reason = "end_turn") {
   const calls: Anthropic.Beta.MessageCreateParamsNonStreaming[] = [];

@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
 import type { NormalizedGuidance } from "../src/shared/types";
+import type { ChatMessage } from "./openai";
 
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
@@ -8,6 +9,7 @@ export interface Session {
   guidance: string;
   normalized: NormalizedGuidance | null;
   messages: Anthropic.Beta.BetaMessageParam[];
+  chatMessages: ChatMessage[];
   /** tool_use id from the last assistant turn that still needs a tool_result. */
   pendingToolUseId: string | null;
   lastUsed: number;
@@ -25,6 +27,7 @@ export class SessionStore {
       guidance,
       normalized,
       messages: [],
+      chatMessages: [],
       pendingToolUseId: null,
       lastUsed: Date.now(),
     };

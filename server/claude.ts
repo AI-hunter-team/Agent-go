@@ -4,22 +4,28 @@ import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
 import { AGENT_TOOLS, parseToolUse } from "./tools";
 
-/** Plan v1.1: one decision's thinking chain may not exceed 1024 tokens. */
-export const DECISION_TOKEN_CAP = 1024;
+/** Plan v1.1 limits reasoning only; action output has a separate budget. */
+export const THINKING_TOKEN_CAP = 1024;
+export const DEFAULT_OUTPUT_TOKENS = 4096;
 
 export interface ClaudeConfig {
   model: string;
-  /** Hard cap on one decision's output (thinking + tool call); never above DECISION_TOKEN_CAP. */
+  /** Total completion safety limit, separate from the reasoning allowance. */
   maxTokens: number;
+  /** Requested reasoning allowance; checked when the provider returns token details. */
+  maxThinkingTokens: number;
   /** Server-side refusal fallback ("default"), or off for strict single-model comparisons. */
   fallback: boolean;
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ClaudeConfig {
-  const requested = Number(env.DECISION_MAX_TOKENS ?? DECISION_TOKEN_CAP);
+  const requested = Number(env.DECISION_MAX_TOKENS ?? DEFAULT_OUTPUT_TOKENS);
+  const thinking = Number(env.DECISION_THINKING_TOKENS ?? THINKING_TOKEN_CAP);
+  const maxThinkingTokens = Math.min(THINKING_TOKEN_CAP, Number.isFinite(thinking) && thinking > 0 ? Math.floor(thinking) : THINKING_TOKEN_CAP);
   return {
     model: env.AGENT_MODEL || "claude-opus-5-5",
-    maxTokens: Math.min(DECISION_TOKEN_CAP, Number.isFinite(requested) && requested > 0 ? requested : DECISION_TOKEN_CAP),
+    maxTokens: Math.max(maxThinkingTokens + 1024, Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : DEFAULT_OUTPUT_TOKENS),
+    maxThinkingTokens,
     fallback: (env.AGENT_FALLBACK ?? "default") !== "off",
   };
 }
@@ -74,7 +80,7 @@ export class ClaudeDecider {
         cache_control: { type: "ephemeral" },
         system: [
           { type: "text", text: prompt.rules, cache_control: { type: "ephemeral" } },
-          { type: "text", text: prompt.guidance },
+          { type: "text", text: `${prompt.guidance}\n本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
         ],
         tools: AGENT_TOOLS,
         tool_choice: { type: "auto", disable_parallel_tool_use: true },
@@ -114,6 +120,9 @@ export class ClaudeDecider {
       return fail(why, result);
     }
     session.pendingToolUseId = toolUse.id;
+    if ((result.usage?.thinkingTokens ?? 0) > this.cfg.maxThinkingTokens) {
+      return fail(`思考用量 ${result.usage!.thinkingTokens} 超过 ${this.cfg.maxThinkingTokens} token，未执行`, result);
+    }
     if (response.stop_reason === "max_tokens") return fail("工具调用被截断，未执行", result);
     const parsed = parseToolUse(toolUse.name, toolUse.input);
     if ("error" in parsed) return fail(parsed.error, result);

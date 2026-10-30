@@ -73,7 +73,10 @@
 | 分开启动 | `npm run dev:web`、`npm run dev:api` | 后者带 watch；`npm run start:api` 单独启动 API，不带 watch |
 | 类型检查 | `npm run typecheck` | `tsc --noEmit`，覆盖范围见 [tsconfig.json](../tsconfig.json) |
 | 自动化测试 | `npm test` | `vitest run`，测试发现与 Node 环境由 Vite 配置定义 |
-| 静态前端构建 | `npm run build` | `tsc --noEmit && vite build`；不打包部署 Express API |
+| 完整生产构建 | `npm run build` | 类型检查后分别构建 `dist/` 与 `build/server.js`；不执行部署 |
+| 单独构建 | `npm run build:web`、`npm run build:server` | Vite 前端与 esbuild Node 24 服务；后者将第三方依赖保持为外部生产依赖 |
+| 编译后启动 | `npm start` | 运行 `build/server.js`；`NODE_ENV=production` 时同端口提供前端，`HOST` 默认仍为回环地址 |
+| 容器部署/冒烟 | `docker compose up --build -d --wait`、`npm run test:compose` | [README 部署说明](../README.md)；冒烟仅使用伪模型并停止容器，适用于独立测试实例 |
 | diff 格式 | `git diff --check` | 检查已跟踪文件的 diff；新文件还需在暂存后检查或单独检查 |
 
 按改动风险执行，不写镜像实现式测试：
@@ -86,6 +89,8 @@
 每次验证使用[报告模板](templates/validation-report.md)写入 [validation](validation/README.md)，逐项记通过/失败/未运行/跳过/阻塞、原因、版本、脏工作区状态、实际命令与证据。修复后复验受影响项；集成后验证合并后的版本。构建或 CI 成功不能替代浏览器、真实模型或其他实际验收。
 
 GitHub Actions 配置在 [ci.yml](../.github/workflows/ci.yml)：面向 `main` 的 PR、`main` push 和手动运行使用 Node.js 24，在 Ubuntu/Windows 上依次执行 `npm ci`、类型检查、测试与构建，并检查提交差异空白及受跟踪文件未被修改。Action 按核实的 v7 commit 固定，使用只读 `contents` 权限和 npm 下载缓存；不提供模型凭据，不做发布部署。实际运行结果见 [CI-001 验证](validation/CI-001.md)。配置存在不等于运行成功，也不等于分支保护把这些检查设为了必需项。
+
+容器改动另由 [compose.yml](../.github/workflows/compose.yml) 在相关路径的 PR 或手动触发时，使用 Linux Docker 构建并启动健康的 Compose 实例，检查前端资源、API、非 root/生产依赖、伪模型配置与正常停止，最后清理容器。它不调用真实模型、不部署外部环境；具体结果见 [Compose 任务验证](validation/DEPLOY-COMPOSE-001.md)。
 
 当前仍无 lint、格式化、Markdown 链接检查、浏览器自动验收或统一 `check` 脚本。文档可使用一次性本地链接审计，但需记录其方法，不能声称仓库已有相应 npm 命令；需要新增工具时另开任务。
 

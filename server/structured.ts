@@ -26,7 +26,7 @@ async function structuredCall<T>(
 
 const stringList = { type: "array", items: { type: "string" } };
 
-const GUIDANCE_SCHEMA = {
+export const GUIDANCE_SCHEMA = {
   type: "object",
   properties: {
     summary: { type: "string" },
@@ -41,7 +41,7 @@ const GUIDANCE_SCHEMA = {
   additionalProperties: false,
 };
 
-const GUIDANCE_SYSTEM = `你负责在一局地铁站游戏开始前，把玩家写给角色的指导整理成便于执行的要点。
+export const GUIDANCE_SYSTEM = `你负责在一局地铁站游戏开始前，把玩家写给角色的指导整理成便于执行的要点。
 游戏：角色要在限时内买票、安检、刷票通过闸机；地图、设施位置和规则是公开的，现场的队伍、故障和保安位置需要走近观察。
 要求：
 - 忠实保留玩家原意，不添加玩家没有表达的偏好或目标。
@@ -64,7 +64,7 @@ const MECHANICS: Record<Exclude<CreativeMechanic, "unsupported">, string> = {
   jump_gate: "翻越闸机：不刷票，直接从闸机或栏杆上越过进入站台",
 };
 
-const CLASSIFY_SCHEMA = {
+export const CLASSIFY_SCHEMA = {
   type: "object",
   properties: {
     mechanic: { type: "string", enum: [...Object.keys(MECHANICS), "unsupported"] },
@@ -74,7 +74,7 @@ const CLASSIFY_SCHEMA = {
   additionalProperties: false,
 };
 
-const CLASSIFY_SYSTEM = `你是地铁站游戏的环境裁判助手，负责把角色想做的行动归类到环境支持的机制之一。
+export const CLASSIFY_SYSTEM = `你是地铁站游戏的环境裁判助手，负责把角色想做的行动归类到环境支持的机制之一。
 只判断意图的含义属于哪一类，不判断能否成功（能否成功由环境规则另行裁定）。意思相近的不同说法应归为同一类。
 支持的机制：
 ${Object.entries(MECHANICS)
