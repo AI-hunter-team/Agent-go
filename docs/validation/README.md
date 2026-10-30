@@ -6,6 +6,9 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [STATION-PR-001](STATION-PR-001.md) | 难度/故障修复与最新 main 的冲突、提示一致性和 343 项集成检查；PR 发布前验证快照 |
+| [DIFFICULTY-002](DIFFICULTY-002.md) | 固定 120 秒 / 每条开放队列额外 3 人、移除难度选择、318 项回归和 650 局离线对照；覆盖原可调 UI 方案 |
+| [DIFFICULTY-001 / FACILITY-FAIL-001](DIFFICULTY-001.md) | 可调时限/初始队列、办理中故障结算、314 项回归、浏览器与 600 局离线对照；不代表真实模型验收 |
 | [BRAND-001](BRAND-001.md) | Agent Go 品牌文字与现行文档核对、软件检查及品牌浏览器验证 |
 | [PR-REMAINING-001](PR-REMAINING-001.md) | 剩余 PR #6、#8 的串行冲突处理、消费者核对及集成验证 |
 | [PR7-MERGE-001](PR7-MERGE-001.md) | 3D PR #7 与 main 的冲突解决、模型配置/调试衔接及集成软件检查；最终合入见 PR |

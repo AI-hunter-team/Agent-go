@@ -3,6 +3,7 @@ import { GameRunner, type RunnerOptions } from "../agent/runner";
 import { Engine } from "../sim/engine";
 import { DT } from "../sim/scenario";
 import { PresentationBuffer } from "./presentation";
+import type { GameSettings } from "../shared/gameSettings";
 
 /** Owns simulation time independently of whichever renderer is mounted. */
 export class GameSession {
@@ -15,8 +16,8 @@ export class GameSession {
   private accumulator = 0;
   private listeners = new Set<() => void>();
 
-  constructor(seed = 1) {
-    this.engine = new Engine(seed);
+  constructor(seed = 1, settings: Partial<GameSettings> = {}) {
+    this.engine = new Engine(seed, settings);
     this.presentation = new PresentationBuffer(this.engine);
   }
   subscribe(listener: () => void) {
@@ -28,11 +29,11 @@ export class GameSession {
   get alpha() { return this.frozen ? 1 : Math.min(1, this.accumulator / DT); }
   get visualTime() { return this.presentation.time(this.alpha); }
 
-  preview(seed: number) {
+  preview(seed: number, settings: Partial<GameSettings> = this.engine.settings) {
     this.generation++;
     if (this.runner && this.runner.phase !== "ended") this.runner.stop();
     this.runner = null;
-    this.engine = new Engine(seed);
+    this.engine = new Engine(seed, settings);
     this.accumulator = 0;
     this.paused = false;
     this.presentation.reset(this.engine);

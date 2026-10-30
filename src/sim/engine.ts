@@ -18,6 +18,7 @@ import { NpcDirector } from "./npc";
 import { buildObservation, visibleFacilities } from "./observation";
 import { DT, RULES, STATUS_LABEL, buildScenario } from "./scenario";
 import { World, round1, type Person } from "./world";
+import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
 const MECHANIC_LABEL: Record<CreativeMechanic, string> = {
   cut_in_line: "插队",
@@ -30,6 +31,7 @@ const MECHANIC_LABEL: Record<CreativeMechanic, string> = {
  * applyAction(); position, tickets, passing and losing are all settled here.
  */
 export class Engine {
+  readonly settings: Readonly<GameSettings>;
   readonly world: World;
   readonly guards = new GuardSystem();
   readonly npcs: NpcDirector;
@@ -49,9 +51,10 @@ export class Engine {
   /** A wait requested while still walking or queueing: fires wait_done without interrupting. */
   private wakeAt: number | null = null;
 
-  constructor(readonly seed = 1) {
-    this.world = new World(seed);
-    this.npcs = new NpcDirector(this.world, buildScenario(seed));
+  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}) {
+    this.settings = resolveGameSettings(settings);
+    this.world = new World(seed, this.settings.timeLimitSeconds);
+    this.npcs = new NpcDirector(this.world, buildScenario(seed, this.settings));
     this.creative = new CreativeSystem(this.world, this.guards);
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
     this.recordTrail();
@@ -88,8 +91,8 @@ export class Engine {
       this.end("success", null);
       return;
     }
-    if (w.t >= RULES.timeLimit - 1e-9) {
-      this.end("failed", `超时：${RULES.timeLimit} 秒内未下楼梯到达站台`);
+    if (w.t >= this.settings.timeLimitSeconds - 1e-9) {
+      this.end("failed", `超时：${this.settings.timeLimitSeconds} 秒内未下楼梯到达站台`);
       return;
     }
 

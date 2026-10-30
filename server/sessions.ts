@@ -3,9 +3,11 @@ import { randomUUID } from "node:crypto";
 import type { NormalizedGuidance } from "../src/shared/types";
 import type { ChatMessage } from "./openai";
 import { assertSafeText, validateNormalized } from "./security";
+import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettings";
 
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
+  settings: Readonly<GameSettings>;
   id: string;
   runId: string;
   guidance: string;
@@ -22,12 +24,13 @@ const TTL_MS = 30 * 60 * 1000;
 export class SessionStore {
   private sessions = new Map<string, Session>();
 
-  create(guidance: string, normalized: NormalizedGuidance | null, runId?: string): Session {
+  create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings: Partial<GameSettings> = {}): Session {
     assertSafeText(guidance);
     validateNormalized(normalized);
     this.sweep();
     const s: Session = {
       id: randomUUID(),
+      settings: resolveGameSettings(settings),
       runId: runId || randomUUID(),
       guidance,
       normalized,

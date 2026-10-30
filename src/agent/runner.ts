@@ -66,7 +66,7 @@ export class GameRunner {
     this.now = opts.now ?? (() => performance.now());
     this.debug = {
       version: 1, runId: opts.runId ?? crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: null,
-      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: RULES.timeLimit, stepSeconds: DT, simulationRules: { ...RULES }, decisionLimits: { ...DECISION_LIMITS } },
+      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: engine.settings.timeLimitSeconds, extraQueuePeople: engine.settings.extraQueuePeople, stepSeconds: DT, simulationRules: { ...RULES, timeLimit: engine.settings.timeLimitSeconds }, decisionLimits: { ...DECISION_LIMITS } },
       preparation: opts.preparation ?? { durationMs: 0, server: null }, attempts: [], summary: summarizeDebug([]),
     };
   }
@@ -359,6 +359,7 @@ export class GameRunner {
     return {
       debug: this.snapshotDebug(),
       seed: e.seed,
+      settings: { ...e.settings },
       agentKind: this.agent.kind,
       guidance: this.opts.guidance ?? "",
       normalizedGuidance: this.opts.normalizedGuidance ?? null,

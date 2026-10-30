@@ -4,6 +4,7 @@ import { FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, qu
 import { findPath } from "./nav";
 import { Rng } from "./rng";
 import { DT, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
+import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
 
 export type Activity =
   | { kind: "idle" }
@@ -56,7 +57,7 @@ export class World {
   gatePassed = 0;
   private nextId = 1;
 
-  constructor(seed: number) {
+  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds) {
     this.rng = new Rng(seed);
     for (const def of FACILITIES) {
       this.facilities.set(def.id, { def, status: "open", note: null, queue: [], serving: null, pendingRecheck: null });
@@ -173,7 +174,8 @@ export class World {
     f.note = note;
     this.log("facility_status", `${f.def.label}${STATUS_LABEL[status]}`, false);
     if (status === "open") return;
-    // Whoever is being served finishes; everyone still waiting has to go elsewhere.
+    this.interruptService(f);
+    // Unfinished service and waiting positions are both invalid once a lane stops.
     for (const id of f.queue) {
       const p = this.persons.get(id);
       if (!p) continue;
@@ -181,6 +183,16 @@ export class World {
       this.personEvent(p, "queue_closed", `你所在的 ${facilityId} 已${STATUS_LABEL[status]}，队伍解散，需要另选`);
     }
     f.queue = [];
+  }
+
+  private interruptService(f: Facility) {
+    if (!f.serving) return;
+    const p = this.persons.get(f.serving.personId);
+    f.serving = null;
+    if (p?.activity.kind === "service" && p.activity.facility === f.def.id) {
+      p.activity = { kind: "idle" };
+      this.personEvent(p, "service_rejected", `${f.def.id} 已${STATUS_LABEL[f.status]}，本次办理中断且未完成，请改选其他可用设施`);
+    }
   }
 
   // ------------------------------------------------------------ simulation
@@ -259,6 +271,10 @@ export class World {
   }
 
   private stepFacility(f: Facility) {
+    if (f.status !== "open") {
+      this.interruptService(f);
+      return;
+    }
     if (f.serving) {
       f.serving.remaining -= DT;
       if (f.serving.remaining <= 1e-9) {
@@ -268,7 +284,7 @@ export class World {
       }
       return;
     }
-    if (f.status !== "open" || f.queue.length === 0) return;
+    if (f.queue.length === 0) return;
     const head = this.persons.get(f.queue[0]);
     if (!head) {
       f.queue.shift();
