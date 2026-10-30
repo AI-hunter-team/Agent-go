@@ -32,6 +32,40 @@ class ScriptedAgent implements Agent {
 }
 
 describe("GameRunner", () => {
+  test.each<AgentAction>([
+    { type: "move_to", target: "TVM-3", reason: "直接前往南侧售票机观察" },
+    { type: "join_queue", facility: "TVM-1", reason: "从入口直接前往队尾" },
+    { type: "wait", seconds: 2, reason: "先在入口等待" },
+  ])("executes the model's opening choice without an automatic hall waypoint: $type", async (action) => {
+    let release!: (result: DecisionResult) => void;
+    const agent = new ScriptedAgent(() => new Promise((resolve) => { release = resolve; }));
+    const engine = new Engine(1);
+    const entrance = { ...engine.player.pos };
+    const runner = new GameRunner(engine, agent, keywords);
+
+    runner.start();
+    expect(agent.turns).toHaveLength(1);
+    expect(agent.turns[0]).toMatchObject({
+      triggers: [{ kind: "start" }], lastResult: null,
+      observation: { t: 0, self: { position: entrance, activity: "空闲，等待指令" }, facilities: [] },
+    });
+    runner.advance(100);
+    expect(engine.t).toBe(0);
+    expect(engine.player.pos).toEqual(entrance);
+    expect(engine.player.activity.kind).toBe("idle");
+
+    release(ok(action));
+    await runner.pending;
+    expect(runner.decisions).toHaveLength(1);
+    expect(runner.decisions[0]).toMatchObject({ t: 0, action, result: { ok: true }, fallback: false });
+    expect(engine.player.pos).toEqual(entrance);
+    expect(engine.t).toBe(0);
+    if (action.type === "join_queue") expect(engine.player.activity).toMatchObject({ kind: "to_queue", facility: action.facility });
+    else if (action.type === "move_to") expect(engine.player.activity).toMatchObject({ kind: "walking", label: "3号售票机附近" });
+    else expect(engine.player.activity).toMatchObject({ kind: "waiting", remaining: 2 });
+    runner.stop();
+  });
+
   test("offline agent finishes a run and produces a report", async () => {
     const runner = new GameRunner(new Engine(1), new HeuristicAgent(), keywords, { guidance: "" });
     await runner.runToEnd();
