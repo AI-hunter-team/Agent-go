@@ -1,0 +1,1382 @@
+{
+  "version": 2,
+  "title": "AI猎人 · 站厅空间与模块素材 V2",
+  "units": "metres",
+  "upAxis": "Y",
+  "rootConvention": "Footprint centre; floor top is Y=0. Ceiling/light assets use mounting-plane Y=0. Devices face +Z; approach +Z, exit -Z.",
+  "source": "Original procedural geometry and seeded textures; no third-party textures or character models included.",
+  "gridMetres": 3,
+  "wallHeightMetres": 3.5,
+  "pillarFootprintMetres": [
+    2,
+    2
+  ],
+  "showroomCeilingMetres": 4.25,
+  "structuralFrameHeightMetres": 4.2,
+  "gateAnimation": {
+    "nodeRoles": "gateHinge",
+    "property": "rotation.y",
+    "angleRadians": "sign * progress * PI * 0.48",
+    "progress": [
+      0,
+      1
+    ]
+  },
+  "currentGameMapping": "Rotate device roots -PI/2 about Y to face the existing -X station approach; simulation anchors remain authoritative.",
+  "materials": [
+    {
+      "file": "terrazzo-color.png",
+      "family": "terrazzo",
+      "map": "color",
+      "width": 512,
+      "height": 512,
+      "bytes": 113929,
+      "source": "original-seeded-procedural",
+      "seed": 851,
+      "tilingMetres": 3
+    },
+    {
+      "file": "terrazzo-normal.png",
+      "family": "terrazzo",
+      "map": "normal",
+      "width": 512,
+      "height": 512,
+      "bytes": 186395,
+      "source": "original-seeded-procedural",
+      "seed": 851,
+      "tilingMetres": 3
+    },
+    {
+      "file": "terrazzo-roughness.png",
+      "family": "terrazzo",
+      "map": "roughness",
+      "width": 512,
+      "height": 512,
+      "bytes": 98361,
+      "source": "original-seeded-procedural",
+      "seed": 851,
+      "tilingMetres": 3
+    },
+    {
+      "file": "plaster-color.png",
+      "family": "plaster",
+      "map": "color",
+      "width": 512,
+      "height": 512,
+      "bytes": 98415,
+      "source": "original-seeded-procedural",
+      "seed": 271,
+      "tilingMetres": 3
+    },
+    {
+      "file": "plaster-normal.png",
+      "family": "plaster",
+      "map": "normal",
+      "width": 512,
+      "height": 512,
+      "bytes": 241094,
+      "source": "original-seeded-procedural",
+      "seed": 271,
+      "tilingMetres": 3
+    },
+    {
+      "file": "plaster-roughness.png",
+      "family": "plaster",
+      "map": "roughness",
+      "width": 512,
+      "height": 512,
+      "bytes": 98418,
+      "source": "original-seeded-procedural",
+      "seed": 271,
+      "tilingMetres": 3
+    },
+    {
+      "file": "coating-color.png",
+      "family": "coating",
+      "map": "color",
+      "width": 512,
+      "height": 512,
+      "bytes": 98406,
+      "source": "original-seeded-procedural",
+      "seed": 913,
+      "tilingMetres": 3
+    },
+    {
+      "file": "coating-normal.png",
+      "family": "coating",
+      "map": "normal",
+      "width": 512,
+      "height": 512,
+      "bytes": 124221,
+      "source": "original-seeded-procedural",
+      "seed": 913,
+      "tilingMetres": 3
+    },
+    {
+      "file": "coating-roughness.png",
+      "family": "coating",
+      "map": "roughness",
+      "width": 512,
+      "height": 512,
+      "bytes": 98408,
+      "source": "original-seeded-procedural",
+      "seed": 913,
+      "tilingMetres": 3
+    }
+  ],
+  "assets": [
+    {
+      "id": "floor-ivory",
+      "label": "暖白磨石地面",
+      "category": "architecture",
+      "description": "3×3m；顶面 Y=0；可平铺。",
+      "state": "open",
+      "file": "models/floor-ivory.glb",
+      "bytes": 408204,
+      "sha256": "6656bb10b1e95131821022876f06ccd48ac4b555b2ed9c33f08c126a5fd55f8f",
+      "bounds": {
+        "min": [
+          -1.5,
+          -0.11999999865889549,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          0.0020000000474974513,
+          1.5
+        ],
+        "size": [
+          3,
+          0.12199999870639294,
+          3
+        ]
+      },
+      "meshCount": 5,
+      "triangles": 156,
+      "materialSlots": [
+        "kit.paint.line",
+        "kit.terrazzo.ivory"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "floor-sage",
+      "label": "鼠尾草绿磨石",
+      "category": "architecture",
+      "description": "同一地面模型，不同材质皮肤。",
+      "state": "open",
+      "file": "models/floor-sage.glb",
+      "bytes": 408204,
+      "sha256": "ab3465e2fd13bce5d8ed36a2667ede3520c56b312945d623f5ae486641cdf775",
+      "bounds": {
+        "min": [
+          -1.5,
+          -0.11999999865889549,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          0.0020000000474974513,
+          1.5
+        ],
+        "size": [
+          3,
+          0.12199999870639294,
+          3
+        ]
+      },
+      "meshCount": 5,
+      "triangles": 156,
+      "materialSlots": [
+        "kit.paint.line",
+        "kit.terrazzo.sage"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "floor-plain",
+      "label": "素色地面",
+      "category": "architecture",
+      "description": "共享漆面；可用于中性区域。",
+      "state": "open",
+      "file": "models/floor-plain.glb",
+      "bytes": 7692,
+      "sha256": "3b4cf0fa80478aec1a97454d3c6397a7c9ee3df17d1c71134b0627657fb86e50",
+      "bounds": {
+        "min": [
+          -1.5,
+          -0.11999999865889549,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          0.0020000000474974513,
+          1.5
+        ],
+        "size": [
+          3,
+          0.12199999870639294,
+          3
+        ]
+      },
+      "meshCount": 5,
+      "triangles": 156,
+      "materialSlots": [
+        "kit.paint.ivory",
+        "kit.paint.line"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "wall-straight",
+      "label": "直墙",
+      "category": "architecture",
+      "description": "3m 长，3.5m 高，0.4m 厚。",
+      "state": "open",
+      "file": "models/wall-straight.glb",
+      "bytes": 774236,
+      "sha256": "f2033b0612f763dff18f4b30cf83b0b5f0bf90c7b117dbfee8fc768a44504e3e",
+      "bounds": {
+        "min": [
+          -1.5,
+          5.960464483090178e-10,
+          -0.20000000298023224
+        ],
+        "max": [
+          1.5,
+          3.499999993443489,
+          0.20000000298023224
+        ],
+        "size": [
+          3,
+          3.499999992847443,
+          0.4000000059604645
+        ]
+      },
+      "meshCount": 3,
+      "triangles": 324,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.plaster.ivory"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "wall-corner",
+      "label": "转角墙",
+      "category": "architecture",
+      "description": "3×3m 包络的 L 型转角。",
+      "state": "open",
+      "file": "models/wall-corner.glb",
+      "bytes": 787336,
+      "sha256": "b02dbfe8eb270b66f2e991cf48d09b4afd3dabc717bc8c28f7a839b0eb54e9d7",
+      "bounds": {
+        "min": [
+          -1.5000000029802323,
+          5.960464483090178e-10,
+          -1.5000000029802323
+        ],
+        "max": [
+          1.5,
+          3.499999993443489,
+          1.4999999523162841
+        ],
+        "size": [
+          3.000000002980232,
+          3.499999992847443,
+          2.9999999552965164
+        ]
+      },
+      "meshCount": 6,
+      "triangles": 648,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.plaster.ivory"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "wall-end",
+      "label": "墙体端头",
+      "category": "architecture",
+      "description": "0.4m 方形端头，供局部长度适配。",
+      "state": "open",
+      "file": "models/wall-end.glb",
+      "bytes": 774316,
+      "sha256": "65dfd73772ee4295f72459d7dbd52b778e530d14da27a511653086f77c4bcb9a",
+      "bounds": {
+        "min": [
+          -0.20000000298023224,
+          5.960464483090178e-10,
+          -0.20000000298023224
+        ],
+        "max": [
+          0.20000000298023224,
+          3.499999993443489,
+          0.20000000298023224
+        ],
+        "size": [
+          0.4000000059604645,
+          3.499999992847443,
+          0.4000000059604645
+        ]
+      },
+      "meshCount": 3,
+      "triangles": 324,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.plaster.ivory"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "portal",
+      "label": "门洞模块",
+      "category": "architecture",
+      "description": "3m 模数；2m 净宽，2.75m 净高。",
+      "state": "open",
+      "file": "models/portal.glb",
+      "bytes": 783328,
+      "sha256": "7a2af2990c08f48e94a15b81a694874aac7d5d1907db5af14d0a15288d778320",
+      "bounds": {
+        "min": [
+          -1.5,
+          5.960464483090178e-10,
+          -0.20000000298023224
+        ],
+        "max": [
+          1.5,
+          3.499999993443489,
+          0.20000000298023224
+        ],
+        "size": [
+          3,
+          3.499999992847443,
+          0.4000000059604645
+        ]
+      },
+      "meshCount": 8,
+      "triangles": 864,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.plaster.ivory"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_passage",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pillar",
+      "label": "方柱",
+      "category": "architecture",
+      "description": "2×2m 占地，3.5m 高。",
+      "state": "open",
+      "file": "models/pillar.glb",
+      "bytes": 776780,
+      "sha256": "ced1055806594aa4679e00a207b92c33b511905d9e16a500f67d2a2b5ab3d8f4",
+      "bounds": {
+        "min": [
+          -1,
+          5.960464483090178e-10,
+          -1
+        ],
+        "max": [
+          1,
+          3.499999993443489,
+          1.0109999996125698
+        ],
+        "size": [
+          2,
+          3.499999992847443,
+          2.0109999996125696
+        ]
+      },
+      "meshCount": 4,
+      "triangles": 336,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.plaster.ivory"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "partition",
+      "label": "低隔断",
+      "category": "architecture",
+      "description": "3m 长，1m 高，0.4m 厚。",
+      "state": "open",
+      "file": "models/partition.glb",
+      "bytes": 774224,
+      "sha256": "66b3c7e9a7d5bd51601f875a0c33421254a33766ffc58ee85171332cd435c08d",
+      "bounds": {
+        "min": [
+          -1.5,
+          5.960464483090178e-10,
+          -0.20000000298023224
+        ],
+        "max": [
+          1.5,
+          0.9999999934434891,
+          0.20000000298023224
+        ],
+        "size": [
+          3,
+          0.9999999928474427,
+          0.4000000059604645
+        ]
+      },
+      "meshCount": 3,
+      "triangles": 324,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.plaster.ivory"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "ticket-machine",
+      "label": "自动售票机",
+      "category": "facility",
+      "description": "屏幕、灯带、票口和交互锚点独立。",
+      "state": "open",
+      "file": "models/ticket-machine-open.glb",
+      "bytes": 371584,
+      "sha256": "d2a4940a6afc9125a72c3e17e8ebbd5ce4b985091000774f3b2e40684ff41b45",
+      "bounds": {
+        "min": [
+          -0.42500001192092896,
+          -7.450580569168253e-10,
+          -0.34999999284744265
+        ],
+        "max": [
+          0.42500001192092896,
+          1.7599999952316283,
+          0.43899999966472386
+        ],
+        "size": [
+          0.8500000238418579,
+          1.7599999959766863,
+          0.7889999925121665
+        ]
+      },
+      "meshCount": 17,
+      "triangles": 1164,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.metal.satin",
+        "kit.paint.light",
+        "kit.screen.ready",
+        "kit.status.open"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ticket-machine",
+      "label": "自动售票机",
+      "category": "facility",
+      "description": "屏幕、灯带、票口和交互锚点独立。",
+      "state": "closed",
+      "file": "models/ticket-machine-closed.glb",
+      "bytes": 371480,
+      "sha256": "40a634032337c7076b5fc33925e7ce7db2618b18c7d3371613e1eb5c9929a2f3",
+      "bounds": {
+        "min": [
+          -0.42500001192092896,
+          -7.450580569168253e-10,
+          -0.34999999284744265
+        ],
+        "max": [
+          0.42500001192092896,
+          1.7599999952316283,
+          0.43899999966472386
+        ],
+        "size": [
+          0.8500000238418579,
+          1.7599999959766863,
+          0.7889999925121665
+        ]
+      },
+      "meshCount": 17,
+      "triangles": 1164,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.metal.satin",
+        "kit.paint.light",
+        "kit.screen.off",
+        "kit.status.closed"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ticket-machine",
+      "label": "自动售票机",
+      "category": "facility",
+      "description": "屏幕、灯带、票口和交互锚点独立。",
+      "state": "broken",
+      "file": "models/ticket-machine-broken.glb",
+      "bytes": 371536,
+      "sha256": "7b51a171ff2f4785b0e6cf82e265a8fb0db36fed6c642291d4da9db3b80d2141",
+      "bounds": {
+        "min": [
+          -0.42500001192092896,
+          -7.450580569168253e-10,
+          -0.34999999284744265
+        ],
+        "max": [
+          0.42500001192092896,
+          1.7599999952316283,
+          0.43899999966472386
+        ],
+        "size": [
+          0.8500000238418579,
+          1.7599999959766863,
+          0.7889999925121665
+        ]
+      },
+      "meshCount": 17,
+      "triangles": 1164,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.metal.satin",
+        "kit.paint.light",
+        "kit.screen.fault",
+        "kit.status.broken"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-arch",
+      "label": "安检门",
+      "category": "facility",
+      "description": "约1.9m 宽、2.5m 高；状态灯独立。",
+      "state": "open",
+      "file": "models/security-arch-open.glb",
+      "bytes": 348696,
+      "sha256": "d9b08660fc8f358b1f15d4bf6228e0f8b9aed64302eebdbad5c49a078ca7904a",
+      "bounds": {
+        "min": [
+          -0.9499999994039535,
+          0,
+          -0.20999999344348907
+        ],
+        "max": [
+          0.9499999994039535,
+          2.500000003576279,
+          0.2439999996125698
+        ],
+        "size": [
+          1.899999998807907,
+          2.500000003576279,
+          0.45399999305605887
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1404,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.status.open"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_entry",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        },
+        {
+          "name": "anchor_exit",
+          "position": [
+            0,
+            0,
+            -1.4
+          ]
+        },
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-arch",
+      "label": "安检门",
+      "category": "facility",
+      "description": "约1.9m 宽、2.5m 高；状态灯独立。",
+      "state": "closed",
+      "file": "models/security-arch-closed.glb",
+      "bytes": 348644,
+      "sha256": "538e4f36ff0386fe2e4afa47cc7c446db12ac4e15ca4a24243f9b6519805968a",
+      "bounds": {
+        "min": [
+          -0.9499999994039535,
+          0,
+          -0.20999999344348907
+        ],
+        "max": [
+          0.9499999994039535,
+          2.500000003576279,
+          0.2439999996125698
+        ],
+        "size": [
+          1.899999998807907,
+          2.500000003576279,
+          0.45399999305605887
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1404,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.status.closed"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_entry",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        },
+        {
+          "name": "anchor_exit",
+          "position": [
+            0,
+            0,
+            -1.4
+          ]
+        },
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-arch",
+      "label": "安检门",
+      "category": "facility",
+      "description": "约1.9m 宽、2.5m 高；状态灯独立。",
+      "state": "broken",
+      "file": "models/security-arch-broken.glb",
+      "bytes": 348700,
+      "sha256": "1c4bbfaa341e97c22a94aedb7b29e936ad66f3372ec9277e423b685e200e361e",
+      "bounds": {
+        "min": [
+          -0.9499999994039535,
+          0,
+          -0.20999999344348907
+        ],
+        "max": [
+          0.9499999994039535,
+          2.500000003576279,
+          0.2439999996125698
+        ],
+        "size": [
+          1.899999998807907,
+          2.500000003576279,
+          0.45399999305605887
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1404,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.status.broken"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_entry",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        },
+        {
+          "name": "anchor_exit",
+          "position": [
+            0,
+            0,
+            -1.4
+          ]
+        },
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fare-gate",
+      "label": "检票闸机",
+      "category": "facility",
+      "description": "双翼分别以铰链为轴，支持独立开合。",
+      "state": "open",
+      "file": "models/fare-gate-open.glb",
+      "bytes": 351796,
+      "sha256": "89fa6d24298ec65f01999cea37b8c71a49cc70bcb1707a6f2421b5bd74b30bca",
+      "bounds": {
+        "min": [
+          -0.5949999967217445,
+          2.8610229518832853e-8,
+          -0.5249999761581421
+        ],
+        "max": [
+          0.5949999967217445,
+          1.093000000268221,
+          0.5585000001862646
+        ],
+        "size": [
+          1.189999993443489,
+          1.0929999716579915,
+          1.0834999763444066
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1404,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.metal.satin",
+        "kit.paint.ivory",
+        "kit.status.open"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_entry",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        },
+        {
+          "name": "anchor_exit",
+          "position": [
+            0,
+            0,
+            -1.4
+          ]
+        },
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fare-gate",
+      "label": "检票闸机",
+      "category": "facility",
+      "description": "双翼分别以铰链为轴，支持独立开合。",
+      "state": "closed",
+      "file": "models/fare-gate-closed.glb",
+      "bytes": 351744,
+      "sha256": "f4035cadee85e4d80496b0d75caae27f3167d46dbaf6a14514e054759c6e13ca",
+      "bounds": {
+        "min": [
+          -0.5949999967217445,
+          2.8610229518832853e-8,
+          -0.5249999761581421
+        ],
+        "max": [
+          0.5949999967217445,
+          1.093000000268221,
+          0.5585000001862646
+        ],
+        "size": [
+          1.189999993443489,
+          1.0929999716579915,
+          1.0834999763444066
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1404,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.metal.satin",
+        "kit.paint.ivory",
+        "kit.status.closed"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_entry",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        },
+        {
+          "name": "anchor_exit",
+          "position": [
+            0,
+            0,
+            -1.4
+          ]
+        },
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fare-gate",
+      "label": "检票闸机",
+      "category": "facility",
+      "description": "双翼分别以铰链为轴，支持独立开合。",
+      "state": "broken",
+      "file": "models/fare-gate-broken.glb",
+      "bytes": 351800,
+      "sha256": "352ad7edcd8b9ff58f8b2f077ee5ec6a41f873a050f17489a6c6250b74b57db6",
+      "bounds": {
+        "min": [
+          -0.5949999967217445,
+          2.8610229518832853e-8,
+          -0.5249999761581421
+        ],
+        "max": [
+          0.5949999967217445,
+          1.093000000268221,
+          0.5585000001862646
+        ],
+        "size": [
+          1.189999993443489,
+          1.0929999716579915,
+          1.0834999763444066
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1404,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.flap.frosted-sage",
+        "kit.metal.satin",
+        "kit.paint.ivory",
+        "kit.status.broken"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_entry",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        },
+        {
+          "name": "anchor_exit",
+          "position": [
+            0,
+            0,
+            -1.4
+          ]
+        },
+        {
+          "name": "anchor_interaction",
+          "position": [
+            0,
+            0,
+            0.6
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sign-totem",
+      "label": "导视立柱",
+      "category": "wayfinding",
+      "description": "空白信息面板，内容可由地图另行覆盖。",
+      "state": "open",
+      "file": "models/sign-totem.glb",
+      "bytes": 331708,
+      "sha256": "6b6777486a073b5c8c4bb06a81c5c2a78401842c5cf0249ff7a2edf41c6e1838",
+      "bounds": {
+        "min": [
+          -0.30000001192092896,
+          -7.450580569168253e-10,
+          -0.20000000298023224
+        ],
+        "max": [
+          0.30000001192092896,
+          2.699999952316284,
+          0.20000000298023224
+        ],
+        "size": [
+          0.6000000238418579,
+          2.6999999530613423,
+          0.4000000059604645
+        ]
+      },
+      "meshCount": 2,
+      "triangles": 216,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_content",
+          "position": [
+            0,
+            1.7,
+            0.086
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sign-panel",
+      "label": "悬挂标牌",
+      "category": "wayfinding",
+      "description": "2.8m 横向标牌；编号/文字不烘入模型。",
+      "state": "open",
+      "file": "models/sign-panel.glb",
+      "bytes": 331640,
+      "sha256": "f203bd2e426c96b60632977b34180d526d6f09864a13b0ab28f26a3c62065407",
+      "bounds": {
+        "min": [
+          -1.399999976158142,
+          0,
+          -0.0625
+        ],
+        "max": [
+          1.399999976158142,
+          0.5075000000745058,
+          0.0625
+        ],
+        "size": [
+          2.799999952316284,
+          0.5075000000745058,
+          0.125
+        ]
+      },
+      "meshCount": 2,
+      "triangles": 216,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_content",
+          "position": [
+            0,
+            0.25,
+            0.065
+          ]
+        }
+      ]
+    },
+    {
+      "id": "marking-arrow",
+      "label": "导向箭头",
+      "category": "wayfinding",
+      "description": "独立几何贴花，朝向本地 -Z。",
+      "state": "open",
+      "file": "models/marking-arrow.glb",
+      "bytes": 1760,
+      "sha256": "c8944bdb5990dfe9646baacccae1cd85b6f3f54d94e747948b28b179b81ce25d",
+      "bounds": {
+        "min": [
+          -0.3199999928474426,
+          0.007999999999999879,
+          -0.550000011920929
+        ],
+        "max": [
+          0.3199999928474426,
+          0.008000000000000122,
+          0.550000011920929
+        ],
+        "size": [
+          0.6399999856948853,
+          2.42861286636753e-16,
+          1.100000023841858
+        ]
+      },
+      "meshCount": 1,
+      "triangles": 5,
+      "materialSlots": [
+        "kit.paint.brick"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "marking-queue",
+      "label": "排队标线",
+      "category": "wayfinding",
+      "description": "6 个标记，间距0.8m；独立于地面。",
+      "state": "open",
+      "file": "models/marking-queue.glb",
+      "bytes": 325260,
+      "sha256": "ce2208ee17bf71f8dfa957be748e43a9fdc85bed7ef2fd9055c0b636e292e1aa",
+      "bounds": {
+        "min": [
+          -0.20000000298023224,
+          0.003999999810010195,
+          -0.017500000074505806
+        ],
+        "max": [
+          0.20000000298023224,
+          0.012000000189989805,
+          4.017500000074506
+        ],
+        "size": [
+          0.4000000059604645,
+          0.00800000037997961,
+          4.035000000149012
+        ]
+      },
+      "meshCount": 6,
+      "triangles": 72,
+      "materialSlots": [
+        "kit.coating.ochre"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "structural-frame",
+      "label": "圆角结构框",
+      "category": "architecture",
+      "description": "6m 跨度、4.2m 高；两倍地面模数。",
+      "state": "open",
+      "file": "models/structural-frame.glb",
+      "bytes": 388864,
+      "sha256": "69bb4bc8dbc983950f50207d0923428d604a615a2acb4ceedc3e5c776e62e5a4",
+      "bounds": {
+        "min": [
+          -3.009999990463257,
+          -0.009999999776482582,
+          -0.17000000178813934
+        ],
+        "max": [
+          3.009999990463257,
+          4.210000038146973,
+          0.17000001668930054
+        ],
+        "size": [
+          6.019999980926514,
+          4.220000037923455,
+          0.3400000184774399
+        ]
+      },
+      "meshCount": 1,
+      "triangles": 668,
+      "materialSlots": [
+        "kit.coating.ochre"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "ceiling-panel",
+      "label": "模块顶板",
+      "category": "architecture",
+      "description": "3×3m；以底部安装面为参考。",
+      "state": "open",
+      "file": "models/ceiling-panel.glb",
+      "bytes": 7816,
+      "sha256": "87cf3a290fc668f32400462813bf8159968f7b28c7eff7fc9630e804276d8295",
+      "bounds": {
+        "min": [
+          -1.5,
+          -0.006000000189989805,
+          -1.5
+        ],
+        "max": [
+          1.5,
+          0.11999999865889549,
+          1.5
+        ],
+        "size": [
+          3,
+          0.1259999988488853,
+          3
+        ]
+      },
+      "meshCount": 5,
+      "triangles": 156,
+      "materialSlots": [
+        "kit.ceiling.ivory",
+        "kit.paint.line"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "light-strip",
+      "label": "嵌入灯带",
+      "category": "architecture",
+      "description": "2.2m 灯条；安装平面为 Y=0，发光面向下。",
+      "state": "open",
+      "file": "models/light-strip.glb",
+      "bytes": 7600,
+      "sha256": "ad418e7b7d2f415349eea97d53df3f33e19017a9b5fc699b5e111e2bf9e2f9b3",
+      "bounds": {
+        "min": [
+          -0.07999999821186066,
+          -0.021000000052154064,
+          -1.100000023841858
+        ],
+        "max": [
+          0.07999999821186066,
+          0.03750000089406967,
+          1.100000023841858
+        ],
+        "size": [
+          0.1599999964237213,
+          0.058500000946223735,
+          2.200000047683716
+        ]
+      },
+      "meshCount": 2,
+      "triangles": 216,
+      "materialSlots": [
+        "kit.ceiling.ivory",
+        "kit.light.warm"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "window-bay",
+      "label": "窗墙模块",
+      "category": "architecture",
+      "description": "3m 窗墙；独立玻璃与窗框。",
+      "state": "open",
+      "file": "models/window-bay.glb",
+      "bytes": 790448,
+      "sha256": "e82fbe5f95a287750fdcb3128dba624a1d78663f2d4d0e07c4739114b8be7ace",
+      "bounds": {
+        "min": [
+          -1.5000000002980232,
+          -3.5762786898541066e-9,
+          -0.20499999821186066
+        ],
+        "max": [
+          1.5000000002980232,
+          3.500000023841858,
+          0.20499999821186066
+        ],
+        "size": [
+          3.0000000005960463,
+          3.5000000274181366,
+          0.4099999964237213
+        ]
+      },
+      "meshCount": 13,
+      "triangles": 1308,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.metal.satin",
+        "kit.plaster.ivory",
+        "kit.window.glass"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "route-straight",
+      "label": "连续导向直段",
+      "category": "wayfinding",
+      "description": "3m 长、0.46m 宽的独立地面漆带。",
+      "state": "open",
+      "file": "models/route-straight.glb",
+      "bytes": 1628,
+      "sha256": "ed9fa9e544a366f8f1293f95340e92b7d9acf2a1350e0acad313908402e79087",
+      "bounds": {
+        "min": [
+          -0.23000000417232513,
+          0.00800000037997961,
+          -1.5
+        ],
+        "max": [
+          0.23000000417232513,
+          0.00800000037997961,
+          1.5
+        ],
+        "size": [
+          0.46000000834465027,
+          0,
+          3
+        ]
+      },
+      "meshCount": 1,
+      "triangles": 2,
+      "materialSlots": [
+        "kit.paint.brick"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "route-turn",
+      "label": "连续导向弯段",
+      "category": "wayfinding",
+      "description": "3m 模数圆弯；可旋转拼接。",
+      "state": "open",
+      "file": "models/route-turn.glb",
+      "bytes": 3408,
+      "sha256": "870ee4e057bd7ad56565d078e015f149abd1e2b9a5a1a4c4abc4e4f4027f0e86",
+      "bounds": {
+        "min": [
+          -0.22994795441627502,
+          0.00800000037997961,
+          -0.22994795441627502
+        ],
+        "max": [
+          1.5048924684524536,
+          0.00800000037997961,
+          1.5048924684524536
+        ],
+        "size": [
+          1.7348404228687286,
+          0,
+          1.7348404228687286
+        ]
+      },
+      "meshCount": 1,
+      "triangles": 48,
+      "materialSlots": [
+        "kit.paint.brick"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "route-split",
+      "label": "连续导向分流",
+      "category": "wayfinding",
+      "description": "T 型分支；连接三侧模块边中点。",
+      "state": "open",
+      "file": "models/route-split.glb",
+      "bytes": 2576,
+      "sha256": "e18bde4b5ffe0a5d2137bef0f86ea27fe248ff463371eadac6729cc8f95ee0f4",
+      "bounds": {
+        "min": [
+          -1.5,
+          0.00800000037997961,
+          -0.23000000417232513
+        ],
+        "max": [
+          1.5,
+          0.00800000037997961,
+          1.5
+        ],
+        "size": [
+          3,
+          0,
+          1.7300000041723251
+        ]
+      },
+      "meshCount": 2,
+      "triangles": 4,
+      "materialSlots": [
+        "kit.paint.brick"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "ceiling-fascia",
+      "label": "顶面侧封板",
+      "category": "architecture",
+      "description": "3m 长、0.7m 高；衔接基础墙与高顶。",
+      "state": "open",
+      "file": "models/ceiling-fascia.glb",
+      "bytes": 443668,
+      "sha256": "a0fe8660f6b8403e4b2ce0ef9b2f3fcc6cd457c0fa5ae04264832079581a3922",
+      "bounds": {
+        "min": [
+          -1.5,
+          5.960464455334602e-9,
+          -0.20000000298023224
+        ],
+        "max": [
+          1.5,
+          0.6999999940395355,
+          0.20000000298023224
+        ],
+        "size": [
+          3,
+          0.699999988079071,
+          0.4000000059604645
+        ]
+      },
+      "meshCount": 1,
+      "triangles": 108,
+      "materialSlots": [
+        "kit.plaster.ivory"
+      ],
+      "anchors": []
+    }
+  ]
+}
