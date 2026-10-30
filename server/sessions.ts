@@ -6,6 +6,7 @@ import type { ChatMessage } from "./openai";
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
   id: string;
+  runId: string;
   guidance: string;
   normalized: NormalizedGuidance | null;
   messages: Anthropic.Beta.BetaMessageParam[];
@@ -20,10 +21,11 @@ const TTL_MS = 30 * 60 * 1000;
 export class SessionStore {
   private sessions = new Map<string, Session>();
 
-  create(guidance: string, normalized: NormalizedGuidance | null): Session {
+  create(guidance: string, normalized: NormalizedGuidance | null, runId?: string): Session {
     this.sweep();
     const s: Session = {
       id: randomUUID(),
+      runId: runId || randomUUID(),
       guidance,
       normalized,
       messages: [],

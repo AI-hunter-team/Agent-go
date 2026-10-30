@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { GameReport, TimeBreakdown } from "../shared/types";
 import { MECHANIC_NAME } from "./format";
+import { DebugPanel } from "./DebugPanel";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "walking", label: "行走", color: "#1f4e79" },
@@ -80,6 +81,8 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
         {report.agentKind === "llm" &&
           ` · 输入 ${report.totals.inputTokens} / 输出 ${report.totals.outputTokens} / 思考 ${report.totals.thinkingTokens ?? "未完整返回"} token`}
       </p>
+
+      <DebugPanel report={report} />
 
       {report.guidance && (
         <>

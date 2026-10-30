@@ -560,3 +560,9 @@ details summary {
   .status { gap: 6px; }
   .segmented { flex-wrap: wrap; }
 }
+
+.debug-panel { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; font-size: 12px; }
+.debug-panel summary { cursor: pointer; padding: 6px 0; overflow-wrap: anywhere; }
+.debug-panel table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.debug-panel th, .debug-panel td { text-align: left; border-bottom: 1px solid var(--line); padding: 5px; }
+.debug-panel pre { max-height: 340px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--paper); padding: 8px; }

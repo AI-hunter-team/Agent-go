@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Agent, Classifier } from "../agent/agent";
 import { HeuristicAgent } from "../agent/heuristicAgent";
-import { Api, RemoteAgent, offlineClassifier, remoteClassifier } from "../agent/remoteAgent";
+import { Api, RemoteAgent, offlineClassifier } from "../agent/remoteAgent";
 import { GameRunner } from "../agent/runner";
 import type { NormalizedGuidance } from "../shared/types";
 import { Engine } from "../sim/engine";
@@ -12,6 +12,7 @@ import { DecisionLog } from "./DecisionLog";
 import { MapCanvas } from "./MapCanvas";
 import { EventTimeline, ReportSummary } from "./ReportView";
 import type { RenderOptions } from "./render";
+import type { OperationDebug } from "../shared/debug";
 
 type Stage = "setup" | "confirm" | "playing" | "ended";
 
@@ -29,6 +30,7 @@ export function App() {
   const [showVision, setShowVision] = useState(true);
   const [showTrail, setShowTrail] = useState(true);
   const [, setTick] = useState(0);
+  const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
 
   const engineRef = useRef<Engine | null>(null);
   if (!engineRef.current) engineRef.current = new Engine(1);
@@ -100,10 +102,14 @@ export function App() {
 
   const prepare = useCallback(async () => {
     setError(null);
+    const runId = crypto.randomUUID();
+    preparationRef.current = null;
     if (agentKind === "llm" && guidance.trim()) {
       setBusy("正在整理指导…");
       try {
-        const r = await Api.normalize(guidance);
+        const started = performance.now();
+        const r = await Api.normalize(guidance, runId);
+        preparationRef.current = { runId, durationMs: performance.now() - started, server: r.debug ?? null };
         setNormalized(r.guidance);
       } catch (e) {
         setError(`整理指导失败：${(e as Error).message}`);
@@ -122,10 +128,13 @@ export function App() {
     setBusy("正在开局…");
     let agent: Agent;
     let classify: Classifier;
+    const preparation = preparationRef.current;
+    const runId = preparation?.runId ?? crypto.randomUUID();
     try {
       if (agentKind === "llm") {
-        agent = await RemoteAgent.create(guidance, normalized);
-        classify = remoteClassifier;
+        const remote = await RemoteAgent.create(guidance, normalized, runId);
+        agent = remote;
+        classify = remote.classify;
       } else {
         agent = new HeuristicAgent();
         classify = offlineClassifier;
@@ -138,11 +147,14 @@ export function App() {
     const engine = new Engine(seed);
     engineRef.current = engine;
     const runner = new GameRunner(engine, agent, classify, {
+      runId,
+      preparation: agentKind === "llm" && preparation ? { durationMs: preparation.durationMs, server: preparation.server } : undefined,
       guidance: agentKind === "llm" ? guidance : "",
       normalizedGuidance: agentKind === "llm" ? normalized : null,
       onChange: () => setTick((t) => t + 1),
     });
     runnerRef.current = runner;
+    preparationRef.current = null;
     setPaused(false);
     setBusy(null);
     optionsRef.current.trail = [];
