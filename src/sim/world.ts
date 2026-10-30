@@ -50,6 +50,8 @@ export class World {
   readonly events: GameEvent[] = [];
   /** Decision triggers for the player character, drained by the engine. */
   playerTriggers: Trigger[] = [];
+  /** Number of passengers (including the player) who have passed a gate. */
+  gatePassed = 0;
   private nextId = 1;
 
   constructor(seed: number) {
@@ -274,6 +276,7 @@ export class World {
         p.pos = { ...f.def.exit! };
         p.onPlatform = true;
         p.activity = { kind: "done" };
+        this.gatePassed++;
         this.personEvent(p, "service_done", `刷票通过 ${f.def.id}`);
         break;
     }
