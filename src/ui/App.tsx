@@ -29,7 +29,7 @@ class SceneBoundary extends Component<{ children: ReactNode; fallback: ReactNode
   render() { return this.state.error ? this.props.fallback : this.props.children; }
 }
 function Brand() {
-  return <div className={styles.brand}><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 6h26v22l-6 6H13l-6-6V6Zm6 6v11h14V12H13Zm1 16h1m10 0h1M10 37l5-5m15 5-5-5" /></svg><div>AI 猎人<span>METRO · 交通剧场</span></div></div>;
+  return <div className={styles.brand}><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 6h26v22l-6 6H13l-6-6V6Zm6 6v11h14V12H13Zm1 16h1m10 0h1M10 37l5-5m15 5-5-5" /></svg><div>Agent Go<span>METRO · 交通剧场</span></div></div>;
 }
 function downloadMetrics(metrics: FrameMetrics) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(metrics.summary(), null, 2)], { type: "application/json" }));

@@ -2,7 +2,7 @@
 
 依据：[Demo方案1.1](Demo方案1.1.md)。本文把方案落为可实现的技术设计；凡标注“MVP 取值”的参数都是为了开发而定的初值，可在测试后调整，不代表产品规则已最终确认。
 
-文档身份：§1–13 保留开发前设计，§14 为原二维 MVP 实现核对；§15 是用户新授权的 3D 展示升级说明。原规则及历史验收不由展示升级覆盖；当前源码和验证状态见 [文档导航](README.md)及[路线图](ROADMAP.md)。
+文档身份：§1–13 保留开发前设计，§14 为原二维 MVP 实现核对；§15 是后续 3D 展示升级说明；[§16](#16-当前集成差异pr-remaining-001) 记录已合入 PR #8 的楼梯、NPC 协商、回放与报告差异。原规则及历史验收不由展示升级覆盖；当前源码和验证状态见 [文档导航](README.md)及[路线图](ROADMAP.md)。
 
 ## 1. 目标与范围
 
@@ -259,7 +259,7 @@ client.beta.messages.create({
 
 ## 10. 接口定义（摘要）
 
-以下按本次调查的 [服务端路由](../server/app.ts) 与 [远程客户端](../src/agent/remoteAgent.ts) 核对；共享响应结构见 [types.ts](../src/shared/types.ts)，工具参数及解析见 [tools.ts](../server/tools.ts)。这是当前内部接口摘要，不是独立的版本化对外承诺。
+以下按本次调查的 [服务端路由](../server/app.ts) 与 [远程客户端](../src/agent/remoteAgent.ts) 核对；共享响应结构见 [types.ts](../src/shared/types.ts)，工具参数及解析见 [tools.ts](../server/tools.ts)。这是原 MVP 的内部接口摘要；后续页面模型配置、报告上传与 NPC 协商入口见 §16，不是独立的版本化对外承诺。
 
 ```
 POST /api/guidance/normalize  { text }                     → { guidance: NormalizedGuidance | null }
@@ -360,3 +360,26 @@ PORT=8787
 - 标准档使用方向光阴影及环境补光，低画质关闭阴影并降低 DPR；没有刚体、布料或重型后期。`?debug=1` 开放 2D、视距示意、路线、模型入口及 60 秒帧率采样；视距扇形仍是未裁剪示意。
 - 运行状态、票/安检/过闸、当前行动、最近已感知事件与决策摘要来自原世界/报告。赛后完整记录保留原过滤和 JSON 格式，未增加体力、排名、预测进度或逐帧回放。
 - HTTP、共享类型、Agent 工具和 GameReport 均未变更。模拟器仍在可信浏览器内，Express 仍只处理模型相关 API；展示升级不提供服务端权威或竞技防作弊。
+
+## 16. 当前集成差异（PR-REMAINING-001）
+
+身份：已合入 main `c6bfb5297f02cadc9a02dda1547ccb262b49bd93` 的实现核对。用户授权处理并合并剩余 PR，PR #8 的功能与现有 3D、页面模型配置和 Debug 接通；不把以下事实改写成原方案或历史验收。范围、差异与证据见[集成简报](tasks/PR-REMAINING-001.md)、[验证报告](validation/PR-REMAINING-001.md)及 [PR #8](https://github.com/AI-hunter-team/Agent-go/pull/8)。
+
+### 楼梯、结算与 NPC 协商
+
+- 当前站厅为 70×30 米，闸机线 x=44，上层楼梯入口 `(48,15)`、下层出口 `(57,15)`，布局以 [layout.ts](../src/sim/layout.ts) 为准。过闸仅设置 `passedGate`；须到入口执行 `descend_stairs`，完成 6 秒下楼进入站台才成功并计分。不能将原过闸成绩直接与新成绩比较；旧技术章节中的“过闸即成功”不再描述当前实现。
+- 新动作 `request_cut_in` 针对具体、可见、可达且在开放设施排队的乘客，距离不超过 3 米，请求 1–200 字，每位乘客每局最多三轮。模型明确同意后，模拟器才检查并执行 1.5 秒移动到该乘客前的插队；拒绝、离线、错误或截断不产生许可。旧 `attempt_creative` 插队需先沟通，不再直接授权插队。
+- 两名保安沿 x=41 直线往返，分别覆盖 y=3–13 和 y=17–27；违规仍由模拟器的距离、视线和遮挡判定。协商与执行边界见 [negotiation.ts](../src/sim/negotiation.ts)、[creative.ts](../src/sim/creative.ts)，结算见 [engine.ts](../src/sim/engine.ts)及 [world.ts](../src/sim/world.ts)，模型工具见 [tools.ts](../server/tools.ts)。
+- 对应设计：[站内交互](superpowers/specs/2026-10-30-station-interactions-design.md)。楼梯仍是固定耗时与程序高度展示，没有增加多层自由寻路或物理模拟。
+
+### 接口与报告入口
+
+- §10 之外，页面模型配置使用 `POST /api/model/verify`、`POST /api/model/enable`、`DELETE /api/model/config`；配置通过 `x-model-config` 关联当前页面，开局会话绑定所用模型。使用和有效期见 [README 模型配置](../README.md#接入真实模型)，完整校验及错误语义以 [app.ts](../server/app.ts) 为准。
+- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史及可选 sessionId，复用会话或当前页面模型，支持 Anthropic 与 OpenAI 兼容接口；无模型返回 503、模型失败返回 502，均不授予插队许可。客户端提供的上下文不是服务端权威世界。
+- `POST /api/session/:id/report` 上传已结束且 runId 匹配的报告，然后删除会话；记录标为 `clientReported`，不是防作弊证明。Debug 与脱敏边界见 [Debug 日志](Debug日志.md)。
+- [共享类型](../src/shared/types.ts)中轨迹点的可选 `t` 兼容旧报告；完整报告增加逐次决策调用 `attempts`、NPC 对话 `dialogues`、独立用量 `npcTotals` 与可选下楼耗时 `stairs`。只保存 API 实际返回的思考/内容块，不推测未公开推理；迟到响应仅记录，不执行。角色决策与 NPC token 分列，并非包含赛前辅助请求的全局账单。见[调用记录设计](superpowers/specs/2026-10-30-decision-trace-design.md)。
+
+### 回放与验证边界
+
+- [TrajectoryReplay](../src/ui/TrajectoryReplay.tsx) 是独立二维历史地图，展示角色位置、已走路线和决策，支持播放、暂停、倍速、拖动与决策跳转；不倒退实时世界、不重建 NPC/设施历史，也不产生新的模型调用。旧报告缺失时间戳时按兼容逻辑播放。见[回放设计](superpowers/specs/2026-10-30-trajectory-replay-design.md)。
+- 主观战仍为同一模拟器驱动的 3D，会话模型隔离与 Debug 保留。集成软件检查、离线浏览器整局/回放/JSON 和远端 CI 的范围见集成报告及 PR；不据此宣布 Chrome、完整性能或真实模型整局验收通过。
