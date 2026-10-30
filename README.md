@@ -6,9 +6,11 @@
 
 **当前状态：本地 Web MVP 已实现，支持 Luna 兼容 API 与 Anthropic 两种模型接入。** 实测记录见 [验收记录](docs/验收记录.md)。功能修改通过独立的 `codex/` 分支向 `main` 提交 PR，审核后合并。
 
+新开发者与开发 Agent 先读 [AGENTS.md](AGENTS.md)、[文档导航](docs/README.md) 和 [开发与协作流程](docs/DEVELOPMENT.md)，当前任务与阻塞见 [工作记录](docs/开发计划.md)。原 MVP 任务的 `mvp-dev` 分支及推送限制保留在历史记录中，不是所有后续任务的固定分支或永久规则。
+
 ## 本地启动
 
-建议 Node.js 24 LTS、npm。首次安装：
+建议 Node.js 24 LTS、npm，使用仓库 `package-lock.json`。仓库尚未用 `engines` 或版本文件固定 Node；验证报告需记实际版本。首次安装：
 
 ```bash
 npm ci
@@ -28,10 +30,10 @@ npm run dev
 
 ### 接入真实模型
 
-复制本地配置模板：
+尚无 `.env` 时复制本地配置模板（PowerShell）；已有配置则直接编辑，避免覆盖：
 
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env
 ```
 
 编辑 `.env`，填入自己的 `OPENAI_API_KEY`，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
@@ -41,7 +43,7 @@ cp .env.example .env
 - 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
 - 使用 Anthropic 时设置 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_API_KEY`、`AGENT_MODEL=claude-opus-5-5`；也支持 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL` 与 `AGENT_FORCE_LLM=1`。
 - `GET /api/health` 只检查凭据是否配置，**不代表额度、认证或模型可用性已验证**。
-- 每次模型请求会消耗接口额度。可显式运行 `npm run test:model` 做真实整局测试；普通 `npm test` 使用模拟响应，不调用付费模型。
+- 每次模型请求会消耗接口额度，执行真实测试需当前任务对应授权。可显式运行 `npm run test:model` 做真实整局测试；普通 `npm test` 使用模拟响应，不调用付费模型。
 - `DECISION_THINKING_TOKENS=1024` **仅约束思考**，动作与说明另计；`DECISION_MAX_TOKENS=4096` 是独立的总输出保护值，并为非思考输出保留至少 1024 token 空间。
 - 当前兼容协议没有经确认的独立数值思考硬上限。应用通过提示、`low` 强度及返回的 `reasoning_tokens` 检查；思考超限的动作不执行。缺少思考明细时标为无法验证，不能声称供应商生成时已硬截断到 1024。[官方推理参数说明](https://developers.openai.com/api/docs/guides/reasoning)。
 - 每个决策最多重试一次，思考用量逐次检查，复盘累计两次用量。模型传输层不自动重试，20 秒超时；浏览器请求 30 秒超时。
@@ -80,6 +82,8 @@ npm run test:model -- --seeds=1,2 --compare
 
 默认只跑种子 1；上述命令跑种子 1、2，并在种子 1 加跑“优先 TVM-2”的指导对照，最后测试三类创造性意图。通过本地 HTTP API 验证指导整理、会话、决策与清理，完整报告写入 `docs/model-tests/`，不含密钥。辅助调用不计入对局 token 总数，费用以供应商账单为准。
 
+[GitHub Actions CI](.github/workflows/ci.yml) 在指向 `main` 的 PR、`main` 更新及手动触发时，使用 Node.js 24 在 Ubuntu/Windows 上执行锁定安装、类型检查、测试和构建；不调用真实模型或部署。运行结果以 Actions 为准，平台分支保护需另行核实。
+
 ## 已实现
 
 - React + TypeScript + Vite，Canvas 2D 地图；Express 模型代理，兼容 OpenAI API 与 Anthropic。
@@ -93,7 +97,7 @@ npm run test:model -- --seeds=1,2 --compare
 
 ## 验证与边界
 
-见 [验收记录](docs/验收记录.md)。规则 Agent 在种子 1–6 的自动化测试中均能通关；此前浏览器完整跑通种子 1，用时 72.9 秒。模型协议回归测试覆盖请求参数、预算、工具解析、多轮会话和失败处理；Luna 实测由独立命令执行并保存报告。
+见 [验收记录](docs/验收记录.md)和[按任务验证报告](docs/validation/README.md)。规则 Agent 在种子 1–6 的既有自动化测试中均能通关；此前浏览器完整跑通种子 1，用时 72.9 秒。模型协议回归测试覆盖请求参数、预算、工具解析、多轮会话和失败处理；Luna 实测由独立命令执行并保存报告。历史数据不代表本次冲突修复重跑了浏览器或真实模型；各轮验证范围与限制以对应记录为准。
 
 - 玩家采用上帝视角；模型只拿局部观察。图上的圆/扇形是视距和朝向示意，**不是经过遮挡裁剪后的实际可见区域**；规则判定会检查遮挡。
 - 相同种子固定初始环境与随机序列；玩家动作会影响后续状态，不代表不同指导下 NPC 轨迹永远相同。真实模型输出也不保证确定性。
@@ -102,9 +106,11 @@ npm run test:model -- --seeds=1,2 --compare
 
 ## 文档
 
-- [方案 1.1](docs/Demo方案1.1.md)：以用户提供的 1.0 为基础，新增评分及思考预算。
-- [详细 MVP 技术方案](docs/MVP技术方案.md)：架构、规则、参数、接口、验证与实现偏差。
-- [原子化开发计划](docs/开发计划.md)：提交拆分与完成记录。
-- [旧项目基线](PROJECT.md)：历史设计；冲突以方案 1.1 和本轮实现记录为准。
+- [文档导航与权威来源](docs/README.md)：产品、架构、接口、开发、验收及历史入口。
+- [开发与协作流程](docs/DEVELOPMENT.md)：任务边界、并行工作、命令、审查与交接。
+- [当前路线图](docs/ROADMAP.md)和[中央工作记录](docs/开发计划.md)：目标依赖、状态、决定与后续入口。
+- [方案 1.1](docs/Demo方案1.1.md)和[详细 MVP 技术方案](docs/MVP技术方案.md)：产品基线、架构与实现差异；代码不能默默覆盖产品规则。
+- [任务简报](docs/templates/task-brief.md)、[验证报告](docs/templates/validation-report.md)及[PR 模板](.github/pull_request_template.md)：新任务可直接使用。
+- [旧项目基线](PROJECT.md)：历史设计和决策证据，不能替代现行产品基线。
 
 后续三维美术方向仍保留 [现代主义交通剧场](design/ui-concepts-v3/README.md)，本版不做 3D。历史素材没有被删除。
