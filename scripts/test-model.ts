@@ -14,10 +14,10 @@ import { Engine } from "../src/sim/engine";
 
 // Opt-in paid integration test. Never included in npm test.
 const llm = createLlm();
-const budgets = configFromEnv();
+const budgets = configFromEnv({ ...process.env, AGENT_MODEL: llm?.model ?? process.env.AGENT_MODEL });
 if (!llm) throw new Error("请先在 .env 配置模型凭据");
 const sessions = new SessionStore();
-const server = createApp({ llm, sessions, debugLogger: debugLoggerFromEnv(), modelParameters: { ...budgets, model: llm.model, effort: "low", timeoutMs: 20_000 } }).listen(0, "127.0.0.1");
+const server = createApp({ llm, sessions, debugLogger: debugLoggerFromEnv(), modelParameters: { ...budgets, model: llm.model, effort: (process.env.AGENT_PROVIDER === "openai" || process.env.OPENAI_API_KEY) ? budgets.reasoningEffort : "low", timeoutMs: 20_000 } }).listen(0, "127.0.0.1");
 await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 async function api<T>(path: string, body?: unknown, method = "POST"): Promise<T> {

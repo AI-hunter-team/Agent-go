@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { configFromEnv } from "../server/claude";
 import { createLlm } from "../server/llm";
 import { OpenAIClient, OpenAILlmService } from "../server/openai";
 import { SessionStore } from "../server/sessions";
@@ -84,6 +85,24 @@ describe("OpenAI-compatible model", () => {
     ]);
   });
 
+  test("retains empty response evidence without putting blank assistant turns into retry history", async () => {
+    const empty = { id: "empty-reply", model: "gpt-6-luna", choices: [{ finish_reason: "stop", message: { role: "assistant", content: "" } }] };
+    const { service, requests } = fake([completion(), empty, completion([call(undefined, "call2")])]);
+    const session = new SessionStore().create("", null);
+    await service.decide(session, turn());
+    const failed = await service.decide(session, turn());
+    expect(failed.action).toBeNull();
+    expect(failed.error).toContain("空响应");
+    expect(failed.usage).toBeNull();
+    expect(failed.output).toEqual({ id: "empty-reply", stopReason: "stop", content: [empty.choices[0].message] });
+    expect(requests).toHaveLength(2); // No hidden transport retry.
+    expect((await service.decide(session, { ...turn(), retry: true })).action).not.toBeNull();
+    const messages = requests[2].body.messages;
+    expect(messages.filter((m: any) => m.role === "assistant")).toEqual([expect.objectContaining({ tool_calls: [call()] })]);
+    expect(messages.filter((m: any) => m.role === "tool")).toEqual([expect.objectContaining({ tool_call_id: "call1" })]);
+    expect(messages.at(-1)).toMatchObject({ role: "user", content: expect.stringContaining("立即调用一个工具") });
+  });
+
   test("accepts outputs above 1024 when reasoning fits, and rejects reasoning overruns", async () => {
     const within = completion();
     within.usage.completion_tokens = 1600;
@@ -166,4 +185,12 @@ test("compatible NPC calls retain paid usage on refusal, malformed output and tr
     expect(requests[0].body.response_format.json_schema.name).toBe("npc_reply");
     expect(requests[0].body.messages[0].content).toContain(SAFETY_SYSTEM_PROMPT);
   }
+});
+
+
+test("latency settings use none only for the tested Luna model and can restore low/non-streaming", () => {
+  expect(configFromEnv({ AGENT_MODEL: "gpt-6-luna" })).toMatchObject({ reasoningEffort: "none", openaiStream: true });
+  expect(configFromEnv({ AGENT_MODEL: "other-model" }).reasoningEffort).toBe("low");
+  expect(configFromEnv({ AGENT_MODEL: "gpt-6-luna", OPENAI_REASONING_EFFORT: "low", OPENAI_STREAM: "0" })).toMatchObject({ reasoningEffort: "low", openaiStream: false });
+  expect(() => configFromEnv({ OPENAI_REASONING_EFFORT: "typo" })).toThrow("OPENAI_REASONING_EFFORT");
 });

@@ -10,7 +10,7 @@ export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | nu
   if (provider === "openai") {
     if (!env.OPENAI_API_KEY) return null;
     const cfg = configFromEnv({ ...env, AGENT_MODEL: env.AGENT_MODEL || "gpt-6-luna", AGENT_FALLBACK: "off" });
-    return new OpenAILlmService(new OpenAIClient(env.OPENAI_BASE_URL || "https://api.openai.com/v1", env.OPENAI_API_KEY, debugFetch()), cfg);
+    return new OpenAILlmService(new OpenAIClient(env.OPENAI_BASE_URL || "https://api.openai.com/v1", env.OPENAI_API_KEY, debugFetch(), { stream: cfg.openaiStream }), cfg);
   }
   if (provider !== "anthropic") throw new Error(`未知 AGENT_PROVIDER：${provider}`);
   if (!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.AGENT_FORCE_LLM)) return null;

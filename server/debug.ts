@@ -1,3 +1,4 @@
+import { SseDecoder } from "./chatStream";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, stat } from "node:fs/promises";
@@ -72,7 +73,7 @@ export async function traceOperation<T>(
   });
 }
 
-/** Non-streaming transport timing: header wait includes network, queueing and generation. */
+/** Preserve streaming bodies: diagnostics must not buffer the model response. */
 export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {
     const current = context.getStore();
@@ -88,6 +89,7 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
       messageCount: Array.isArray(params.messages) ? params.messages.length : 0,
       requestBytes: Buffer.byteLength(body), tools: (params.tools ?? []).map((t: any) => t.function?.name ?? t.name),
       toolChoice: params.tool_choice ?? null, schema: string(params.response_format?.json_schema?.name ?? params.output_config?.format?.type),
+      streaming: params.stream === true, firstBodyByteMs: null,
       status: null, providerRequestId: null, returnedModel: null, stopReason: null, usage: null,
       waitHeadersMs: 0, readBodyMs: 0, totalMs: 0, error: null,
     };
@@ -100,21 +102,59 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
       call.waitHeadersMs = elapsed(start);
       call.status = response.status;
       call.providerRequestId = response.headers.get("x-request-id") ?? response.headers.get("request-id");
-      const text = await response.text();
-      call.readBodyMs = elapsed(received);
-      try {
-        const data = JSON.parse(text);
-        call.returnedModel = string(data.model);
-        call.stopReason = string(data.choices?.[0]?.finish_reason ?? data.stop_reason);
+      if (!response.ok) call.error = `HTTP ${response.status}`;
+      const record = (data: any) => {
+        call.returnedModel = string(data.model) ?? call.returnedModel;
+        call.stopReason = string(data.choices?.[0]?.finish_reason ?? data.stop_reason) ?? call.stopReason;
         const u = data.usage;
         call.usage = u ? {
           inputTokens: u.prompt_tokens ?? (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
           outputTokens: u.completion_tokens ?? u.output_tokens ?? 0,
           thinkingTokens: u.completion_tokens_details?.reasoning_tokens ?? u.output_tokens_details?.thinking_tokens ?? null,
           cacheReadTokens: u.prompt_tokens_details?.cached_tokens ?? u.cache_read_input_tokens ?? 0,
-        } : null;
-      } catch { /* Never log raw response text or private reasoning. */ }
-      if (!response.ok) call.error = `HTTP ${response.status}`;
+        } : call.usage;
+      };
+      if (response.headers.get("content-type")?.includes("text/event-stream") && response.body) {
+        call.streaming = true;
+        const summary: NonNullable<ModelCallDebug["streamSummary"]> = { bytes: 0, events: 0, toolCallDeltas: 0, contentChars: 0, doneReceived: false, usageReceived: false };
+        call.streamSummary = summary;
+        const parser = new SseDecoder((data) => {
+          summary.events++;
+          if (data === "[DONE]") { summary.doneReceived = true; return; }
+          try {
+            const chunk = JSON.parse(data);
+            summary.usageReceived ||= Boolean(chunk.usage);
+            for (const choice of Array.isArray(chunk.choices) ? chunk.choices : []) {
+              if (Array.isArray(choice.delta?.tool_calls)) summary.toolCallDeltas += choice.delta.tool_calls.length;
+              if (typeof choice.delta?.content === "string") summary.contentChars += choice.delta.content.length;
+            }
+            record(chunk);
+          } catch { /* Metadata never changes stream behavior. */ }
+        });
+        const reader = response.body.getReader();
+        const finish = () => { call.readBodyMs = elapsed(received!); call.totalMs = elapsed(start); };
+        const body = new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            try {
+              const next = await reader.read();
+              if (next.done) { parser.end(); finish(); controller.close(); reader.releaseLock(); }
+              else {
+                if (call.firstBodyByteMs === null) call.firstBodyByteMs = elapsed(start);
+                summary.bytes += next.value.byteLength;
+                parser.push(next.value); finish(); controller.enqueue(next.value);
+              }
+            } catch (error) {
+              call.error = error instanceof Error ? error.name : "TransportError";
+              finish(); controller.error(error);
+            }
+          },
+          async cancel(reason) { try { await reader.cancel(reason); } finally { finish(); reader.releaseLock(); } },
+        });
+        return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+      }
+      const text = await response.text();
+      call.readBodyMs = elapsed(received);
+      try { record(JSON.parse(text)); } catch { /* No raw response in diagnostics. */ }
       return new Response(response.status === 204 || response.status === 205 || response.status === 304 ? null : text, {
         status: response.status, statusText: response.statusText, headers: response.headers,
       });

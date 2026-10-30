@@ -8,9 +8,11 @@ import { configFromEnv } from "./claude";
 
 const llm = createLlm();
 const debugLogger = debugLoggerFromEnv();
+const provider = process.env.AGENT_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "anthropic");
+const config = configFromEnv({ ...process.env, AGENT_MODEL: llm?.model ?? process.env.AGENT_MODEL });
 const app = createApp({ llm, sessions: new SessionStore(), frontendDir: process.env.NODE_ENV === "production" ? resolve("dist") : undefined, debugLogger, modelParameters: {
-  provider: process.env.AGENT_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "anthropic"),
-  ...configFromEnv(), model: llm?.model ?? null, effort: "low", timeoutMs: 20_000, transportRetries: 0,
+  provider,
+  ...config, model: llm?.model ?? null, effort: provider === "openai" ? config.reasoningEffort : "low", timeoutMs: 20_000, transportRetries: 0,
 } });
 
 const port = Number(process.env.PORT ?? 8787);

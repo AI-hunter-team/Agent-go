@@ -19,6 +19,18 @@ export interface ModelCallDebug {
   returnedModel: string | null;
   stopReason: string | null;
   usage: DecisionUsage | null;
+  /** Optional for compatibility with older report exports. First body chunk, not first token. */
+  streaming?: boolean;
+  firstBodyByteMs?: number | null;
+  /** Bounded wire metadata only; never includes content or tool arguments. */
+  streamSummary?: {
+    bytes: number;
+    events: number;
+    toolCallDeltas: number;
+    contentChars: number;
+    doneReceived: boolean;
+    usageReceived: boolean;
+  };
   waitHeadersMs: number;
   readBodyMs: number;
   totalMs: number;

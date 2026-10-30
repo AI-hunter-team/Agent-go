@@ -16,13 +16,20 @@ export interface ClaudeConfig {
   maxThinkingTokens: number;
   /** Server-side refusal fallback ("default"), or off for strict single-model comparisons. */
   fallback: boolean;
+  /** Compatible API only; support depends on the chosen provider/model. */
+  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
+  openaiStream?: boolean;
 }
 
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ClaudeConfig {
   const requested = Number(env.DECISION_MAX_TOKENS ?? DEFAULT_OUTPUT_TOKENS);
   const thinking = Number(env.DECISION_THINKING_TOKENS ?? THINKING_TOKEN_CAP);
   const maxThinkingTokens = Math.min(THINKING_TOKEN_CAP, Number.isFinite(thinking) && thinking > 0 ? Math.floor(thinking) : THINKING_TOKEN_CAP);
+  const effort = env.OPENAI_REASONING_EFFORT ?? (env.AGENT_MODEL === "gpt-6-luna" ? "none" : "low");
+  if (!["none", "minimal", "low", "medium", "high"].includes(effort)) throw new Error("OPENAI_REASONING_EFFORT 配置无效");
   return {
+    reasoningEffort: effort as ClaudeConfig["reasoningEffort"],
+    openaiStream: env.OPENAI_STREAM !== "0",
     model: env.AGENT_MODEL || "claude-opus-5-5",
     maxTokens: Math.max(maxThinkingTokens + 1024, Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : DEFAULT_OUTPUT_TOKENS),
     maxThinkingTokens,

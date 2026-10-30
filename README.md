@@ -95,13 +95,14 @@ Copy-Item .env.example .env
 编辑 `.env`，填入自己的 `OPENAI_API_KEY`，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
 
 - 模板默认 `AGENT_PROVIDER=openai`、`OPENAI_BASE_URL=https://lax.toklens.ai/v1`、`AGENT_MODEL=gpt-6-luna`，使用兼容 OpenAI 的 Chat Completions 协议，由 Node 服务端发出请求。
-- Luna 决策使用 `reasoning_effort=low`、强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
+- Luna 默认使用 `reasoning_effort=none` 降低生成等待，其他兼容模型默认 `low`；可用 `OPENAI_REASONING_EFFORT=low` 恢复更多推理。兼容接口默认通过 HTTP SSE 流式接收（`OPENAI_STREAM=0` 可关闭），强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
+- 流式接收不等于提前执行：服务端等完整动作与结束标记、完成流聚合后才校验并交给模拟器；末尾用量会保留，缺失用量记为未知；浏览器仍通过 HTTP JSON 获取完整决策。首段数据时间与完整动作等待分别记录，换成 WebSocket 不保证降低上游排队或生成耗时。当前 `gpt-6-luna` 的 `none` 已在配置的兼容接口做小请求与完整对局验证；复杂策略质量、上游偶发空响应及稳定时延仍需独立验收，详见 [LLM-LATENCY-001](docs/validation/LLM-LATENCY-001.md)。
 - 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
 - 使用 Anthropic 时设置 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_API_KEY`、`AGENT_MODEL=claude-opus-5-5`；也支持 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL` 与 `AGENT_FORCE_LLM=1`。
 - `GET /api/health` 只检查凭据是否配置，**不代表额度、认证或模型可用性已验证**。
 - 每次模型请求会消耗接口额度，执行真实测试需当前任务对应授权。可显式运行 `npm run test:model` 做真实整局测试；普通 `npm test` 使用模拟响应，不调用付费模型。
 - `DECISION_THINKING_TOKENS=1024` **仅约束思考**，动作与说明另计；`DECISION_MAX_TOKENS=4096` 是独立的总输出保护值，并为非思考输出保留至少 1024 token 空间。
-- 当前兼容协议没有经确认的独立数值思考硬上限。应用通过提示、`low` 强度及返回的 `reasoning_tokens` 检查；思考超限的动作不执行。缺少思考明细时标为无法验证，不能声称供应商生成时已硬截断到 1024。[官方推理参数说明](https://developers.openai.com/api/docs/guides/reasoning)。
+- 当前兼容协议没有经确认的独立数值思考硬上限。应用通过提示、所配置的推理强度及返回的 `reasoning_tokens` 检查；思考超限的动作不执行。缺少思考明细时标为无法验证，不能声称供应商生成时已硬截断到 1024。[官方推理参数说明](https://developers.openai.com/api/docs/guides/reasoning)。
 - 每个决策最多重试一次，思考用量逐次检查，复盘累计两次用量。模型传输层不自动重试，20 秒超时；浏览器请求 30 秒超时。
 - 兼容 API 接入固定关闭应用侧模型回退；Anthropic 可通过 `AGENT_FALLBACK=default` 开启服务端拒答回退。日志记录供应商响应的模型名。
 - 指导整理属于赛前操作，输出上限 4096；创造性归类独立调用，上限 1024。角色决策（含重试）与 NPC 沟通的 token 分列统计，**不是全局账单**。
