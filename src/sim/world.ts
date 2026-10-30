@@ -1,0 +1,302 @@
+import type { FacilityStatus, GameEvent, PassengerKind, Trigger, TriggerKind, Vec } from "../shared/types";
+import { dist, moveToward } from "./geometry";
+import { FACILITIES, queueSlot, type FacilityDef } from "./layout";
+import { findPath } from "./nav";
+import { Rng } from "./rng";
+import { DT, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
+
+export type Activity =
+  | { kind: "idle" }
+  | { kind: "walking"; path: Vec[]; label: string }
+  | { kind: "to_queue"; facility: string; path: Vec[] }
+  | { kind: "queued"; facility: string }
+  | { kind: "service"; facility: string }
+  | { kind: "waiting"; remaining: number }
+  | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
+  | { kind: "done" };
+
+export interface Person {
+  id: string;
+  kind: PassengerKind;
+  isPlayer: boolean;
+  pos: Vec;
+  speed: number;
+  hasTicket: boolean;
+  screened: boolean;
+  onPlatform: boolean;
+  irritable: boolean;
+  activity: Activity;
+  /** Actual service durations, sampled once from the profile ranges. Hidden from the agent. */
+  serviceTime: { tvm: number; security: number; gate: number };
+}
+
+export interface Facility {
+  def: FacilityDef;
+  status: FacilityStatus;
+  note: string | null;
+  queue: string[];
+  serving: { personId: string; remaining: number; recheck: boolean } | null;
+  /** Extra seconds to apply to the next non-player passenger served (scripted re-check). */
+  pendingRecheck: number | null;
+}
+
+const ARRIVE_EPS = 0.05;
+
+export class World {
+  t = 0;
+  readonly rng: Rng;
+  readonly persons = new Map<string, Person>();
+  readonly facilities = new Map<string, Facility>();
+  readonly events: GameEvent[] = [];
+  /** Decision triggers for the player character, drained by the engine. */
+  playerTriggers: Trigger[] = [];
+  private nextId = 1;
+
+  constructor(seed: number) {
+    this.rng = new Rng(seed);
+    for (const def of FACILITIES) {
+      this.facilities.set(def.id, { def, status: "open", note: null, queue: [], serving: null, pendingRecheck: null });
+    }
+  }
+
+  // ---------------------------------------------------------------- people
+
+  addPerson(kind: PassengerKind, pos: Vec, opts: { isPlayer?: boolean; hasTicket?: boolean; irritable?: boolean } = {}): Person {
+    const profile = PROFILES[kind];
+    const sample = (r: [number, number]) => this.rng.range(r[0], r[1]);
+    const person: Person = {
+      id: opts.isPlayer ? "player" : `p${this.nextId++}`,
+      kind,
+      isPlayer: opts.isPlayer ?? false,
+      pos: { ...pos },
+      speed: profile.speed,
+      hasTicket: opts.hasTicket ?? false,
+      screened: false,
+      onPlatform: false,
+      irritable: opts.irritable ?? false,
+      activity: { kind: "idle" },
+      serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
+    };
+    this.persons.set(person.id, person);
+    return person;
+  }
+
+  get player(): Person | undefined {
+    return this.persons.get("player");
+  }
+
+  facility(id: string): Facility | undefined {
+    return this.facilities.get(id);
+  }
+
+  // ------------------------------------------------------------ events
+
+  log(kind: string, text: string, playerVisible: boolean) {
+    this.events.push({ t: round1(this.t), kind, text, playerVisible });
+  }
+
+  notifyPlayer(kind: TriggerKind, text: string) {
+    this.playerTriggers.push({ kind, text });
+    this.log(kind, text, true);
+  }
+
+  private personEvent(p: Person, kind: TriggerKind, text: string) {
+    if (p.isPlayer) this.notifyPlayer(kind, text);
+  }
+
+  // ------------------------------------------------------------ actions
+
+  /** Walk to a point. Returns an error message when it cannot be reached on foot. */
+  walkTo(p: Person, to: Vec, label: string): string | null {
+    const path = findPath(p.pos, to);
+    if (!path) return `无法步行到达${label}：需要先通过安检或闸机`;
+    p.activity = { kind: "walking", path, label };
+    return null;
+  }
+
+  /** Head for the tail of a facility queue. */
+  joinQueue(p: Person, facilityId: string): string | null {
+    const f = this.facilities.get(facilityId);
+    if (!f) return `不存在设施 ${facilityId}`;
+    if (p.activity.kind === "queued" || p.activity.kind === "service") return "已经在队伍中，需先离队";
+    const tail = queueSlot(f.def, f.queue.length);
+    const path = findPath(p.pos, tail);
+    if (!path) return `无法步行到达 ${facilityId} 的队尾：需要先通过安检或闸机`;
+    p.activity = { kind: "to_queue", facility: facilityId, path };
+    return null;
+  }
+
+  leaveQueue(p: Person): string | null {
+    if (p.activity.kind === "service") return "正在办理中，不能离队";
+    if (p.activity.kind !== "queued") return "当前不在任何队伍中";
+    this.removeFromQueue(p);
+    p.activity = { kind: "idle" };
+    return null;
+  }
+
+  removeFromQueue(p: Person) {
+    for (const f of this.facilities.values()) {
+      const i = f.queue.indexOf(p.id);
+      if (i >= 0) f.queue.splice(i, 1);
+    }
+  }
+
+  queuePosition(p: Person): { facility: Facility; index: number } | null {
+    for (const f of this.facilities.values()) {
+      const i = f.queue.indexOf(p.id);
+      if (i >= 0) return { facility: f, index: i };
+    }
+    return null;
+  }
+
+  setStatus(facilityId: string, status: FacilityStatus, note: string | null) {
+    const f = this.facilities.get(facilityId);
+    if (!f) return;
+    f.status = status;
+    f.note = note;
+    this.log("facility_status", `${f.def.label}${STATUS_LABEL[status]}`, false);
+    if (status === "open") return;
+    // Whoever is being served finishes; everyone still waiting has to go elsewhere.
+    for (const id of f.queue) {
+      const p = this.persons.get(id);
+      if (!p) continue;
+      p.activity = { kind: "idle" };
+      this.personEvent(p, "queue_closed", `你所在的 ${facilityId} 已${STATUS_LABEL[status]}，队伍解散，需要另选`);
+    }
+    f.queue = [];
+  }
+
+  // ------------------------------------------------------------ simulation
+
+  /** Advance people and facilities by one fixed step. */
+  stepPeopleAndFacilities() {
+    for (const p of this.persons.values()) this.stepPerson(p);
+    for (const f of this.facilities.values()) this.stepFacility(f);
+  }
+
+  private stepPerson(p: Person) {
+    const a = p.activity;
+    const stride = p.speed * DT;
+    switch (a.kind) {
+      case "walking": {
+        if (followPath(p, a.path, stride)) {
+          p.activity = { kind: "idle" };
+          this.personEvent(p, "arrived", `已到达${a.label}`);
+        }
+        break;
+      }
+      case "to_queue": {
+        const f = this.facilities.get(a.facility)!;
+        a.path[a.path.length - 1] = queueSlot(f.def, f.queue.length);
+        if (followPath(p, a.path, stride)) {
+          if (f.status !== "open") {
+            p.activity = { kind: "idle" };
+            this.personEvent(p, "action_failed", `到达后发现 ${a.facility} ${STATUS_LABEL[f.status]}，无法排队`);
+          } else {
+            f.queue.push(p.id);
+            p.activity = { kind: "queued", facility: a.facility };
+            this.personEvent(p, "joined_queue", `已加入 ${a.facility} 队伍，前面还有 ${f.queue.length - 1} 人`);
+          }
+        }
+        break;
+      }
+      case "queued": {
+        const f = this.facilities.get(a.facility)!;
+        const i = f.queue.indexOf(p.id);
+        if (i >= 0) p.pos = moveToward(p.pos, queueSlot(f.def, i), stride);
+        break;
+      }
+      case "waiting": {
+        a.remaining -= DT;
+        if (a.remaining <= 1e-9) {
+          p.activity = { kind: "idle" };
+          this.personEvent(p, "wait_done", "等待结束");
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  private stepFacility(f: Facility) {
+    if (f.serving) {
+      f.serving.remaining -= DT;
+      if (f.serving.remaining <= 1e-9) {
+        const p = this.persons.get(f.serving.personId);
+        f.serving = null;
+        if (p) this.completeService(f, p);
+      }
+      return;
+    }
+    if (f.status !== "open" || f.queue.length === 0) return;
+    const head = this.persons.get(f.queue[0]);
+    if (!head) {
+      f.queue.shift();
+      return;
+    }
+    if (dist(head.pos, f.def.head) > 0.2) return;
+
+    if (f.def.kind === "gate" && !head.hasTicket) {
+      f.queue.shift();
+      head.activity = { kind: "idle" };
+      this.personEvent(head, "service_rejected", `${f.def.id} 拒绝通行：没有有效车票`);
+      return;
+    }
+    f.queue.shift();
+    let duration = head.serviceTime[f.def.kind] * multiplierOf(f.def.id);
+    let recheck = false;
+    if (f.pendingRecheck !== null && !head.isPlayer) {
+      duration += f.pendingRecheck;
+      f.pendingRecheck = null;
+      recheck = true;
+      this.log("recheck", `${f.def.label}有乘客需要复检`, false);
+    }
+    f.serving = { personId: head.id, remaining: duration, recheck };
+    head.activity = { kind: "service", facility: f.def.id };
+  }
+
+  private completeService(f: Facility, p: Person) {
+    switch (f.def.kind) {
+      case "tvm":
+        p.hasTicket = true;
+        p.pos = { x: f.def.head.x - 0.4, y: f.def.head.y + 1.2 };
+        p.activity = { kind: "idle" };
+        this.personEvent(p, "service_done", `在 ${f.def.id} 买到单程票`);
+        break;
+      case "security":
+        p.screened = true;
+        p.pos = { ...f.def.exit! };
+        p.activity = { kind: "idle" };
+        this.personEvent(p, "service_done", `通过 ${f.def.id} 安检，进入安检后大厅`);
+        break;
+      case "gate":
+        p.pos = { ...f.def.exit! };
+        p.onPlatform = true;
+        p.activity = { kind: "done" };
+        this.personEvent(p, "service_done", `刷票通过 ${f.def.id}`);
+        break;
+    }
+  }
+}
+
+/** Walk along a path; returns true once the final waypoint is reached. */
+function followPath(p: Person, path: Vec[], stride: number): boolean {
+  let budget = stride;
+  while (path.length > 0 && budget > 0) {
+    const next = path[0];
+    const d = dist(p.pos, next);
+    if (d <= budget + ARRIVE_EPS) {
+      p.pos = { ...next };
+      budget -= d;
+      if (path.length === 1) return true;
+      path.shift();
+    } else {
+      p.pos = moveToward(p.pos, next, budget);
+      budget = 0;
+    }
+  }
+  return path.length === 0;
+}
+
+export const round1 = (n: number) => Math.round(n * 10) / 10;
