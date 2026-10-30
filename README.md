@@ -4,7 +4,21 @@
 
 **当前仓库状态：本地 Web MVP 已实现，离线通过证据见历史验收记录；仓库尚无真实大模型整局通过的验收记录。** 新开发者与开发 Agent 先读 [AGENTS.md](AGENTS.md)、[文档导航](docs/README.md) 和 [开发与协作流程](docs/DEVELOPMENT.md)，当前任务与阻塞见 [工作记录](docs/开发计划.md)。原 MVP 任务的 `mvp-dev` 分支及推送限制保留在历史记录中，不是所有后续任务的固定分支或永久规则。
 
-## 本地启动
+## Docker Compose 部署
+
+**完整教程：[Docker Compose 部署与配置](docs/DOCKER.md)。** 包含首次安装、页面 API Key 配置、自定义端口、宿主机网关、更新和停止步骤。
+
+当前 Docker 版本已随 [PR #5](https://github.com/AI-hunter-team/Agent-go/pull/5) 合入 `codex/luna-api-thinking-budget`，尚未进入默认 `main`。首次部署请直接克隆包含 Compose 文件的分支：
+
+```bash
+git clone --branch codex/luna-api-thinking-budget --single-branch https://github.com/AI-hunter-team/Agent-go.git Agent-go-docker
+cd Agent-go-docker
+docker compose up --build -d --wait
+```
+
+打开 [http://localhost:8080](http://localhost:8080)，点击「模型 API 配置」，填写域名和 Key、验证连接、选择模型并启用；也可直接使用离线规则 Agent。需要 Docker Engine / Docker Desktop 和 Docker Compose v2.20+，无需在宿主机安装 Node.js。没有 `.env` 也可以启动。
+
+## 本地开发启动
 
 建议 Node.js 24 LTS、npm，使用仓库 `package-lock.json`。仓库尚未用 `engines` 或版本文件固定 Node；验证报告需记实际版本。首次安装：
 
