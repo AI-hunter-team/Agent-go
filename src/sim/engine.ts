@@ -177,8 +177,12 @@ export class Engine {
     const w = this.world;
     const p = this.player;
     if (this.status !== "running") return { ok: false, text: "本局已结束" };
-    if (p.activity.kind === "service") return { ok: false, text: "正在办理中，请等办理完成" };
-    if (p.activity.kind === "creative") return { ok: false, text: "上一个行动尚未完成" };
+    // Waiting never changes the world, so it is always allowed; anything else must not
+    // interrupt a service or a creative act in progress.
+    if (action.type !== "wait") {
+      if (p.activity.kind === "service") return { ok: false, text: "正在办理中，请等办理完成" };
+      if (p.activity.kind === "creative") return { ok: false, text: "上一个行动尚未完成" };
+    }
     this.wakeAt = null;
 
     switch (action.type) {

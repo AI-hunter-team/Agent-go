@@ -114,4 +114,12 @@ describe("engine", () => {
     };
     expect(run()).toBe(run());
   });
+
+  test("waiting is allowed during a service; other actions are not", () => {
+    const e = new Engine(1);
+    e.player.activity = { kind: "service", facility: "TVM-3" };
+    expect(act(e, { type: "move_to", target: "HALL_C" }).ok).toBe(false);
+    expect(act(e, { type: "wait", seconds: 4 }).ok).toBe(true);
+    expect(e.player.activity.kind).toBe("service");
+  });
 });
