@@ -1,12 +1,12 @@
-# AI猎人 · 地铁站 MVP
+# AI猎人 · 地铁交通剧场
 
 玩家用最多 300 字指导一个角色，让它在动态地铁站里自主完成 **买票 → 安检 → 过闸机**。世界由程序模拟，Agent 只能请求行动，不能改写世界事实。
 
 项目仓库：[AI-hunter-team/Agent-go](https://github.com/AI-hunter-team/Agent-go)。
 
-**当前状态：本地 Web MVP 已实现，支持 Luna 兼容 API 与 Anthropic 两种模型接入。** 实测记录见 [验收记录](docs/验收记录.md)。功能修改通过独立的 `codex/` 分支向 `main` 提交 PR，审核后合并。
+**当前开发版本已增加单层 3D 站厅、几何角色、跟随/总览镜头及完整游戏界面，支持 Luna 兼容 API 与 Anthropic 接入。** 规则仍由原模拟器结算，二维地图保留为调试视图。3D 浏览器证据及未完成验收见 [3D-MIG-001](docs/validation/3D-MIG-001.md)，模型实测见 [验收记录](docs/验收记录.md)，本次集成检查见 [PR7-MERGE-001](docs/validation/PR7-MERGE-001.md)。
 
-新开发者与开发 Agent 先读 [AGENTS.md](AGENTS.md)、[文档导航](docs/README.md) 和 [开发与协作流程](docs/DEVELOPMENT.md)，当前任务与阻塞见 [工作记录](docs/开发计划.md)。原 MVP 任务的 `mvp-dev` 分支及推送限制保留在历史记录中，不是所有后续任务的固定分支或永久规则。
+新开发者与开发 Agent 先读 [AGENTS.md](AGENTS.md)、[文档导航](docs/README.md)和[开发流程](docs/DEVELOPMENT.md)，阶段状态见[工作记录](docs/开发计划.md)。功能修改通过独立 `codex/` 分支向 `main` 提交 PR；历史任务的分支及推送限制不是后续任务的永久规则。
 
 ## 本地启动
 
@@ -24,9 +24,24 @@ npm run dev
 
 打开 http://localhost:5173 。前端 Vite 代理 `/api` 到本机 Express 8787 端口。
 
-没有模型凭据也能玩：选 **离线规则 Agent → 准备开局 → 开局**。可暂停、切换 1/2/4 倍速、查看轨迹、结束对局；结束后看成绩、耗时、决策与事件，或导出 JSON。
+没有模型凭据也能玩：选 **离线规则 Agent → 准备开局 → 出发**。可暂停、切换 1/2/4 倍速、结束对局；结束后看成绩、耗时、决策与事件，或导出 JSON。
 
 离线规则 Agent **不是大模型，不理解自然语言指导**，只用于运行规则演示及回归测试。不能据此认定真实模型会通关。
+
+### 三维观战与占位资产
+
+- 默认第三人称跟随；拖动场景环绕、滚轮缩放；“回正”恢复背后视角，“总览”切换正交镜头。暂停或思考时仍可操作镜头。
+- “显示设置”提供标准/低画质和减少动效；低画质关闭动态阴影。
+- 地址后加 `?debug=1` 显示开发调试：切换同一局的 2D/3D、查看视距示意和轨迹、采样/导出性能记录。
+- 调试中的“加载样例”使用原创 [文本 glTF 样例](public/models/sample-sculpture.gltf)替换玩家模型；也可指定 `/models/` 下的本地 `.gltf` / `.glb`。失败显示几何占位，不改变对局。
+- 资产采用米制、Y 向上、脚底原点、+Z 为角色前方，玩家模型适配到约 1.7 米。动画名为 `Idle / Walk / Interact / Jump`；缺失时使用程序动效。当前支持普通 glTF 2.0/GLB，未配置外部 Draco 解码器，不依赖外部字体或解码 CDN。
+- 正式角色、NPC、设施和材质资产后续单独接入；当前没有多层空间或刚体物理，大型资产和截图不入库。
+
+### 无费用浏览器验收服务
+
+仅在验收时运行 `node --import tsx tests/browser-fixture.ts`，它在本机端口 8891 提供标明“伪模型（无费用）”的 API，不读取模型凭据。另一个 PowerShell 中设置 `$env:PORT = '8891'`，再运行 `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5178 --strictPort`，即可用隔离端口验收。
+
+指导包含 `FAIL-NORMALIZE` 可检查整理失败；`SLOW` 使伪决策等待 10 秒；`FAIL-DECISION` 检查重试/保底/终局；`JUMP` 供已有翻闸机制的展示验证使用。这些只属于测试服务，不是真实模型能力。验收结束后停止该服务；日常使用沿用 `npm run dev`。
 
 ### Docker Compose 部署
 
@@ -117,7 +132,8 @@ npm run test:model -- --seeds=1,2 --compare
 
 ## 已实现
 
-- React + TypeScript + Vite，Canvas 2D 地图；Express 模型代理，兼容 OpenAI API 与 Anthropic。
+- React 18 + TypeScript + Vite，Three.js / R3F / Drei 三维场景，Radix 交互与定制游戏 UI；Express 模型代理，兼容 OpenAI API 与 Anthropic。
+- 与渲染器独立的对局运行层、只读展示快照、位置插值、程序动画、相机避障、同局二维调试与模型失败占位。
 - 固定步长模拟、带种子的 NPC/耗时、队列与服务、设施故障与广播。
 - 角色局部观察、墙体/柱子遮挡、保安视野及违规发现判负。
 - 事件触发决策、思考期间整个世界与倒计时暂停、每局决策预算。
@@ -128,7 +144,7 @@ npm run test:model -- --seeds=1,2 --compare
 
 ## 验证与边界
 
-见 [验收记录](docs/验收记录.md)和[按任务验证报告](docs/validation/README.md)。规则 Agent 在种子 1–6 的既有自动化测试中均能通关；此前浏览器完整跑通种子 1，用时 72.9 秒。模型协议回归测试覆盖请求参数、预算、工具解析、多轮会话和失败处理；Luna 实测由独立命令执行并保存报告。历史数据不代表本次冲突修复重跑了浏览器或真实模型；各轮验证范围与限制以对应记录为准。
+见 [历史验收记录](docs/验收记录.md)与[按任务验证报告](docs/validation/README.md)。规则 Agent 种子 1–6 既有自动化测试通过；3D 任务核对了这些种子的对局结果一致性，并在 Edge 跑通种子 1（72.9 秒）。Luna 真实模型实测由独立命令执行并保存报告，3D 界面原验收使用伪 API。历史数据不代表本次集成重跑了浏览器或真实模型；Chrome、最终构建浏览器/性能及其他未验证项以对应报告为准，不从软件检查推断全部验收通过。
 
 - 玩家采用上帝视角；模型只拿局部观察。图上的圆/扇形是视距和朝向示意，**不是经过遮挡裁剪后的实际可见区域**；规则判定会检查遮挡。
 - 相同种子固定初始环境与随机序列；玩家动作会影响后续状态，不代表不同指导下 NPC 轨迹永远相同。真实模型输出也不保证确定性。
@@ -144,4 +160,4 @@ npm run test:model -- --seeds=1,2 --compare
 - [任务简报](docs/templates/task-brief.md)、[验证报告](docs/templates/validation-report.md)及[PR 模板](.github/pull_request_template.md)：新任务可直接使用。
 - [旧项目基线](PROJECT.md)：历史设计和决策证据，不能替代现行产品基线。
 
-后续三维美术方向仍保留 [现代主义交通剧场](design/ui-concepts-v3/README.md)，本版不做 3D。历史素材没有被删除。
+三维美术沿用 [现代主义交通剧场](design/ui-concepts-v3/README.md)。本版使用几何占位，历史概念图不作为已实现效果或性能承诺。

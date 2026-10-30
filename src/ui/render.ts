@@ -31,12 +31,8 @@ export const MAP_PX = { w: WIDTH * SCALE, h: HEIGHT * SCALE };
 
 const px = (v: number) => v * SCALE;
 
-export interface RenderOptions {
-  showVision: boolean;
-  showTrail: boolean;
-  thinking: boolean;
-  trail?: Vec[];
-}
+export type { ViewOptions as RenderOptions } from "./presentation";
+import type { ViewOptions as RenderOptions } from "./presentation";
 
 export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts: RenderOptions) {
   const { world, guards, player } = engine;
@@ -211,7 +207,7 @@ function line(ctx: CanvasRenderingContext2D, a: Vec, b: Vec) {
   ctx.stroke();
 }
 
-function polyline(ctx: CanvasRenderingContext2D, pts: Vec[]) {
+function polyline(ctx: CanvasRenderingContext2D, pts: readonly Vec[]) {
   ctx.beginPath();
   pts.forEach((p, i) => (i === 0 ? ctx.moveTo(px(p.x), px(p.y)) : ctx.lineTo(px(p.x), px(p.y))));
   ctx.stroke();
