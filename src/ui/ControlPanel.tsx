@@ -21,23 +21,23 @@ export function SetupPanel(p: SetupProps) {
   const over = chars > GUIDANCE_MAX_CHARS;
   return (
     <section className="card">
-      <h2>赛前指导</h2>
+      <h2>出发之前</h2>
       <p className="muted">
         目标：限时 180 秒内买票、安检、刷票过闸。成绩看过闸用时。角色进场后自主行动，你只能观看。
       </p>
 
-      <label className="field">
+      <div className="field" role="group" aria-label="角色驱动方式">
         <span>角色由谁驱动</span>
         <div className="segmented">
-          <button className={p.agentKind === "llm" ? "on" : ""} disabled={!p.llmAvailable} onClick={() => p.onAgentKind("llm")}>
+          <button aria-pressed={p.agentKind === "llm"} className={p.agentKind === "llm" ? "on" : ""} disabled={!p.llmAvailable} onClick={() => p.onAgentKind("llm")}>
             大模型 {p.model ? `（${p.model}）` : ""}
           </button>
-          <button className={p.agentKind === "offline" ? "on" : ""} onClick={() => p.onAgentKind("offline")}>
+          <button aria-pressed={p.agentKind === "offline"} className={p.agentKind === "offline" ? "on" : ""} onClick={() => p.onAgentKind("offline")}>
             离线规则 Agent
           </button>
         </div>
-        {!p.llmAvailable && <small className="muted">服务端未配置 ANTHROPIC_API_KEY，只能使用离线规则 Agent（非大模型）。</small>}
-      </label>
+        {!p.llmAvailable && <small className="muted">模型服务暂不可用，当前可使用离线规则 Agent 体验。</small>}
+      </div>
 
       <label className="field">
         <span>
@@ -58,8 +58,8 @@ export function SetupPanel(p: SetupProps) {
 
       <label className="field inline">
         <span>情景种子</span>
-        <input type="number" min={1} value={p.seed} onChange={(e) => p.onSeed(Math.max(1, Number(e.target.value) || 1))} />
-        <small className="muted">相同种子 = 相同的世界演化，便于对照不同指导。</small>
+        <input aria-label="情景种子" type="number" min={1} value={p.seed} onChange={(e) => p.onSeed(Math.max(1, Number(e.target.value) || 1))} />
+        <small className="muted">相同种子固定初始条件，角色行动会影响后续演化。</small>
       </label>
 
       <button className="primary" disabled={over || p.busy !== null} onClick={p.onPrepare}>
