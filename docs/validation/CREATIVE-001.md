@@ -96,3 +96,4 @@
 - `git fetch origin` 成功，远端 main 仍为 `756ffddfa3fcea271fea5987fb61ba9731abfd6a`；无新增实现差异，无需重新执行已通过的付费模型调用或本地业务检查。PR CI 将检查实际提交及合并候选版本。
 - 自查确认只调整游戏策略语义和默认目标，不改变安全检测函数、模拟器及 API；新测试覆盖两种供应商、旧错误摘要、注入边界、前置条件及真实工具执行。此为 AI 自查，人工审查未进行。
 - 仅纳入五个 server 文件、一个测试、三份任务文档；保留 LOCAL-RUN-001 无关文件，不提交凭据、截图、原始日志或临时脚本。部署未运行。
+- 实现及验证记录已提交为 `b19e182`，推送 `codex/preserve-creative-guidance` 并创建 [PR #12](https://github.com/AI-hunter-team/Agent-go/pull/12)。暂存后 `git diff --cached --check` 通过，9 个任务文件/29 个本地文档链接审计通过。本报告保留合入前快照；最新提交 CI、合入及 main 复验链接由 PR 集成记录承载，不提前把待验状态写成已通过。
