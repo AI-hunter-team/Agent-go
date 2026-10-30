@@ -1,17 +1,10 @@
-import { StrictMode, useRef } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Engine } from "../sim/engine";
-import { MapCanvas } from "./MapCanvas";
-import type { RenderOptions } from "./render";
-
-function Preview() {
-  const engineRef = useRef<Engine | null>(new Engine(1));
-  const optionsRef = useRef<RenderOptions>({ showVision: true, showTrail: false, thinking: false });
-  return <MapCanvas engineRef={engineRef} optionsRef={optionsRef} />;
-}
+import { App } from "./App";
+import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Preview />
+    <App />
   </StrictMode>,
 );
