@@ -10,6 +10,7 @@ import { DECISION_LIMITS, RULES } from "../sim/scenario";
 import { Controls, GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
 import { DecisionLog } from "./DecisionLog";
 import { MapCanvas } from "./MapCanvas";
+import { EventTimeline, ReportSummary } from "./ReportView";
 import type { RenderOptions } from "./render";
 
 type Stage = "setup" | "confirm" | "playing" | "ended";
@@ -175,6 +176,7 @@ export function App() {
         <div className="stage">
           <MapCanvas engineRef={engineRef} optionsRef={optionsRef} />
           <Legend />
+          {stage === "ended" && runner && <EventTimeline report={runner.report()} />}
         </div>
 
         <aside>
@@ -234,15 +236,7 @@ export function App() {
                   </p>
                 </section>
               )}
-              {stage === "ended" && (
-                <section className="card">
-                  <h2>{engine.status === "success" ? `通过闸机 · ${engine.score?.toFixed(1)} 秒` : "本局失败"}</h2>
-                  {engine.failReason && <p>{engine.failReason}</p>}
-                  <button className="primary" onClick={() => setStage("setup")}>
-                    修改指导再来一局
-                  </button>
-                </section>
-              )}
+              {stage === "ended" && <ReportSummary report={runner.report()} onRetry={start} onEdit={() => setStage("setup")} />}
               <section className="card log">
                 <h3>决策记录</h3>
                 <DecisionLog decisions={runner.decisions} />

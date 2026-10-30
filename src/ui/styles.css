@@ -443,3 +443,103 @@ details summary {
   color: var(--ink-soft);
   margin-top: 4px;
 }
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.verdict.win {
+  background: #e3ebe4;
+  color: #2f4a36;
+}
+
+.verdict.lose {
+  background: #f6e1da;
+  color: var(--brick);
+}
+
+.verdict strong {
+  font-size: 26px;
+}
+
+.verdict strong.reason-text {
+  font-size: 16px;
+}
+
+.bar {
+  display: flex;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+}
+
+.bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.bar-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+.report h3 {
+  margin-top: 14px;
+}
+
+.plain {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.timeline {
+  margin-top: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.timeline ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+}
+
+.timeline li {
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.timeline li.unseen {
+  color: var(--ink-soft);
+}
+
+.timeline .time {
+  display: inline-block;
+  width: 56px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.row.between {
+  justify-content: space-between;
+}
