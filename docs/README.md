@@ -8,7 +8,7 @@
 
 | 内容 | 当前权威入口 | 使用边界 |
 |---|---|---|
-| 产品范围、玩法与首版验收目标 | [Demo 方案 1.1](Demo方案1.1.md) | 沿用既有产品基线；长期构思不是当前交付承诺，本次未新增产品批准 |
+| 产品范围、玩法与首版验收目标 | [Demo 方案 1.1](Demo方案1.1.md) | 玩法沿用原基线；后续 3D 展示升级的用户授权、范围与验收见 [3D-MIG-001](tasks/3D-MIG-001.md)，历史长期构思不自动成为交付承诺 |
 | 架构、设计约束及实现差异 | [MVP 技术方案](MVP技术方案.md) | §1–13 主要保留开发前设计，§4/§10 的目录与接口已据源码校准；§14 记录原 MVP 实现核对，不能据此更改产品规则 |
 | 实际目录、共享类型和接口行为 | [技术方案的目录与接口章节](MVP技术方案.md)及其中链接的源码 | 代码是实现事实，规范与代码不一致需记录差异和后续任务 |
 | 开发、文档生命周期、协作和检查要求 | [DEVELOPMENT](DEVELOPMENT.md) | 团队约定；不代表托管平台已经强制执行 |
@@ -21,7 +21,7 @@
 
 ## 架构与接口入口
 
-项目为 npm 管理的 TypeScript Web 应用：React/Vite + Canvas 2D 前端、浏览器模拟器、Express 模型代理，Vitest 在 Node 环境运行测试。目录职责、共享文件协调和真实脚本见 [开发流程](DEVELOPMENT.md)。
+项目为 npm 管理的 TypeScript Web 应用：React/Vite + Three.js/R3F/Drei 三维展示、Radix 定制 UI、浏览器模拟器和 Express 模型代理；Canvas 2D 保留作调试，Vitest 在 Node 环境运行测试。当前三维展示与内部快照入口见 [技术方案 §15](MVP技术方案.md)，目录职责和脚本见 [开发流程](DEVELOPMENT.md)。
 
 HTTP JSON、动作工具及共享数据目前是应用内部接口，复用 [技术方案 §7、§10、§14](MVP技术方案.md)，不另建一份协议表。实际接口以 [server/app.ts](../server/app.ts)、[远程客户端](../src/agent/remoteAgent.ts)、[共享类型](../src/shared/types.ts) 和 [工具定义](../server/tools.ts) 互相核对；导出格式从 `GameReport` 与 [报告导出实现](../src/ui/ReportView.tsx) 查起。目前没有仓库内的独立版本化对外协议或冻结记录，不能因此自行破坏已有调用方或导出数据消费者。
 

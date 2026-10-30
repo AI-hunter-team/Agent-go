@@ -1,6 +1,6 @@
 # Docker Compose 部署与配置
 
-适用版本：已包含 [PR #5](https://github.com/AI-hunter-team/Agent-go/pull/5) 的 `codex/luna-api-thinking-budget` 分支。2026-10-30 核对的版本为 `66d7ede44f8824bb99326998a51fd98b1e644c6c`；此时默认 `main` 尚未包含 Docker/Compose 实现。请先选择本教程指定的分支，再执行部署命令。
+适用版本：默认 `main`，已包含 Docker/Compose、页面模型配置和 3D 界面。本次集成核对基线为 `392f050034dadeaa8d7991621d0c9b7ff410ca69`（2026-10-30）；无需切换历史功能分支。
 
 ## 1. 准备环境
 
@@ -22,7 +22,7 @@ docker compose version
 首次部署建议克隆到新目录，避免影响已有开发环境或覆盖其未提交修改：
 
 ```bash
-git clone --branch codex/luna-api-thinking-budget --single-branch https://github.com/AI-hunter-team/Agent-go.git Agent-go-docker
+git clone --branch main --single-branch https://github.com/AI-hunter-team/Agent-go.git Agent-go-docker
 cd Agent-go-docker
 docker compose up --build -d --wait
 ```
@@ -103,7 +103,7 @@ docker compose down
 
 | 现象 | 检查方式 |
 |---|---|
-| 提示找不到 Compose 配置文件 | 确认位于 `Agent-go-docker` 根目录，且分支是 `codex/luna-api-thinking-budget`；默认 `main` 在上述核对时点尚无该文件 |
+| 提示找不到 Compose 配置文件 | 确认位于 `Agent-go-docker` 根目录，分支为当前 `main`，目录中存在 `compose.yaml` |
 | 8080 端口被占用 | 在 `.env` 设置其他 `APP_PORT`，重新执行启动命令 |
 | 页面可访问，但模型认证失败 | 在页面检查域名、Key、模型权限和额度；`healthy` 不验证这些内容 |
 | 连接宿主机网关失败 | 使用上一节的 `host.docker.internal`，核对网关端口、监听接口和宿主机网络设置 |
@@ -114,6 +114,6 @@ docker compose down
 
 - [实际 Compose 构建、健康启动及模拟模型流程验证](https://github.com/AI-hunter-team/Agent-go/actions/runs/41051814331)。
 - [Ubuntu/Windows 软件检查](https://github.com/AI-hunter-team/Agent-go/actions/runs/41051838597)。
-- 部署实现：[compose.yaml](https://github.com/AI-hunter-team/Agent-go/blob/66d7ede44f8824bb99326998a51fd98b1e644c6c/compose.yaml)、[Dockerfile](https://github.com/AI-hunter-team/Agent-go/blob/66d7ede44f8824bb99326998a51fd98b1e644c6c/Dockerfile)。
+- 部署实现：[compose.yaml](../compose.yaml)、[Dockerfile](../Dockerfile)。
 
 以上是既有部署版本的验证记录，本次教程更新没有重新执行 Docker 构建或真实模型调用。实际验证的平台为 Linux CI 容器环境；不能据此宣称全部桌面 Docker 或 CPU 架构均已验收。

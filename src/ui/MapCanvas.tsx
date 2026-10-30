@@ -27,5 +27,5 @@ export function MapCanvas({ engineRef, optionsRef }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [engineRef, optionsRef]);
 
-  return <canvas ref={canvasRef} className="map" style={{ width: MAP_PX.w, height: MAP_PX.h }} />;
+  return <canvas ref={canvasRef} className="map" style={{ width: "100%", height: "100%", objectFit: "contain" }} aria-label="二维调试地图" />;
 }

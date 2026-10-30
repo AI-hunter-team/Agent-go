@@ -24,7 +24,7 @@ export const MECHANIC_NAME: Record<CreativeMechanic, string> = {
 
 export function describeUsage(u: DecisionUsage | null): string {
   if (!u) return "";
-  const thinking = u.thinkingTokens === null ? "" : ` · 思考 ${u.thinkingTokens}`;
+  const thinking = u.thinkingTokens === null ? " · 思考用量未返回" : ` · 思考 ${u.thinkingTokens}`;
   return `输入 ${u.inputTokens} · 输出 ${u.outputTokens}${thinking} token`;
 }
 
