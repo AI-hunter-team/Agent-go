@@ -59,7 +59,7 @@ describe("NPC negotiation API", () => {
     const call = await start(async (value) => { seen.push(value); return reply; });
     const result = await call(request);
     expect(result.status).toBe(200);
-    expect(result.body).toEqual(reply);
+    expect(result.body).toMatchObject(reply);
     expect(seen).toEqual([request]);
   });
 
@@ -114,7 +114,7 @@ describe("NPC negotiation API", () => {
     const call = await start(async () => failure);
     const result = await call(request);
     expect(result.status).toBe(502);
-    expect(result.body).toEqual(failure);
+    expect(result.body).toMatchObject(failure);
   });
 
   test("unexpected service errors fail closed without retry", async () => {

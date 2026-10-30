@@ -1,4 +1,5 @@
 // Types shared by the simulation, the agents, the API server and the UI.
+import type { OperationDebug, RunDebug } from "./debug";
 
 export interface Vec {
   x: number;
@@ -27,6 +28,7 @@ export type ActionType = AgentAction["type"];
 export type CreativeMechanic = "cut_in_line" | "jump_gate" | "unsupported";
 
 export interface CreativeClassification {
+  debug?: OperationDebug;
   mechanic: CreativeMechanic;
   reason: string;
   /** "llm" when classified by the model, "keywords" for the offline fallback. */
@@ -123,6 +125,7 @@ export interface DecisionUsage {
 }
 
 export interface DecisionResult {
+  debug?: OperationDebug;
   action: AgentAction | null;
   thinking: string | null;
   usage: DecisionUsage | null;
@@ -152,6 +155,7 @@ export interface CutInDialogueRequest {
 }
 
 export interface NpcReply {
+  debug?: OperationDebug;
   accepted: boolean;
   reply: string;
   reason: string;
@@ -234,6 +238,7 @@ export interface TrailPoint extends Vec {
 }
 
 export interface GameReport {
+  debug?: RunDebug;
   seed: number;
   agentKind: "llm" | "offline";
   guidance: string;
@@ -253,5 +258,5 @@ export interface GameReport {
   events: GameEvent[];
   trail: TrailPoint[];
   thinkingRealSeconds: number;
-  totals: { decisions: number; inputTokens: number; outputTokens: number; thinkingTokens: number };
+  totals: { decisions: number; inputTokens: number; outputTokens: number; thinkingTokens: number | null };
 }

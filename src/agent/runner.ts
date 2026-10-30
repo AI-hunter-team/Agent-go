@@ -14,9 +14,10 @@ import type {
 import type { Engine } from "../sim/engine";
 import { classifyByKeywords } from "../sim/intent";
 import { summarizeObservation } from "../sim/observation";
-import { DECISION_LIMITS } from "../sim/scenario";
-import { prepareCutIn } from "../sim/negotiation";
+import { DECISION_LIMITS, RULES, DT } from "../sim/scenario";
 import type { Agent, Classifier, NpcNegotiator } from "./agent";
+import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
+import { prepareCutIn } from "../sim/negotiation";
 
 export type RunnerPhase = "ready" | "running" | "thinking" | "ended";
 
@@ -28,6 +29,8 @@ export interface RunnerOptions {
   onChange?: () => void;
   now?: () => number;
   negotiate?: NpcNegotiator;
+  runId?: string;
+  preparation?: { durationMs: number; server: OperationDebug | null };
 }
 
 /**
@@ -40,7 +43,7 @@ export class GameRunner {
   readonly attempts: DecisionAttempt[] = [];
   readonly dialogues: NpcDialogueRecord[] = [];
   private npcRealMs = 0;
-  thinkingRealMs = 0;
+  get thinkingRealMs() { return this.snapshotDebug().summary.aiWaitMs; }
   budgetExhausted = false;
   /** Latest decision while it is still being made, for the "thinking" indicator. */
   pending: Promise<void> | null = null;
@@ -50,6 +53,8 @@ export class GameRunner {
   private rejectStreak = 0;
   private readonly maxDecisions: number;
   private readonly now: () => number;
+  private readonly debug: RunDebug;
+  private active: { record: DebugAttempt; start: number } | null = null;
 
   constructor(
     readonly engine: Engine,
@@ -59,6 +64,11 @@ export class GameRunner {
   ) {
     this.maxDecisions = opts.maxDecisions ?? DECISION_LIMITS.maxDecisions;
     this.now = opts.now ?? (() => performance.now());
+    this.debug = {
+      version: 1, runId: opts.runId ?? crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: null,
+      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: RULES.timeLimit, stepSeconds: DT, simulationRules: { ...RULES }, decisionLimits: { ...DECISION_LIMITS } },
+      preparation: opts.preparation ?? { durationMs: 0, server: null }, attempts: [], summary: summarizeDebug([]),
+    };
   }
 
   start() {
@@ -143,11 +153,19 @@ export class GameRunner {
     if (action) {
       this.consecutiveFailures = 0;
       if (action.type === "attempt_creative") {
+        const record = this.beginAttempt("classification", turn);
         try {
           classification = await this.classify(action.intent, observation);
-        } catch {
+          if (record.status !== "cancelled") {
+            record.server = classification.debug ?? null;
+            record.error = classification.debug?.error ?? null;
+            record.classification = { mechanic: classification.mechanic, reason: classification.reason, source: classification.source };
+          }
+        } catch (error) {
+          if (record.status !== "cancelled") record.error = String(error);
           classification = classifyByKeywords(action.intent);
-        }
+          if (record.status !== "cancelled") record.classification = classification;
+        } finally { this.endAttempt(record); }
         if (engine.status !== "running") return;
         outcome = engine.applyAction(action, classification.mechanic);
       } else if (action.type === "request_cut_in") {
@@ -222,6 +240,7 @@ export class GameRunner {
     this.dialogues.push(dialogue);
     this.opts.onChange?.();
     const start = this.now();
+    const debugRecord = this.beginAttempt("negotiation", { triggers: [], lastResult: this.lastResult, observation: e.observe() });
     let response: NpcReply;
     try {
       response = this.opts.negotiate ? await this.opts.negotiate(prepared.request) : {
@@ -234,7 +253,9 @@ export class GameRunner {
       response = { accepted: false, reply: "沟通失败，请继续排队或稍后重试。", reason: String(err), source: "error", model: null, usage: null };
     } finally {
       this.npcRealMs += this.now() - start;
+      this.endAttempt(debugRecord);
     }
+    if (debugRecord.status !== "cancelled") { debugRecord.usage = response.usage; debugRecord.error = response.source === "error" ? response.reason : null; debugRecord.server = response.debug ?? null; }
     dialogue.response = structuredClone(response);
     dialogue.finishedAt = new Date().toISOString();
     dialogue.status = response.source === "llm" ? "completed" : "error";
@@ -248,7 +269,7 @@ export class GameRunner {
   }
 
   private async timed(turn: AgentTurn, attempts: DecisionAttempt[]): Promise<DecisionResult> {
-    const start = this.now();
+    const debugRecord = this.beginAttempt(turn.retry ? "retry" : "decision", turn);
     const record: DecisionAttempt = {
       decisionIndex: this.decisions.length + 1,
       attempt: attempts.length + 1,
@@ -268,7 +289,11 @@ export class GameRunner {
     } catch (err) {
       result = { action: null, thinking: null, usage: null, model: null, latencyMs: 0, error: String(err) };
     } finally {
-      this.thinkingRealMs += this.now() - start;
+      this.endAttempt(debugRecord);
+    }
+    if (debugRecord.status !== "cancelled") {
+      debugRecord.action = result.action; debugRecord.error = result.error;
+      debugRecord.usage = result.usage; debugRecord.server = result.debug ?? null;
     }
     record.response = structuredClone(result);
     record.status = result.error ? "error" : "completed";
@@ -277,24 +302,62 @@ export class GameRunner {
     return result;
   }
 
+  private beginAttempt(operation: DebugAttempt["operation"], turn: AgentTurn): DebugAttempt {
+    const self = turn.observation.self;
+    const record: DebugAttempt = {
+      index: this.debug.attempts.length + 1, decisionIndex: this.decisions.length + 1,
+      operation, stage: self.passedGate ? "stairs" : !self.hasTicket ? "ticket" : !self.screened ? "security" : "gate",
+      startedAt: new Date().toISOString(), durationMs: 0, status: "pending", turn: structuredClone(turn),
+      action: null, classification: null, error: null, usage: null, server: null,
+    };
+    this.debug.attempts.push(record);
+    this.active = { record, start: this.now() };
+    return record;
+  }
+
+  private endAttempt(record: DebugAttempt) {
+    if (record.status === "cancelled") return;
+    if (this.active?.record === record) {
+      record.durationMs = Math.max(0, this.now() - this.active.start);
+      record.status = "completed";
+      this.active = null;
+    }
+  }
+
+  private snapshotDebug(): RunDebug {
+    const debug = structuredClone(this.debug);
+    if (this.active) debug.attempts[this.active.record.index - 1].durationMs = Math.max(0, this.now() - this.active.start);
+    debug.summary = summarizeDebug(debug.attempts, debug.preparation.durationMs);
+    return debug;
+  }
+
   private finish() {
     if (this.phase === "ended") return;
     this.phase = "ended";
-    void this.agent.dispose().catch(() => undefined);
+    if (this.active) {
+      this.active.record.durationMs = Math.max(0, this.now() - this.active.start);
+      this.active.record.status = "cancelled";
+      this.active.record.error = "对局结束时请求仍未返回；计时截至结束时刻";
+      this.active = null;
+    }
+    this.debug.endedAt = new Date().toISOString();
+    void this.agent.dispose(this.report()).catch(() => undefined);
     this.opts.onChange?.();
   }
 
   report(): GameReport {
     const e = this.engine;
-    const totals = { decisions: this.decisions.length, inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
+    const totals: GameReport["totals"] = { decisions: this.decisions.length, inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
     for (const a of this.attempts) {
       totals.inputTokens += a.response?.usage?.inputTokens ?? 0;
       totals.outputTokens += a.response?.usage?.outputTokens ?? 0;
-      totals.thinkingTokens += a.response?.usage?.thinkingTokens ?? 0;
+      totals.thinkingTokens = totals.thinkingTokens === null || a.response?.usage?.thinkingTokens == null
+        ? null : totals.thinkingTokens + a.response.usage.thinkingTokens;
     }
     const round = (n: number) => Math.round(n * 10) / 10;
     const tb = e.timeBreakdown;
     return {
+      debug: this.snapshotDebug(),
       seed: e.seed,
       agentKind: this.agent.kind,
       guidance: this.opts.guidance ?? "",

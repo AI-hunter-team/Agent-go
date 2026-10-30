@@ -2,6 +2,8 @@
 
 依据：[Demo方案1.1](Demo方案1.1.md)。本文把方案落为可实现的技术设计；凡标注“MVP 取值”的参数都是为了开发而定的初值，可在测试后调整，不代表产品规则已最终确认。
 
+文档身份：§1–13 保留开发前设计，§14 为原二维 MVP 实现核对；§15 是用户新授权的 3D 展示升级说明。原规则及历史验收不由展示升级覆盖；当前源码和验证状态见 [文档导航](README.md)及[路线图](ROADMAP.md)。
+
 ## 1. 目标与范围
 
 在浏览器中跑通一局完整体验：**填写指导 → 指导整理 → 角色在二维地铁站中自主完成“买票 → 安检 → 过闸机” → 复盘**。
@@ -23,7 +25,7 @@ MVP 必须证明（方案 1.1 第十一章）：
 | 前端 | Vite + React 18 | 面板与报告用 React；地图用 Canvas 2D 绘制 |
 | 模拟 | 纯 TS 模块，运行在浏览器 | 无 DOM 依赖，可在 Node/Vitest 中独立测试 |
 | 后端 | Node 20+，Express | 只做模型代理与会话记忆；API Key 只存在服务端 |
-| 模型 | Anthropic SDK `@anthropic-ai/sdk`，默认 `claude-opus-5-5` | 通过 `AGENT_MODEL` 环境变量可替换；服务端保留 Provider 接口，后续可接其他模型做对比 |
+| 模型 | 兼容 OpenAI 的 Chat Completions（模板默认 `gpt-6-luna`）；保留 Anthropic SDK | `AGENT_PROVIDER` 选择协议，`AGENT_MODEL` 选择模型，`OPENAI_BASE_URL` 配置兼容接口 |
 | 测试 | Vitest | 模拟器规则、确定性、离线 Agent 通关 |
 | 运行 | `npm run dev` 同时启动 Vite(5173) 与 API(8787)，Vite 代理 `/api` | |
 
@@ -42,7 +44,7 @@ MVP 必须证明（方案 1.1 第十一章）：
                              │ HTTP JSON
 ┌──────────────── Node 服务 (server/) ───────────────────┐
 │ /api/guidance/normalize  指导整理（赛前一次）           │
-│ /api/agent/decide        单次决策（≤1024 token）        │
+│ /api/agent/decide        单次决策（思考预算 1024 token） │
 │ /api/creative/classify   创造性意图归类（封闭清单）     │
 │ /api/session/:id DELETE  局后清空局内记忆               │
 │ SessionStore（内存）：system 提示词 + 本局消息历史       │
@@ -55,17 +57,19 @@ MVP 必须证明（方案 1.1 第十一章）：
 
 ```
 src/
-  shared/       types.ts       —— 动作、观察、事件、决策结果等共享类型
+  shared/       types.ts guidance.ts —— 共享类型与指导长度校验
   sim/          rng.ts geometry.ts layout.ts nav.ts scenario.ts
-                world.ts queues.ts npc.ts guards.ts observation.ts
+                world.ts npc.ts guards.ts observation.ts intent.ts
                 creative.ts engine.ts
-  agent/        heuristicAgent.ts remoteAgent.ts runner.ts
+  agent/        agent.ts heuristicAgent.ts remoteAgent.ts runner.ts
   ui/           App.tsx MapCanvas.tsx ControlPanel.tsx DecisionLog.tsx
-                ReportView.tsx render.ts styles.css main.tsx
-server/         index.ts sessions.ts prompts.ts tools.ts llm.ts classify.ts
+                ReportView.tsx render.ts format.ts styles.css main.tsx
+server/         index.ts app.ts sessions.ts prompts.ts tools.ts claude.ts structured.ts
 tests/          *.test.ts
-docs/           方案、技术方案、开发计划
+docs/           产品/技术方案、导航/开发流程、路线图/工作记录、任务/验证及模板
 ```
+
+职责与消费者检查见 [开发流程](DEVELOPMENT.md)。动作/观察/报告结构维护在 [shared/types.ts](../src/shared/types.ts)，Agent 接口在 [agent.ts](../src/agent/agent.ts)；队列实现合并于 `world.ts`，不存在独立 `queues.ts`。
 
 ## 5. 模拟器
 
@@ -175,17 +179,27 @@ docs/           方案、技术方案、开发计划
 
 - 触发决策 ⇒ GameRunner 停止调用 `step()`，界面显示“思考中”；收到有效动作后恢复。
 - 新决策返回后：若是新动作则替换当前动作；若模型认为维持现状，可调用 `wait` 或 `join_queue` 当前队伍（视为保持）。
-- **单次决策 ≤ 1024 token（方案 1.1）**：请求参数 `max_tokens: 1024`。在 Opus 5.5 上思考不能关闭、也不接受 `budget_tokens`，`max_tokens` 是唯一的硬上限，它覆盖“思考 + 说明 + 工具调用”的全部输出，因此思考链必然 ≤ 1024 token。同时设置 `output_config.effort: "low"` 让模型倾向简短思考。
-- 若 `stop_reason == "max_tokens"` 且未产生工具调用，算一次决策失败。
+- **单次思考预算 ≤ 1024 token（方案 1.1）**：`DECISION_THINKING_TOKENS` 只针对思考，工具与说明另计。`DECISION_MAX_TOKENS` 默认 4096，作为独立的总输出保护值；不再以总输出 1024 代替思考预算。
+- Luna 兼容协议和保留的 Anthropic adaptive 路径使用 low 强度、提示中的数值预算及返回的思考用量检查。思考超限则动作不执行；未返回明细则保留未知。此检查发生在响应后，不能保证供应商生成时不超过预算，也不能阻止已产生的超限计费。
+- Anthropic 的 `stop_reason == "max_tokens"` 或兼容 API 的 `finish_reason == "length"` 都视为截断，动作不执行。
 - 决策失败处理：同一触发重试 1 次（追加“请直接调用一个工具”的提示）；仍失败则执行保底动作 `wait 2s` 并记入复盘；连续 3 次失败 ⇒ 本局终止（模型不可用）。
 - 单局决策上限 60 次（MVP 取值）。用尽后不再调用模型，当前动作继续执行到底，空闲则原地等待（复盘中注明）。
 
 ### 7.4 模型调用细节（服务端）
 
+`server/llm.ts` 按环境配置选择协议，实现共同的 `LlmService`。兼容 API 模式由 `server/openai.ts` 使用服务端原生 `fetch` 调用 `${OPENAI_BASE_URL}/chat/completions`，不引入额外 SDK。所有模型请求超时 20 秒，无传输层自动重试。
+
+- Luna 强制 `tool_choice: "required"`、`parallel_tool_calls: false`，并在应用侧再次检查恰好一个工具及合法参数。多个调用全部拒绝，下一轮仍逐一回答其工具 ID，避免破坏会话协议。
+- `max_completion_tokens` 默认 4096，限制总输出，独立于 1024 思考预算；输入/输出、缓存命中及推理 token 明细按接口 `usage` 记录。缺少明细时保留未知，不伪造思考摘要。完整思考总数只在所有决策均有明细时显示。
+- 指导整理与意图分类使用 `response_format.json_schema`、`strict: true`，并校验必需字段。应用侧不发起模型切换，响应模型名写入日志。
+- API Key 仅从服务端 `.env` 读取，错误信息会遮蔽该密钥；不允许鉴权请求跟随重定向。
+
+保留的 Anthropic 调用方式：
+
 ```ts
 client.beta.messages.create({
   model: AGENT_MODEL,                    // 默认 claude-opus-5-5
-  max_tokens: 1024,                      // 单次决策硬上限
+  max_tokens: 4096,                      // 总输出保护值，思考预算单独为 1024
   thinking: { type: "adaptive", display: "summarized" },
   output_config: { effort: "low" },
   system: [...固定规则与地图, ...整理后的玩家指导],   // 带 cache_control，跨决策复用缓存
@@ -245,16 +259,18 @@ client.beta.messages.create({
 
 ## 10. 接口定义（摘要）
 
+以下按本次调查的 [服务端路由](../server/app.ts) 与 [远程客户端](../src/agent/remoteAgent.ts) 核对；共享响应结构见 [types.ts](../src/shared/types.ts)，工具参数及解析见 [tools.ts](../server/tools.ts)。这是当前内部接口摘要，不是独立的版本化对外承诺。
+
 ```
-POST /api/guidance/normalize  { text }                     → { guidance, plan }
-POST /api/session             { guidance, scenarioBrief }   → { sessionId }
-POST /api/agent/decide        { sessionId, turn }           → { action, reason, thinking, usage, model, latencyMs, error? }
-POST /api/creative/classify   { intent, context }           → { mechanic, reason }
+POST /api/guidance/normalize  { text }                     → { guidance: NormalizedGuidance | null }
+POST /api/session             { guidance, normalized }      → { sessionId }
+POST /api/agent/decide        { sessionId, turn }           → DecisionResult
+POST /api/creative/classify   { intent, observation }       → CreativeClassification
 DELETE /api/session/:id                                     → 204
-GET  /api/health                                            → { llm: boolean, model }
+GET  /api/health                                            → { llm: boolean, model: string | null }
 ```
 
-`turn` 为上一动作结果 + 新观察 + 触发事件（结构化 JSON，服务端渲染为文本）。
+`turn` 为上一动作结果 + 新观察 + 触发事件（结构化 JSON，服务端渲染为文本）。空白指导返回 `guidance: null`，初始方案包含于 `NormalizedGuidance.initialPlan`，没有独立的 `plan` 响应字段。错误、会话及无模型分支以路由和 [server.test.ts](../tests/server.test.ts) 核对；health 不执行真实模型请求。
 
 ## 11. 测试策略
 
@@ -268,10 +284,13 @@ GET  /api/health                                            → { llm: boolean, 
 `.env`（不入库，提供 `.env.example`）：
 
 ```
-ANTHROPIC_API_KEY=
-AGENT_MODEL=claude-opus-5-5
-DECISION_MAX_TOKENS=1024
-AGENT_FALLBACK=default   # off 关闭服务端拒答兜底
+AGENT_PROVIDER=openai
+OPENAI_BASE_URL=https://lax.toklens.ai/v1
+OPENAI_API_KEY=
+AGENT_MODEL=gpt-6-luna
+DECISION_THINKING_TOKENS=1024
+DECISION_MAX_TOKENS=4096
+AGENT_FALLBACK=off
 PORT=8787
 ```
 
@@ -279,7 +298,7 @@ PORT=8787
 
 | 风险 | 应对 |
 |---|---|
-| 1024 token 内模型未给出工具调用 | effort low + 提示“先行动后解释” + 重试 1 次 + 保底动作 |
+| 思考超预算或总输出截断 | effort low + 思考预算提示及 usage 检查 + 重试 1 次 + 保底动作；接口没有独立数值硬上限时不能保证生成长度 |
 | 每次决策现实等待数秒 | 思考中显示状态与思考摘要；system 提示词做缓存 |
 | 创造性归类不一致 | 封闭枚举 + 结构化输出；离线关键词兜底 |
 | 参数手感 | 所有数值集中在 `scenario.ts`，便于调参 |
@@ -294,7 +313,7 @@ PORT=8787
 
 - 队列、设施、移动合并在 `src/sim/world.ts`，没有单独的 queues.ts。
 - `src/agent/runner.ts` 负责暂停、预算、重试和报告；没有额外的报告模型调用。
-- 模型层为 `server/claude.ts`（局内决策）与 `server/structured.ts`（赛前整理/意图归类）；模型参数配置在前者。
+- 模型入口为 `server/llm.ts`；`server/openai.ts` 实现兼容 API，`server/claude.ts` 与 `server/structured.ts` 保留 Anthropic 支持并共享工具和结构化协议。
 - 会话创建接口是 `POST /api/session { guidance, normalized }`；不接受客户端自定义世界规则作为 system 提示词。
 - 创造性归类接口是 `POST /api/creative/classify { intent, observation }`。
 - 导航图按节点可直达关系构造可见性边，使用 Dijkstra；程序只选几何路径，不选择策略目的地。
@@ -312,12 +331,12 @@ PORT=8787
 
 ### 模型预算与错误处理
 
-- `max_tokens <= 1024` 限制每次角色决策请求的全部输出，不只是可见说明；这比单独限制思考更严格，可能更容易截断。
-- 同一决策机会允许一次重试，两次请求分别受 1024 限制；累计用量包含二者。每局上限 60 个决策机会，最多 120 次角色决策请求（SDK 自动重试已关闭）。
+- 思考预算默认为 1024，总输出保护值默认为 4096，分别配置；不把工具输出算进思考额度。服务端检查已报告的思考用量，未知时明确保留未知，不宣称硬上限已经验证。
+- 同一决策机会允许一次重试，两次请求分别检查思考预算；累计用量包含二者。每局上限 60 个决策机会，最多 120 次角色决策请求（传输层不自动重试）。
 - 三次连续决策失败终止本局，无成绩，但这属于技术失败，不等同于角色违规死亡。
 - API SDK 超时 20 秒，浏览器请求超时 30 秒。终止对局立即结束前端对局并清理会话，迟到动作不执行；已经发给供应商的请求未必立即取消或免于计费。
 - 赛前整理允许 4096 输出 token；环境意图归类独立请求允许 1024。报告的 token 累计只覆盖局内角色决策，不包含这两类辅助调用，也不提供金额账单。
-- 拒答回退默认开启，实际模型记录在日志里。做严格模型比较应关闭回退；服务端回退内部的用量以供应商 usage/账单为准。
+- 当前 Luna 模板关闭模型回退；Anthropic 可显式开启拒答回退。模型名按接口响应记录，供应商内部路由不能由本应用独立验证。
 - 复盘仅显示模型返回的简短说明或摘要，不要求输出私有的完整思考链。
 
 ### 交付限制
@@ -326,4 +345,18 @@ PORT=8787
 - 报告支持 JSON 导出、轨迹和同种子再运行，但不是存档式逐帧回放；刷新页面会丢失未导出的报告。
 - 种子固定初始条件和随机序列；不同动作会影响队伍及事件消费顺序，不保证所有后续状态完全一样。
 - 本地可信客户端执行模拟；Express 监听 127.0.0.1。未实现账号、鉴权、计费限流、竞技防作弊或公网部署加固，不应直接开放到公网。
-- 真实模型整局未测试，因此默认模型能否在 1024 token 下稳定给出有效动作、不同自然语言指导的行为差异与实际费用仍待真实接口验收。
+- Luna 真实整局测试通过 `npm run test:model` 单独执行，结果见验收记录与 `docs/model-tests/`。有限样本不能证明所有种子和指导稳定通过，金额仍以供应商账单为准。
+
+## 15. 浏览器三维展示升级（3D-MIG-001）
+
+身份：后续本地实现说明，用户已要求实施完整 3D V1 计划。范围见 [实施简报](tasks/3D-MIG-001.md)，软件、Edge、Chrome、模型和性能结论分别见 [验证报告](validation/3D-MIG-001.md)，不据此宣布全部实际验收或合入。
+
+- React 18.3.1 配合 Three.js 0.170、R3F 8.18、Drei 9.122；Three 类型包同 revision。WebGL2 渲染，3D 场景按需加载；Radix Dialog/Tooltip 负责交互，CSS Modules/变量实现交通导视与票据风格。
+- [GameSession](../src/ui/gameSession.ts) 从 App 中接管对局推进，仍调用原 GameRunner，每次至多推进一个固定步并采集快照。只有会话推进世界；渲染器挂载、镜头和 2D/3D 切换不会启动第二个模拟循环。
+- [presentation](../src/ui/presentation.ts) 复制人物、保安、设施和路线的原始值作为 UI 内部只读快照，保留相邻步长用于插值。二维 `(x,y)` 对应三维 `(x,height,y)`；人物朝向和视觉跳跃高度只作用于 Three 对象。
+- `useGameSession` 持续推进当前会话、约每 120ms 刷新 HUD；R3F `useFrame` 更新模型和相机，不逐帧写 React state。暂停、思考和终局使用冻结/对齐后的展示状态，新局清除插值缓存。
+- [三维场景](../src/ui/scene/GameScene.tsx) 从现有布局生成站厅和设备；角色采用共享几何、材质和程序动作。跟随使用透视相机，支持环绕、距离调节和回正；总览使用正交相机。相机对墙柱做线段盒体裁剪，包括装饰外围墙，不更改模拟器阻挡。
+- 模型输入限本地 `/models/` 普通 GLB/glTF 2.0；玩家模型居中、脚底对齐并适配约 1.7 米，加载失败仍显示几何角色。支持 `Idle/Walk/Interact/Jump` 动画名及缺失时的程序动效；正式骨骼、材质、压缩资产和 NPC/设施资源后续接入，不把几何样例冒充正式资产验收。
+- 标准档使用方向光阴影及环境补光，低画质关闭阴影并降低 DPR；没有刚体、布料或重型后期。`?debug=1` 开放 2D、视距示意、路线、模型入口及 60 秒帧率采样；视距扇形仍是未裁剪示意。
+- 运行状态、票/安检/过闸、当前行动、最近已感知事件与决策摘要来自原世界/报告。赛后完整记录保留原过滤和 JSON 格式，未增加体力、排名、预测进度或逐帧回放。
+- HTTP、共享类型、Agent 工具和 GameReport 均未变更。模拟器仍在可信浏览器内，Express 仍只处理模型相关 API；展示升级不提供服务端权威或竞技防作弊。

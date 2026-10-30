@@ -1,0 +1,259 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Agent-go original geometric test fixture",
+    "copyright": "CC0-1.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Transit sculpture",
+      "children": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "name": "Coat",
+      "mesh": 1,
+      "translation": [
+        0,
+        0.99,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.66,
+        0.29
+      ]
+    },
+    {
+      "name": "Head",
+      "mesh": 0,
+      "translation": [
+        0,
+        1.54,
+        0
+      ],
+      "scale": [
+        0.28,
+        0.34,
+        0.28
+      ]
+    },
+    {
+      "name": "Left leg",
+      "mesh": 2,
+      "translation": [
+        -0.13,
+        0.35,
+        0
+      ],
+      "scale": [
+        0.12,
+        0.65,
+        0.14
+      ]
+    },
+    {
+      "name": "Right leg",
+      "mesh": 2,
+      "translation": [
+        0.13,
+        0.35,
+        0
+      ],
+      "scale": [
+        0.12,
+        0.65,
+        0.14
+      ]
+    },
+    {
+      "name": "Left arm",
+      "mesh": 1,
+      "translation": [
+        -0.34,
+        1,
+        0
+      ],
+      "scale": [
+        0.09,
+        0.6,
+        0.11
+      ]
+    },
+    {
+      "name": "Right arm",
+      "mesh": 1,
+      "translation": [
+        0.34,
+        1,
+        0
+      ],
+      "scale": [
+        0.09,
+        0.6,
+        0.11
+      ]
+    },
+    {
+      "name": "Left shoe",
+      "mesh": 2,
+      "translation": [
+        -0.13,
+        0.055,
+        0.05
+      ],
+      "scale": [
+        0.16,
+        0.11,
+        0.26
+      ]
+    },
+    {
+      "name": "Right shoe",
+      "mesh": 2,
+      "translation": [
+        0.13,
+        0.055,
+        0.05
+      ],
+      "scale": [
+        0.16,
+        0.11,
+        0.26
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.94,
+          0.92,
+          0.86,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      }
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.13,
+          0.31,
+          0.38,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      }
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.76,
+          0.5,
+          0.17,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 1
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 2
+        }
+      ]
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 168,
+      "uri": "data:application/octet-stream;base64,AAAAvwAAAL8AAAC/AAAAPwAAAL8AAAC/AAAAPwAAAD8AAAC/AAAAvwAAAD8AAAC/AAAAvwAAAL8AAAA/AAAAPwAAAL8AAAA/AAAAPwAAAD8AAAA/AAAAvwAAAD8AAAA/AAACAAEAAAADAAIABAAFAAYABAAGAAcAAAABAAUAAAAFAAQAAwAHAAYAAwAGAAIAAAAEAAcAAAAHAAMAAQACAAYAAQAGAAUA"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 96,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 96,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 8,
+      "type": "VEC3",
+      "min": [
+        -0.5,
+        -0.5,
+        -0.5
+      ],
+      "max": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    }
+  ]
+}

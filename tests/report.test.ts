@@ -19,6 +19,10 @@ test("a completed run renders a score, breakdown and export action", async () =>
   expect(report.timeBreakdown.stairs).toBeCloseTo(6);
   expect(html).toContain(report.score!.toFixed(1));
   expect(html).toContain("导出报告 JSON");
+  expect(html).toContain("Debug 日志与 AI 耗时");
+  expect(html).toContain("导出 Debug JSON");
+  expect(html).toContain("任务阶段");
+  expect(html).toContain("不能单独测出纯思考时间");
   expect(JSON.parse(JSON.stringify(report)).totals.decisions).toBe(report.decisions.length);
 });
 

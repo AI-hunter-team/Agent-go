@@ -1,15 +1,19 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
 import type { NormalizedGuidance } from "../src/shared/types";
+import type { ChatMessage } from "./openai";
+import { assertSafeText, validateNormalized } from "./security";
 
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
   id: string;
+  runId: string;
   guidance: string;
   normalized: NormalizedGuidance | null;
   messages: Anthropic.Beta.BetaMessageParam[];
-  /** tool_use id from the last assistant turn that still needs a tool_result. */
-  pendingToolUseId: string | null;
+  chatMessages: ChatMessage[];
+  /** Every tool id must be answered, even when a batched response is rejected. */
+  pendingToolUseIds: string[];
   lastUsed: number;
 }
 
@@ -18,14 +22,18 @@ const TTL_MS = 30 * 60 * 1000;
 export class SessionStore {
   private sessions = new Map<string, Session>();
 
-  create(guidance: string, normalized: NormalizedGuidance | null): Session {
+  create(guidance: string, normalized: NormalizedGuidance | null, runId?: string): Session {
+    assertSafeText(guidance);
+    validateNormalized(normalized);
     this.sweep();
     const s: Session = {
       id: randomUUID(),
+      runId: runId || randomUUID(),
       guidance,
       normalized,
       messages: [],
-      pendingToolUseId: null,
+      chatMessages: [],
+      pendingToolUseIds: [],
       lastUsed: Date.now(),
     };
     this.sessions.set(s.id, s);

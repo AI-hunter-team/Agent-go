@@ -2,8 +2,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, test } from "vitest";
 import { classifyIntent, negotiateNpc, normalizeGuidance } from "../server/structured";
 import type { CutInDialogueRequest } from "../src/shared/types";
+import { SAFETY_SYSTEM_PROMPT } from "../server/security";
 
-const cfg = { model: "claude-opus-5-5", maxTokens: 1024, fallback: false };
+const cfg = { model: "claude-opus-5-5", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false };
 
 function fakeClient(output: string | { name: string; input: unknown }, stop_reason = "end_turn", extra: Record<string, unknown> = {}) {
   const calls: Anthropic.Beta.MessageCreateParamsNonStreaming[] = [];
@@ -41,6 +42,7 @@ describe("structured calls", () => {
     expect(await normalizeGuidance(client, cfg, "稳一点")).toEqual(g);
     expect(calls[0].output_config?.format?.type).toBe("json_schema");
     expect(calls[0].fallbacks).toBeUndefined();
+    expect(String(calls[0].system).startsWith(SAFETY_SYSTEM_PROMPT)).toBe(true);
   });
 
   test("classification is constrained to the closed mechanic list", async () => {
@@ -48,6 +50,7 @@ describe("structured calls", () => {
     expect(await classifyIntent(client, cfg, "从栏杆上跨过去", null)).toEqual({ mechanic: "jump_gate", reason: "翻越", source: "llm" });
     const schema = calls[0].output_config?.format?.schema as { properties: { mechanic: { enum: string[] } } };
     expect(schema.properties.mechanic.enum).toEqual(["cut_in_line", "jump_gate", "unsupported"]);
+    expect(String(calls[0].system).startsWith(SAFETY_SYSTEM_PROMPT)).toBe(true);
   });
 
   test("refusals and truncation raise so the API falls back to keywords", async () => {
@@ -101,7 +104,7 @@ describe("model NPC negotiation", () => {
     expect(calls[0].output_config?.format?.type).toBe("json_schema");
     expect(calls[0].fallbacks).toBeUndefined();
     expect(requestOptions).toEqual([{ maxRetries: 0 }]);
-    expect(JSON.parse(calls[0].messages[0].content as string)).toEqual(npcRequest);
+    expect(JSON.parse((calls[0].messages[0].content as string).split("\n").slice(1).join("\n"))).toEqual(npcRequest);
   });
 
   test("DeepSeek roleplays the NPC through a forced named tool", async () => {

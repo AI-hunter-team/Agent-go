@@ -6,19 +6,26 @@ import type {
   Observation,
   NpcReply,
   CutInDialogueRequest,
+  GameReport,
 } from "../shared/types";
+import type { OperationDebug } from "../shared/debug";
 import { classifyByKeywords } from "../sim/intent";
 import type { Agent, Classifier, NpcNegotiator } from "./agent";
 
-async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+let activeModelToken: string | null = null;
+
+async function api<T>(path: string, init: { method?: string; body?: unknown; configToken?: string | null } = {}): Promise<T> {
+  const token = init.configToken === undefined ? activeModelToken : init.configToken;
   const res = await fetch(path, {
     signal: AbortSignal.timeout(30_000),
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}) },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data;
+  try { data = text ? JSON.parse(text) : null; }
+  catch { throw new Error("API 服务返回格式异常，请检查服务是否已启动"); }
   // NPC failures also carry their raw model response and paid usage for the run log.
   if (!res.ok && !(path === "/api/npc/negotiate" && data?.source === "error" && data?.accepted === false)) {
     throw new Error(data?.error ?? `HTTP ${res.status}`);
@@ -27,39 +34,59 @@ async function api<T>(path: string, init: { method?: string; body?: unknown } = 
 }
 
 export const Api = {
+  verifyModel: (baseUrl: string, apiKey: string) => api<{ token: string; baseUrl: string; models: string[] }>("/api/model/verify", { body: { baseUrl, apiKey }, configToken: null }),
+  discardModel: (token: string) => api<null>("/api/model/config", { method: "DELETE", configToken: token }),
+  enableModel: async (token: string, model: string) => {
+    const health = await api<{ llm: boolean; model: string | null }>("/api/model/enable", { body: { model }, configToken: token });
+    const previous = activeModelToken;
+    activeModelToken = token;
+    if (previous && previous !== token) void Api.discardModel(previous).catch(() => undefined);
+    return health;
+  },
+  clearModel: async () => {
+    if (activeModelToken) await Api.discardModel(activeModelToken);
+    activeModelToken = null;
+    return Api.health();
+  },
   health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
-  normalize: (text: string) => api<{ guidance: NormalizedGuidance | null }>("/api/guidance/normalize", { body: { text } }),
-  createSession: (guidance: string, normalized: NormalizedGuidance | null) =>
-    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized } }),
+  normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
+  createSession: (guidance: string, normalized: NormalizedGuidance | null, runId?: string) =>
+    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId } }),
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn } }),
-  classify: (intent: string, observation: Observation) =>
-    api<CreativeClassification>("/api/creative/classify", { body: { intent, observation } }),
+  classify: (intent: string, observation: Observation, sessionId?: string, runId?: string) =>
+    api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId } }),
+  saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report } }),
   deleteSession: (sessionId: string) => api<null>(`/api/session/${sessionId}`, { method: "DELETE" }),
-  negotiate: (request: CutInDialogueRequest) => api<NpcReply>("/api/npc/negotiate", { body: request }),
+  negotiate: (request: CutInDialogueRequest, sessionId?: string) => api<NpcReply>("/api/npc/negotiate", { body: { ...request, sessionId } }),
 };
 
 /** Model-driven agent: each decision is a call to the API server, which holds in-run memory. */
 export class RemoteAgent implements Agent {
   readonly kind = "llm" as const;
-  private constructor(private sessionId: string) {}
+  private constructor(private sessionId: string, private runId?: string) {}
 
-  static async create(guidance: string, normalized: NormalizedGuidance | null): Promise<RemoteAgent> {
-    const { sessionId } = await Api.createSession(guidance, normalized);
-    return new RemoteAgent(sessionId);
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string): Promise<RemoteAgent> {
+    const { sessionId } = await Api.createSession(guidance, normalized, runId);
+    return new RemoteAgent(sessionId, runId);
   }
 
   decide(turn: AgentTurn): Promise<DecisionResult> {
     return Api.decide(this.sessionId, turn);
   }
 
-  async dispose() {
-    await Api.deleteSession(this.sessionId).catch(() => undefined);
+  readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId, this.runId);
+
+  readonly negotiate: NpcNegotiator = (request) => Api.negotiate(request, this.sessionId);
+
+  async dispose(report?: GameReport) {
+    try { if (report) await Api.saveReport(this.sessionId, report); }
+    finally { await Api.deleteSession(this.sessionId).catch(() => undefined); }
   }
 }
 
-/** Server classifier (model, with keyword fallback server-side); keywords if the server is unreachable. */
+/** Standalone server classifier; the runner records transport errors and applies keyword fallback. */
 export const remoteClassifier: Classifier = (intent, observation) =>
-  Api.classify(intent, observation).catch(() => classifyByKeywords(intent));
+  Api.classify(intent, observation);
 
 export const offlineClassifier: Classifier = async (intent) => classifyByKeywords(intent);
 

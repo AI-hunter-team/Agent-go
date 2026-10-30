@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { GameReport } from "../shared/types";
 import { getReplayFrame } from "../replay/trajectory";
 import { DecisionLog } from "./DecisionLog";
+import type { Engine } from "../sim/engine";
+import { useRef } from "react";
+import { MapCanvas } from "./MapCanvas";
 import type { RenderOptions } from "./render";
 
 export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; optionsRef: MutableRefObject<RenderOptions> }) {
@@ -89,4 +92,11 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
       </div>
     </section>
   );
+}
+
+export function TrajectoryReplayView({ report, engine }: { report: GameReport; engine: Engine }) {
+  const engineRef = useRef<Engine | null>(engine);
+  const optionsRef = useRef<RenderOptions>({ showVision: false, showTrail: true, thinking: false });
+  engineRef.current = engine;
+  return <><MapCanvas engineRef={engineRef} optionsRef={optionsRef} /><TrajectoryReplay report={report} optionsRef={optionsRef} /></>;
 }
