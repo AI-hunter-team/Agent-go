@@ -21,6 +21,7 @@ DEBUG_LOG_DIR=logs
 - `byOperationMs`：首次决策、重试、创造性归类、NPC 协商；`byStageMs`：按发起调用时的角色状态归入买票、安检、过闸或下楼梯。两者是同一批等待的不同视角，不能相加。
 - `providerWaitHeadersMs`：请求发出至收到响应头。非流式时通常含网络、供应商排队和生成；流式时后续生成发生在读体阶段，不能直接跨模式比较头部等待。`providerReadBodyMs`：读取响应体，流式时包含后续生成等待。
 - 单次调用新增可选 `streaming` 与 `firstBodyByteMs`：流式模式及从请求开始至首个非空响应体片段的时间（毫秒），不是首个可见 token 或完整动作时间，可能是心跳；非流式未单独测量，值为 `null`。完整调用耗时仍为 `totalMs`。旧报告缺少这些字段仍可读取。
+- 流式调用的可选 `streamSummary` 只保存计数：响应字节 `bytes`、SSE data 事件数 `events`（包含 DONE）、工具调用片段数 `toolCallDeltas`、文本字符数 `contentChars`、`doneReceived` 与 `usageReceived`。片段数不是工具总数；心跳注释不计事件；缺失 usage 仍为未知。这些字段不保存正文或工具参数，旧报告缺少时仍兼容。
 - `otherMs`：总等待扣除以上供应商细分后的剩余，含浏览器到本机 API 往返、解析和未细分等待；不能解释为纯本地计算时间。缺少细分的调用数单列。
 - `internalReasoningMs` 始终为 `null`：供应商没有提供内部推理耗时，不能把响应头等待当作纯推理时间。
 
@@ -62,3 +63,9 @@ Docker Compose 使用 `debug-logs` 命名卷挂载 `/app/logs`，容器以 node 
 `gpt-6-luna` 默认推理强度为 `none`，其他兼容模型保留 `low`；`OPENAI_REASONING_EFFORT` 可显式配置 `none/minimal/low/medium/high`，是否支持由服务商和模型决定。恢复原有更多推理使用 `OPENAI_REASONING_EFFORT=low`，不支持流式则设置 `OPENAI_STREAM=0`；更改后重启 API 并重新启用页面配置/开新局。不会因流式失败自动切换协议或增加隐藏的付费请求。页面模型配置沿用服务端的这些性能参数及预算，凭据仍按页面隔离。
 
 降低推理强度可能影响复杂策略与沟通质量。八次小请求的实际延迟、缓存差异及局限见 [LLM-LATENCY-001](validation/LLM-LATENCY-001.md)；该结果不证明完整对局质量、稳定时延或纯内部推理耗时。官方依据：[延迟优化](https://developers.openai.com/api/docs/guides/latency-optimization)、[推理强度](https://developers.openai.com/api/docs/guides/reasoning)；兼容接口支持需实测，不能直接从官方接口推断。
+
+## 空工具响应排查
+
+出现“模型返回空响应”时，先查同次请求的 HTTP 状态、`stopReason`、`providerRequestId` 和 `streamSummary`。`doneReceived=true`、`toolCallDeltas=0`、`contentChars=0`、`usageReceived=false` 表示所观察到的 SSE 没有工具/文本片段及 usage；如工具片段非零却未得到动作，还需检查参数、截断、工具数量和用量校验错误。缺少历史计数时不能据此倒推供应商内部根因。
+
+空响应仍保留在本次 `output` 和错误中，不写成后续请求中的空 assistant 消息；合法或被拒的工具调用仍保留，以便下一轮逐一回答工具 ID。沿用最多一次业务重试，不补造动作、用量或额外传输重试。[专项诊断记录](validation/LLM-LATENCY-001.md)区分已确认的空历史记录问题与尚未复现的四次空响应来源。

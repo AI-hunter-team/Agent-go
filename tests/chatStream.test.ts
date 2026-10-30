@@ -74,6 +74,19 @@ test("can disable streaming and accepts JSON-only compatible gateways", async ()
   expect(body).not.toHaveProperty("stream"); expect(body).not.toHaveProperty("stream_options");
 });
 
+test("a completed empty stream is diagnosed without inventing usage or poisoning retry history", async () => {
+  const client = new OpenAIClient("https://example.test/v1", "test", (async () => stream([
+    delta({ role: "assistant" }), delta({ content: "" }, "stop"),
+  ])) as typeof fetch);
+  const session = new SessionStore().create("", null);
+  const result = await new OpenAILlmService(client, cfg).decide(session, turn());
+  expect(result.action).toBeNull();
+  expect(result.error).toContain("空响应");
+  expect(result.usage).toBeNull();
+  expect(result.output).toMatchObject({ stopReason: "stop", content: [{ role: "assistant", content: "" }] });
+  expect(session.chatMessages.map((message) => message.role)).toEqual(["user"]);
+});
+
 test("logical DONE cancels a transport that stays open", async () => {
   let cancelled = false;
   const response = new Response(new ReadableStream({ start(controller) {

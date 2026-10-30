@@ -91,5 +91,21 @@ test("stream diagnostics pass the first chunk through before completion and reta
   });
   expect(result.debug.calls[0]).toMatchObject({ streaming: true, returnedModel: "streamed", stopReason: "stop", usage: { outputTokens: 20 } });
   expect(result.debug.calls[0].firstBodyByteMs).toBeTypeOf("number");
+  expect(result.debug.calls[0].streamSummary).toMatchObject({ events: 3, toolCallDeltas: 0, contentChars: 7, doneReceived: true, usageReceived: true });
+  expect(result.debug.calls[0].streamSummary!.bytes).toBeGreaterThan(0);
+  expect(JSON.stringify(result.debug)).not.toContain("PRIVATE");
+});
+
+test.each([false, true])("stream diagnostics distinguish empty wire output from tool fragments (tools=%s)", async (hasTools) => {
+  const chunks = [
+    { choices: [{ index: 0, delta: hasTools ? { tool_calls: [{ index: 0, function: { arguments: "PRIVATE" } }] } : { content: "" }, finish_reason: null }] },
+    { choices: [{ index: 0, delta: {}, finish_reason: hasTools ? "tool_calls" : "stop" }] },
+  ];
+  const body = chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n";
+  const fetch = debugFetch((async () => new Response(body, { headers: { "content-type": "text/event-stream" } })) as typeof globalThis.fetch);
+  const result = await traceOperation(details, {}, new DebugLogger(false), async () => (await fetch("https://example.test/v1")).text());
+  expect(result.value).toBe(body);
+  expect(result.debug.calls[0].streamSummary).toEqual({ bytes: Buffer.byteLength(body), events: 3, toolCallDeltas: hasTools ? 1 : 0, contentChars: 0, doneReceived: true, usageReceived: false });
+  expect(result.debug.calls[0].usage).toBeNull();
   expect(JSON.stringify(result.debug)).not.toContain("PRIVATE");
 });

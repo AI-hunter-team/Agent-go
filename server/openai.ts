@@ -135,11 +135,16 @@ export class OpenAILlmService implements LlmService {
       if (calls.some((c) => !c.id || c.type !== "function" || !c.function?.name || typeof c.function.arguments !== "string")) {
         throw new Error("模型返回了无效的工具结构，未执行");
       }
-      session.chatMessages.push({ role: "assistant", content: message.content ?? null, ...(calls.length ? { tool_calls: calls } : {}) });
+      // Empty replies are still retained in result.output for diagnosis, but must not
+      // become blank assistant turns in the next paid request. Keep every tool id,
+      // including rejected/truncated calls, so the next turn can answer them.
+      const empty = calls.length === 0 && !message.content?.trim();
+      if (!empty) session.chatMessages.push({ role: "assistant", content: message.content ?? null, ...(calls.length ? { tool_calls: calls } : {}) });
       if ((result.usage?.thinkingTokens ?? 0) > this.cfg.maxThinkingTokens) {
         throw new Error(`思考用量 ${result.usage!.thinkingTokens} 超过 ${this.cfg.maxThinkingTokens} token，未执行`);
       }
       if (choice.finish_reason === "length") throw new Error(`超出单次决策 ${this.cfg.maxTokens} token 上限，未执行`);
+      if (empty) throw new Error("模型返回空响应（无内容或工具），实际 0 个工具，未执行");
       if (calls.length !== 1) throw new Error(`模型必须调用且只调用一个工具，实际 ${calls.length} 个，未执行`);
       let input: unknown;
       try { input = JSON.parse(calls[0].function.arguments); }

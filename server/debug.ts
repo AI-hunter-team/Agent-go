@@ -116,9 +116,20 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
       };
       if (response.headers.get("content-type")?.includes("text/event-stream") && response.body) {
         call.streaming = true;
+        const summary: NonNullable<ModelCallDebug["streamSummary"]> = { bytes: 0, events: 0, toolCallDeltas: 0, contentChars: 0, doneReceived: false, usageReceived: false };
+        call.streamSummary = summary;
         const parser = new SseDecoder((data) => {
-          if (data === "[DONE]") return;
-          try { record(JSON.parse(data)); } catch { /* Metadata never changes stream behavior. */ }
+          summary.events++;
+          if (data === "[DONE]") { summary.doneReceived = true; return; }
+          try {
+            const chunk = JSON.parse(data);
+            summary.usageReceived ||= Boolean(chunk.usage);
+            for (const choice of Array.isArray(chunk.choices) ? chunk.choices : []) {
+              if (Array.isArray(choice.delta?.tool_calls)) summary.toolCallDeltas += choice.delta.tool_calls.length;
+              if (typeof choice.delta?.content === "string") summary.contentChars += choice.delta.content.length;
+            }
+            record(chunk);
+          } catch { /* Metadata never changes stream behavior. */ }
         });
         const reader = response.body.getReader();
         const finish = () => { call.readBodyMs = elapsed(received!); call.totalMs = elapsed(start); };
@@ -129,6 +140,7 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
               if (next.done) { parser.end(); finish(); controller.close(); reader.releaseLock(); }
               else {
                 if (call.firstBodyByteMs === null) call.firstBodyByteMs = elapsed(start);
+                summary.bytes += next.value.byteLength;
                 parser.push(next.value); finish(); controller.enqueue(next.value);
               }
             } catch (error) {
