@@ -2,6 +2,8 @@
 
 依据：[Demo方案1.1](Demo方案1.1.md)。本文把方案落为可实现的技术设计；凡标注“MVP 取值”的参数都是为了开发而定的初值，可在测试后调整，不代表产品规则已最终确认。
 
+文档身份：§1–13 主要保留开发前设计，§14 为原 MVP 实现核对与限制；DOC-001 据源码校准了 §4 的目录、§10 的接口索引并增加来源链接，不新增产品批准或重写历史验证结论。来源分工见 [文档导航](README.md)，当前验收进度见 [路线图](ROADMAP.md)。
+
 ## 1. 目标与范围
 
 在浏览器中跑通一局完整体验：**填写指导 → 指导整理 → 角色在二维地铁站中自主完成“买票 → 安检 → 过闸机” → 复盘**。
@@ -55,17 +57,19 @@ MVP 必须证明（方案 1.1 第十一章）：
 
 ```
 src/
-  shared/       types.ts       —— 动作、观察、事件、决策结果等共享类型
+  shared/       types.ts guidance.ts —— 共享类型与指导长度校验
   sim/          rng.ts geometry.ts layout.ts nav.ts scenario.ts
-                world.ts queues.ts npc.ts guards.ts observation.ts
+                world.ts npc.ts guards.ts observation.ts intent.ts
                 creative.ts engine.ts
-  agent/        heuristicAgent.ts remoteAgent.ts runner.ts
+  agent/        agent.ts heuristicAgent.ts remoteAgent.ts runner.ts
   ui/           App.tsx MapCanvas.tsx ControlPanel.tsx DecisionLog.tsx
-                ReportView.tsx render.ts styles.css main.tsx
-server/         index.ts sessions.ts prompts.ts tools.ts llm.ts classify.ts
+                ReportView.tsx render.ts format.ts styles.css main.tsx
+server/         index.ts app.ts sessions.ts prompts.ts tools.ts claude.ts structured.ts
 tests/          *.test.ts
-docs/           方案、技术方案、开发计划
+docs/           产品/技术方案、导航/开发流程、路线图/工作记录、任务/验证及模板
 ```
+
+职责与消费者检查见 [开发流程](DEVELOPMENT.md)。动作/观察/报告结构维护在 [shared/types.ts](../src/shared/types.ts)，Agent 接口在 [agent.ts](../src/agent/agent.ts)；队列实现合并于 `world.ts`，不存在独立 `queues.ts`。
 
 ## 5. 模拟器
 
@@ -255,16 +259,18 @@ client.beta.messages.create({
 
 ## 10. 接口定义（摘要）
 
+以下按本次调查的 [服务端路由](../server/app.ts) 与 [远程客户端](../src/agent/remoteAgent.ts) 核对；共享响应结构见 [types.ts](../src/shared/types.ts)，工具参数及解析见 [tools.ts](../server/tools.ts)。这是当前内部接口摘要，不是独立的版本化对外承诺。
+
 ```
-POST /api/guidance/normalize  { text }                     → { guidance, plan }
-POST /api/session             { guidance, scenarioBrief }   → { sessionId }
-POST /api/agent/decide        { sessionId, turn }           → { action, reason, thinking, usage, model, latencyMs, error? }
-POST /api/creative/classify   { intent, context }           → { mechanic, reason }
+POST /api/guidance/normalize  { text }                     → { guidance: NormalizedGuidance | null }
+POST /api/session             { guidance, normalized }      → { sessionId }
+POST /api/agent/decide        { sessionId, turn }           → DecisionResult
+POST /api/creative/classify   { intent, observation }       → CreativeClassification
 DELETE /api/session/:id                                     → 204
-GET  /api/health                                            → { llm: boolean, model }
+GET  /api/health                                            → { llm: boolean, model: string | null }
 ```
 
-`turn` 为上一动作结果 + 新观察 + 触发事件（结构化 JSON，服务端渲染为文本）。
+`turn` 为上一动作结果 + 新观察 + 触发事件（结构化 JSON，服务端渲染为文本）。空白指导返回 `guidance: null`，初始方案包含于 `NormalizedGuidance.initialPlan`，没有独立的 `plan` 响应字段。错误、会话及无模型分支以路由和 [server.test.ts](../tests/server.test.ts) 核对；health 不执行真实模型请求。
 
 ## 11. 测试策略
 
