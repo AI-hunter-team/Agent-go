@@ -1,4 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
+import { extname, resolve } from "node:path";
 import { guidanceError } from "../src/shared/guidance";
 import type {
   AgentTurn,
@@ -23,12 +24,13 @@ export interface AppDeps {
   llm: LlmService | null;
   sessions: SessionStore;
   modelConfigs?: ModelConfigStore;
+  frontendDir?: string;
 }
 
 type Handler = (req: Request, res: Response) => Promise<void> | void;
 const wrap = (h: Handler) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(h(req, res)).catch(next);
 
-export function createApp({ llm, sessions, modelConfigs = new ModelConfigStore() }: AppDeps) {
+export function createApp({ llm, sessions, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   type Runtime = { llm: LlmService | null; token: string };
@@ -132,6 +134,16 @@ export function createApp({ llm, sessions, modelConfigs = new ModelConfigStore()
     sessions.delete(req.params.id);
     res.status(204).end();
   }));
+
+  if (frontendDir) {
+    // Keep API errors and missing assets out of the SPA fallback.
+    app.use("/api", (_req, res) => { res.status(404).json({ error: "API 不存在" }); });
+    app.use(express.static(frontendDir));
+    app.get("*", (req, res, next) => {
+      if (extname(req.path) || req.path.startsWith("/assets/") || !req.accepts("html")) return next();
+      res.sendFile(resolve(frontendDir, "index.html"));
+    });
+  }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ModelConfigError) return void res.status(err.status).json({ error: err.message });
