@@ -32,7 +32,7 @@ export function createApp({ llm, sessions }: AppDeps) {
 
   const requireLlm = (res: Response): boolean => {
     if (llm) return true;
-    res.status(503).json({ error: "未配置模型（ANTHROPIC_API_KEY），请使用离线规则 Agent" });
+    res.status(503).json({ error: "未配置模型凭据（OPENAI_API_KEY / ANTHROPIC_API_KEY），请使用离线规则 Agent" });
     return false;
   };
 

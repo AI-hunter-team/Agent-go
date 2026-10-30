@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "start:api": "tsx server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:model": "tsx scripts/test-model.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

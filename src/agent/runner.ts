@@ -211,11 +211,12 @@ export class GameRunner {
 
   report(): GameReport {
     const e = this.engine;
-    const totals = { decisions: this.decisions.length, inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
+    const totals: GameReport["totals"] = { decisions: this.decisions.length, inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
     for (const d of this.decisions) {
       totals.inputTokens += d.usage?.inputTokens ?? 0;
       totals.outputTokens += d.usage?.outputTokens ?? 0;
-      totals.thinkingTokens += d.usage?.thinkingTokens ?? 0;
+      totals.thinkingTokens = totals.thinkingTokens === null || d.usage?.thinkingTokens == null
+        ? null : totals.thinkingTokens + d.usage.thinkingTokens;
     }
     const round = (n: number) => Math.round(n * 10) / 10;
     const tb = e.timeBreakdown;

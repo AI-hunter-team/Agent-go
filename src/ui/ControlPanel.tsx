@@ -36,7 +36,7 @@ export function SetupPanel(p: SetupProps) {
             离线规则 Agent
           </button>
         </div>
-        {!p.llmAvailable && <small className="muted">服务端未配置 ANTHROPIC_API_KEY，只能使用离线规则 Agent（非大模型）。</small>}
+        {!p.llmAvailable && <small className="muted">服务端未配置模型凭据，只能使用离线规则 Agent（非大模型）。</small>}
       </label>
 
       <label className="field">

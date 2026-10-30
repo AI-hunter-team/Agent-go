@@ -195,5 +195,5 @@ export interface GameReport {
   events: GameEvent[];
   trail: Vec[];
   thinkingRealSeconds: number;
-  totals: { decisions: number; inputTokens: number; outputTokens: number; thinkingTokens: number };
+  totals: { decisions: number; inputTokens: number; outputTokens: number; thinkingTokens: number | null };
 }

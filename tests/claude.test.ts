@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, test } from "vitest";
-import { ClaudeDecider, DECISION_TOKEN_CAP, configFromEnv } from "../server/claude";
+import { ClaudeDecider, configFromEnv } from "../server/claude";
 import { buildSystemPrompt, renderTurn } from "../server/prompts";
 import { SessionStore } from "../server/sessions";
 import { AGENT_TOOLS, parseToolUse } from "../server/tools";
@@ -33,13 +33,15 @@ function fakeClient(responses: Partial<Anthropic.Beta.BetaMessage>[]) {
 
 const toolUse = (id: string, name: string, input: object) => ({ type: "tool_use", id, name, input });
 const turn = (): AgentTurn => ({ triggers: [{ kind: "start", text: "开局" }], lastResult: null, observation: new Engine(1).observe() });
-const cfg = { model: "claude-opus-5-5", maxTokens: DECISION_TOKEN_CAP, fallback: true };
+const cfg = { model: "claude-opus-5-5", maxTokens: 4096, maxThinkingTokens: 1024, fallback: true };
 
-describe("decision token cap", () => {
-  test("env cannot raise the per-decision cap above 1024", () => {
-    expect(configFromEnv({ DECISION_MAX_TOKENS: "4096" }).maxTokens).toBe(1024);
-    expect(configFromEnv({ DECISION_MAX_TOKENS: "800" }).maxTokens).toBe(800);
-    expect(configFromEnv({}).maxTokens).toBe(1024);
+describe("separate reasoning and completion budgets", () => {
+  test("only reasoning is capped at 1024 and completion has additional headroom", () => {
+    expect(configFromEnv({ DECISION_MAX_TOKENS: "4096" }).maxTokens).toBe(4096);
+    expect(configFromEnv({ DECISION_THINKING_TOKENS: "800" }).maxThinkingTokens).toBe(800);
+    expect(configFromEnv({ DECISION_THINKING_TOKENS: "9999" }).maxThinkingTokens).toBe(1024);
+    expect(configFromEnv({ DECISION_MAX_TOKENS: "1024" }).maxTokens).toBeGreaterThan(1024);
+    expect(configFromEnv({}).maxTokens).toBe(4096);
     expect(configFromEnv({ AGENT_FALLBACK: "off" }).fallback).toBe(false);
   });
 
@@ -49,7 +51,7 @@ describe("decision token cap", () => {
     const r = await new ClaudeDecider(client, cfg).decide(session, turn());
     expect(r.action).toEqual({ type: "move_to", target: "HALL_C", reason: "去看看" });
     const p = calls[0];
-    expect(p.max_tokens).toBeLessThanOrEqual(1024);
+    expect(p.max_tokens).toBe(4096);
     expect(p.thinking).toEqual({ type: "adaptive", display: "summarized" });
     expect(p.output_config?.effort).toBe("low");
     expect(p.tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
@@ -62,7 +64,7 @@ describe("decision token cap", () => {
     const session = new SessionStore().create("", null);
     const r = await new ClaudeDecider(client, cfg).decide(session, turn());
     expect(r.action).toBeNull();
-    expect(r.error).toContain("1024");
+    expect(r.error).toContain("4096");
   });
 });
 
