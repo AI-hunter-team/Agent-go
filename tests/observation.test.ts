@@ -7,7 +7,8 @@ import { World } from "../src/sim/world";
 
 function worldWithPlayerAt(x: number, y: number) {
   const world = new World(1);
-  new NpcDirector(world, buildScenario(1));
+  // Keep the visibility fixture's original passengers, independent of gameplay balancing.
+  new NpcDirector(world, buildScenario(1, { extraQueuePeople: 0 }));
   const guards = new GuardSystem();
   const p = world.addPerson("player", { x, y }, { isPlayer: true });
   return { world, guards, p };

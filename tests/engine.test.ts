@@ -18,7 +18,7 @@ describe("engine", () => {
     const e = new Engine(1);
     expect(e.takeTriggers().map((t) => t.kind)).toEqual(["start"]);
     expect(e.observe().facilities).toHaveLength(0);
-    expect(e.observe().self.timeLeft).toBe(180);
+    expect(e.observe().self.timeLeft).toBe(120);
   });
 
   test("world time does not advance without step (bullet time)", () => {
@@ -36,7 +36,7 @@ describe("engine", () => {
   });
 
   test("a scripted orderly run descends after the gate and is scored on platform arrival", () => {
-    const e = new Engine(1);
+    const e = new Engine(1, { timeLimitSeconds: 180, extraQueuePeople: 0 });
     e.takeTriggers();
     const plan: AgentAction[] = [
       { type: "join_queue", facility: "TVM-3", reason: "" },
