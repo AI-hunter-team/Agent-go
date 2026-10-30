@@ -73,7 +73,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     if (!token) return { llm, parameters: modelParameters, token };
     const config = modelConfigs.get(token);
     if (!config.llm) throw new ModelConfigError("请先选择模型并验证启用", 409);
-    return { llm: config.llm, parameters: { ...configFromEnv({ AGENT_MODEL: config.llm.model, AGENT_FALLBACK: "off" }), provider: "openai", model: config.llm.model, effort: "low", timeoutMs: 20_000, transportRetries: 0 }, token };
+    const cfg = configFromEnv({ ...process.env, AGENT_MODEL: config.llm.model, AGENT_FALLBACK: "off" });
+    return { llm: config.llm, parameters: { ...cfg, provider: "openai", model: config.llm.model, effort: cfg.reasoningEffort, timeoutMs: 20_000, transportRetries: 0 }, token };
   };
   const forSession = (req: Request, session: Session): Runtime => {
     const bound = bindings.get(session);

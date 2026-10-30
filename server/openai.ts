@@ -1,3 +1,4 @@
+import { readChatStream } from "./chatStream";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
 import type { LlmService } from "./app";
 import type { ClaudeConfig } from "./claude";
@@ -40,6 +41,7 @@ export class OpenAIClient {
     baseURL: string,
     private readonly apiKey: string,
     private readonly fetcher: typeof fetch = fetch,
+    private readonly options: { stream?: boolean } = {},
   ) {
     const url = new URL(baseURL);
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
@@ -54,7 +56,7 @@ export class OpenAIClient {
       response = await this.fetcher(this.endpoint, {
         method: "POST",
         headers: { authorization: `Bearer ${this.apiKey}`, "content-type": "application/json" },
-        body: JSON.stringify(params),
+        body: JSON.stringify({ ...params, ...(this.options.stream === false ? {} : { stream: true, stream_options: { include_usage: true } }) }),
         signal: AbortSignal.timeout(20_000),
         redirect: "error",
       });
@@ -65,6 +67,10 @@ export class OpenAIClient {
     if (response.status === 401 || response.status === 403) throw new Error("模型认证失败，请检查 OPENAI_API_KEY 和模型权限");
     if (response.status === 429) throw new Error("模型限流或额度不足，请稍后再试");
     if (!response.ok) throw new Error(`模型接口错误 ${response.status}，请检查接口配置或稍后重试`);
+    if (response.headers.get("content-type")?.includes("text/event-stream")) {
+      return readChatStream(response);
+    }
+    // Some compatible gateways ignore stream:true and return a regular completion.
     try { return await response.json() as Completion; }
     catch { throw new Error("模型接口返回了无效 JSON"); }
   }
@@ -100,7 +106,7 @@ export class OpenAILlmService implements LlmService {
       const response = await this.client.complete({
         model: this.model,
         max_completion_tokens: this.cfg.maxTokens,
-        reasoning_effort: "low",
+        reasoning_effort: this.cfg.reasoningEffort ?? "low",
         messages: [
           { role: "system", content: `${prompt.rules}\n本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
           { role: "user", content: prompt.guidance },
@@ -152,7 +158,7 @@ export class OpenAILlmService implements LlmService {
     let metadata: Pick<NpcReply, "model" | "usage" | "output"> = { model: this.model, usage: null };
     try {
       const response = await this.client.complete({
-        model: this.model, max_completion_tokens: 1024, reasoning_effort: "low",
+        model: this.model, max_completion_tokens: 1024, reasoning_effort: this.cfg.reasoningEffort ?? "low",
         messages: [{ role: "system", content: NPC_SYSTEM }, { role: "user", content: untrustedData("NPC 对话资料", request) }],
         response_format: { type: "json_schema", json_schema: { name: "npc_reply", strict: true, schema: NPC_SCHEMA } },
       });
@@ -180,7 +186,7 @@ export class OpenAILlmService implements LlmService {
     const response = await this.client.complete({
       model: this.model,
       max_completion_tokens: maxTokens,
-      reasoning_effort: "low",
+      reasoning_effort: this.cfg.reasoningEffort ?? "low",
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
       response_format: { type: "json_schema", json_schema: { name, strict: true, schema } },
     });

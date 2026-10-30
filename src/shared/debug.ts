@@ -19,6 +19,9 @@ export interface ModelCallDebug {
   returnedModel: string | null;
   stopReason: string | null;
   usage: DecisionUsage | null;
+  /** Optional for compatibility with older report exports. First body chunk, not first token. */
+  streaming?: boolean;
+  firstBodyByteMs?: number | null;
   waitHeadersMs: number;
   readBodyMs: number;
   totalMs: number;

@@ -27,8 +27,8 @@ export function DebugPanel({ report }: { report: GameReport }) {
     <table><tbody>{Object.entries(s.byStageMs).map(([key, ms]) => <tr key={key}><th>{stages[key as keyof typeof stages]}</th><td>{seconds(ms)}</td><td>{percent(ms)}</td></tr>)}</tbody></table>
     <h4>接口与本地开销</h4>
     <ul className="plain">
-      <li>等待响应头（含网络、排队、生成）：{seconds(s.providerWaitHeadersMs)}</li>
-      <li>读取响应体：{seconds(s.providerReadBodyMs)}</li>
+      <li>等待响应头（流式时不含后续生成）：{seconds(s.providerWaitHeadersMs)}</li>
+      <li>读取响应体（流式时含后续生成）：{seconds(s.providerReadBodyMs)}</li>
       <li>本地、HTTP 往返及未细分开销：{seconds(s.otherMs)}</li>
       <li>有接口细分的调用 {s.measuredRequests} 次；缺少细分 {s.unmeasuredRequests} 次</li>
     </ul>

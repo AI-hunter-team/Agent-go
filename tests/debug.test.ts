@@ -72,3 +72,24 @@ describe("model transport diagnostics", () => {
     expect(result.debug.error).toBe("[REDACTED]");
   });
 });
+
+test("stream diagnostics pass the first chunk through before completion and retain late usage", async () => {
+  let send: ReadableStreamDefaultController<Uint8Array>;
+  const encoder = new TextEncoder();
+  const fetch = debugFetch((async () => new Response(new ReadableStream<Uint8Array>({ start(controller) {
+    send = controller;
+    controller.enqueue(encoder.encode('data: {"model":"streamed","choices":[{"index":0,"delta":{"content":"PRIVATE"},"finish_reason":null}]}\n\n'));
+  } }), { headers: { "content-type": "text/event-stream" } })) as typeof globalThis.fetch);
+  const result = await traceOperation(details, {}, new DebugLogger(false), async () => {
+    const response = await fetch("https://example.test/v1", { body: JSON.stringify({ stream: true, model: "x" }) });
+    const reader = response.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain("PRIVATE");
+    send!.enqueue(encoder.encode('data: {"choices":[{"index":0,"finish_reason":"stop","delta":{}}],"usage":{"completion_tokens":20}}\n\ndata: [DONE]\n\n'));
+    send!.close();
+    while (!(await reader.read()).done) { /* consume metadata */ }
+    return true;
+  });
+  expect(result.debug.calls[0]).toMatchObject({ streaming: true, returnedModel: "streamed", stopReason: "stop", usage: { outputTokens: 20 } });
+  expect(result.debug.calls[0].firstBodyByteMs).toBeTypeOf("number");
+  expect(JSON.stringify(result.debug)).not.toContain("PRIVATE");
+});

@@ -34,7 +34,7 @@ export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
     facility: { type: "string", enum: FACILITY_IDS },
   }),
   tool("leave_queue", "离开当前队伍（失去位次）。", {}),
-  tool("wait", "等待若干秒（1–20）后重新评估。正在走路或排队时调用不会打断当前动作。", {
+  tool("wait", "等待若干秒（1–20）后重新评估。行走、排队或办理时保持当前动作；无短时机策略时优先 20 秒以减少无效轮询，到达、办理完成和设施变化等事件仍会提前唤起。", {
     seconds: { type: "integer", description: "1 到 20 之间的整数" },
   }),
   tool("descend_stairs", "过闸后走到 STAIRS_TOP 楼梯入口，再下楼到站台；下楼期间不能改向。", {}),

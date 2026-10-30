@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { configFromEnv } from "../server/claude";
 import { createLlm } from "../server/llm";
 import { OpenAIClient, OpenAILlmService } from "../server/openai";
 import { SessionStore } from "../server/sessions";
@@ -166,4 +167,12 @@ test("compatible NPC calls retain paid usage on refusal, malformed output and tr
     expect(requests[0].body.response_format.json_schema.name).toBe("npc_reply");
     expect(requests[0].body.messages[0].content).toContain(SAFETY_SYSTEM_PROMPT);
   }
+});
+
+
+test("latency settings use none only for the tested Luna model and can restore low/non-streaming", () => {
+  expect(configFromEnv({ AGENT_MODEL: "gpt-6-luna" })).toMatchObject({ reasoningEffort: "none", openaiStream: true });
+  expect(configFromEnv({ AGENT_MODEL: "other-model" }).reasoningEffort).toBe("low");
+  expect(configFromEnv({ AGENT_MODEL: "gpt-6-luna", OPENAI_REASONING_EFFORT: "low", OPENAI_STREAM: "0" })).toMatchObject({ reasoningEffort: "low", openaiStream: false });
+  expect(() => configFromEnv({ OPENAI_REASONING_EFFORT: "typo" })).toThrow("OPENAI_REASONING_EFFORT");
 });

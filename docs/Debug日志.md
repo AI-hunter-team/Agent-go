@@ -19,7 +19,8 @@ DEBUG_LOG_DIR=logs
 - `preparation.durationMs`：赛前指导整理单列；没有输入指导时为 0。复用同一整理结果重试时不重复计算。
 - `summary.includingPreparationMs`：局内等待加赛前整理；不包括玩家停留时间、世界模拟运行时间和会话创建/清理。
 - `byOperationMs`：首次决策、重试、创造性归类、NPC 协商；`byStageMs`：按发起调用时的角色状态归入买票、安检、过闸或下楼梯。两者是同一批等待的不同视角，不能相加。
-- `providerWaitHeadersMs`：非流式请求发出至收到响应头，含网络、供应商排队和生成。`providerReadBodyMs`：读取响应体。
+- `providerWaitHeadersMs`：请求发出至收到响应头。非流式时通常含网络、供应商排队和生成；流式时后续生成发生在读体阶段，不能直接跨模式比较头部等待。`providerReadBodyMs`：读取响应体，流式时包含后续生成等待。
+- 单次调用新增可选 `streaming` 与 `firstBodyByteMs`：流式模式及从请求开始至首个非空响应体片段的时间（毫秒），不是首个可见 token 或完整动作时间，可能是心跳；非流式未单独测量，值为 `null`。完整调用耗时仍为 `totalMs`。旧报告缺少这些字段仍可读取。
 - `otherMs`：总等待扣除以上供应商细分后的剩余，含浏览器到本机 API 往返、解析和未细分等待；不能解释为纯本地计算时间。缺少细分的调用数单列。
 - `internalReasoningMs` 始终为 `null`：供应商没有提供内部推理耗时，不能把响应头等待当作纯推理时间。
 
@@ -52,3 +53,12 @@ Docker Compose 使用 `debug-logs` 命名卷挂载 `/app/logs`，容器以 node 
 文件名为 `debug-UTC日期-进程号-分片.jsonl`，逐条串行追加，约 10 MiB 后切换分片；单条超大记录可以超过此值。新建目录权限为 0700，文件为 0600（已有目录权限不改变）。日期使用 UTC；没有自动清理旧文件，需要按磁盘容量自行归档或删除。
 
 `.env`、`logs/` 和 `*.jsonl` 已加入 Git 忽略。推送的是功能源码、测试和说明，运行日志不提交到 GitHub；这次提交不部署公网服务。思考预算 1024 与总输出保护值 4096 仍分开配置。
+
+
+## 流式与延迟配置
+
+兼容接口默认 `OPENAI_STREAM=1`（HTTP SSE），日志包装器直接透传分片，不预先读完整个响应。服务端收齐完整动作和流结束后才执行既有校验，并将完整 JSON 决策返回浏览器；尚未向浏览器逐 token 展示模型内容。没有迁移为 WebSocket。
+
+`gpt-6-luna` 默认推理强度为 `none`，其他兼容模型保留 `low`；`OPENAI_REASONING_EFFORT` 可显式配置 `none/minimal/low/medium/high`，是否支持由服务商和模型决定。恢复原有更多推理使用 `OPENAI_REASONING_EFFORT=low`，不支持流式则设置 `OPENAI_STREAM=0`；更改后重启 API 并重新启用页面配置/开新局。不会因流式失败自动切换协议或增加隐藏的付费请求。页面模型配置沿用服务端的这些性能参数及预算，凭据仍按页面隔离。
+
+降低推理强度可能影响复杂策略与沟通质量。八次小请求的实际延迟、缓存差异及局限见 [LLM-LATENCY-001](validation/LLM-LATENCY-001.md)；该结果不证明完整对局质量、稳定时延或纯内部推理耗时。官方依据：[延迟优化](https://developers.openai.com/api/docs/guides/latency-optimization)、[推理强度](https://developers.openai.com/api/docs/guides/reasoning)；兼容接口支持需实测，不能直接从官方接口推断。
