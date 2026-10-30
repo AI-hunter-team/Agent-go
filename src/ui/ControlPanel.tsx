@@ -24,7 +24,7 @@ export function SetupPanel(p: SetupProps) {
     <section className="card">
       <h2>出发之前</h2>
       <p className="muted">
-        目标：限时 180 秒内进入站台。常规流程是买票、安检、刷票过闸、下楼到站台。成绩看进入站台的用时，角色进场后自主行动。
+        唯一目标：限时 180 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台；角色依据你的指导自主选择方案，结果由环境判定。
       </p>
 
       <div className="field" role="group" aria-label="角色驱动方式">
@@ -45,7 +45,7 @@ export function SetupPanel(p: SetupProps) {
 
       <label className="field">
         <span>
-          你的指导（可留空，使用默认守序方案）
+          你的指导（可留空，让角色自主规划）
           <em className={over ? "count over" : "count"}>
             {chars}/{GUIDANCE_MAX_CHARS}
           </em>
@@ -74,7 +74,7 @@ export function SetupPanel(p: SetupProps) {
 }
 
 export function GuidanceCard({ guidance, normalized }: { guidance: string; normalized: NormalizedGuidance | null }) {
-  if (!guidance.trim()) return <p className="muted">未填写指导：角色使用系统默认守序方案。</p>;
+  if (!guidance.trim()) return <p className="muted">未填写额外策略：以到达站台为目标，角色按所选模式规划路线。</p>;
   if (!normalized) return <p className="quote">「{guidance}」</p>;
   const list = (title: string, items: string[]) =>
     items.length > 0 && (
