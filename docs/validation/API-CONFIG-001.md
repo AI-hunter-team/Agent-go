@@ -5,7 +5,7 @@
 ## 版本与环境
 
 - [任务简报](../tasks/API-CONFIG-001.md)；执行人：本次 Codex 会话；日期：2026-10-30（Asia/Shanghai，UTC+8）。
-- 受测版本：独立分支 `codex/model-api-settings`，基线 `de7796de2d2e6c6f7b64e2a395d58444fe689ac8`；验证时为提交前工作区，最终内容由本 PR 的提交固定。
+- 受测版本：独立分支 `codex/model-api-settings`，基线 `de7796de2d2e6c6f7b64e2a395d58444fe689ac8`；验证时为提交前工作区，受测功能已由 `e256b786990f5066c20d45c57b00642ecac276dc` 固定。本次交接文档提交没有修改受测代码。
 - 相对基线的代码/说明改动：`README.md`、`server/app.ts`、`src/agent/remoteAgent.ts`、`src/ui/App.tsx`、`src/ui/ControlPanel.tsx`、`src/ui/styles.css`；新增 `server/modelConfig.ts`、`src/ui/ModelConfigPanel.tsx`、`tests/modelConfig.test.ts`。本任务的两份文档一并提交。
 - 环境：macOS / Darwin 25.6.0 arm64，Node.js v24.8.0，npm 11.6.0。沿用基线 `package-lock.json` 与本机已有依赖安装，未新增依赖或第二套锁文件。复用安装的本地链接不入库。
 - 浏览器：Codex in-app browser；临时前后端只监听本机，模型网关使用虚拟 Key 和伪响应，没有载入真实凭据或调用真实付费模型。
@@ -38,7 +38,7 @@
 | 实现完成 | 完成，代码与使用说明在本 PR 允许范围内 |
 | 软件检查通过 | 本地类型检查、141 项测试、构建和 diff 检查通过 |
 | 实际验收通过 | 本机浏览器模拟网关配置及开局冒烟通过；真实供应商/真实模型通关、费用、指导差异未验证 |
-| 已合入 | 未合入；等待用户审核及前置 PR #1 |
+| 已合入 | 未合入；已提交 [PR #4](https://github.com/AI-hunter-team/Agent-go/pull/4)，等待用户审核及前置 PR #1 |
 
 - 前置 #1 尚未合入，PR 目标暂为其功能分支。最新 `main` 集成、Linux/Windows CI 及目标迁移后的复验未运行；本地通过不能替代这些结果。当前 `main` 的 CI 只匹配面向 `main` 的 PR，因此不能承诺本次依赖分支 PR 自动触发检查。
 - 本次没有运行 `npm ci`，沿用已安装且与锁文件对应的依赖；没有真实付费模型调用授权或实测结论。窄屏浏览器矩阵、刷新后重新配置的完整浏览器路径未单独复验；内存生命周期与超时/过期由实现及相关测试覆盖，不能声称全部 UI 设备矩阵验收完成。
