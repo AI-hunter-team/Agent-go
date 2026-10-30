@@ -1,0 +1,1265 @@
+{
+  "testedAt": "2026-10-30T11:08:17.997Z",
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "baseURL": "https://lax.toklens.ai/v1",
+  "decisionMaxTokens": 4096,
+  "thinkingMaxTokens": 1024,
+  "thinkingEnforcement": "prompt-and-usage-check; no provider-side numeric reasoning cap",
+  "requestCount": 13,
+  "requestErrors": 0,
+  "reportedModels": [
+    "gpt-6-luna"
+  ],
+  "maxDecisionOutputTokens": 107,
+  "maxReportedThinkingTokens": 64,
+  "unverifiedThinkingRequests": 7,
+  "auxiliaryUsageIncluded": false,
+  "cases": [
+    {
+      "name": "default-seed-1",
+      "report": {
+        "seed": 1,
+        "agentKind": "llm",
+        "guidance": "",
+        "normalizedGuidance": null,
+        "status": "success",
+        "score": 52.7,
+        "failReason": null,
+        "elapsed": 52.7,
+        "timeBreakdown": {
+          "walking": 33,
+          "queueing": 3.1,
+          "service": 16.6,
+          "waiting": 0,
+          "creative": 0,
+          "idle": 0
+        },
+        "violations": [],
+        "decisions": [
+          {
+            "index": 1,
+            "t": 0,
+            "triggers": [
+              {
+                "kind": "start",
+                "text": "开局：你站在车站入口，需要买票、安检并通过闸机。"
+              }
+            ],
+            "observationSummary": "t=0s 售票厅（未安检区） 空闲，等待指令 | 视野内无设施",
+            "action": {
+              "type": "move_to",
+              "target": "TVM-2",
+              "reason": "先前往最近的售票机，获取队列和设备状态"
+            },
+            "result": {
+              "ok": true,
+              "text": "出发前往2号售票机附近"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 1931,
+              "outputTokens": 97,
+              "thinkingTokens": 56,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 12594,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 2,
+            "t": 7.1,
+            "triggers": [
+              {
+                "kind": "arrived",
+                "text": "已到达2号售票机附近"
+              }
+            ],
+            "observationSummary": "t=7.1s 售票厅（未安检区） 空闲，等待指令 | 可见 TVM-1:0人 TVM-2:3人 TVM-3:0人",
+            "action": {
+              "type": "join_queue",
+              "facility": "TVM-1",
+              "reason": "1号机空队，步行和办理总耗时预计最短"
+            },
+            "result": {
+              "ok": true,
+              "text": "走向 TVM-1 队尾"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 2316,
+              "outputTokens": 93,
+              "thinkingTokens": 51,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 2589,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 3,
+            "t": 12.4,
+            "triggers": [
+              {
+                "kind": "joined_queue",
+                "text": "已加入 TVM-1 队伍，前面还有 0 人"
+              }
+            ],
+            "observationSummary": "t=12.4s 售票厅（未安检区） 正在 TVM-1 办理 | 可见 TVM-1:0人 TVM-2:2人",
+            "action": {
+              "type": "wait",
+              "seconds": 8,
+              "reason": "正在办理车票，等待自动完成"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，8 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 2643,
+              "outputTokens": 28,
+              "thinkingTokens": null,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 7326,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 4,
+            "t": 20.4,
+            "triggers": [
+              {
+                "kind": "wait_done",
+                "text": "等待结束"
+              }
+            ],
+            "observationSummary": "t=20.4s 售票厅（未安检区） 正在 TVM-1 办理 | 可见 TVM-1:0人 TVM-2:2人",
+            "action": {
+              "type": "wait",
+              "seconds": 2,
+              "reason": "继续等待售票办理完成"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，2 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 2944,
+              "outputTokens": 40,
+              "thinkingTokens": 12,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 6960,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 5,
+            "t": 21,
+            "triggers": [
+              {
+                "kind": "service_done",
+                "text": "在 TVM-1 买到单程票"
+              }
+            ],
+            "observationSummary": "t=21s 售票厅（未安检区） 空闲，等待指令 | 可见 TVM-1:0人 TVM-2:2人",
+            "action": {
+              "type": "move_to",
+              "target": "S1",
+              "reason": "前往高效的S1安检通道，路程与效率均有优势"
+            },
+            "result": {
+              "ok": true,
+              "text": "出发前往1号安检通道附近"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 3243,
+              "outputTokens": 107,
+              "thinkingTokens": 64,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 8553,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 6,
+            "t": 25,
+            "triggers": [
+              {
+                "kind": "facility_changed",
+                "text": "看到 TVM-1 故障"
+              }
+            ],
+            "observationSummary": "t=25s 售票厅（未安检区） 正在走向1号安检通道附近 | 可见 TVM-1:故障 TVM-2:1人 S1:1人 S2:3人",
+            "action": {
+              "type": "wait",
+              "seconds": 6,
+              "reason": "继续前往S1，途中已确认队列较短且效率高"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，6 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 3700,
+              "outputTokens": 56,
+              "thinkingTokens": 18,
+              "cacheReadTokens": 1536
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 2436,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 7,
+            "t": 28.7,
+            "triggers": [
+              {
+                "kind": "arrived",
+                "text": "已到达1号安检通道附近"
+              }
+            ],
+            "observationSummary": "t=28.7s 售票厅（未安检区） 空闲，等待指令 | 可见 TVM-1:故障 TVM-2:1人 S1:0人 S2:2人",
+            "action": {
+              "type": "join_queue",
+              "facility": "S1",
+              "reason": "S1当前无排队且效率最高，立即安检"
+            },
+            "result": {
+              "ok": true,
+              "text": "走向 S1 队尾"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 4144,
+              "outputTokens": 35,
+              "thinkingTokens": null,
+              "cacheReadTokens": 1536
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 7393,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 8,
+            "t": 30.1,
+            "triggers": [
+              {
+                "kind": "joined_queue",
+                "text": "已加入 S1 队伍，前面还有 0 人"
+              }
+            ],
+            "observationSummary": "t=30.1s 售票厅（未安检区） 在 S1 排队（第 1 位） | 可见 TVM-1:故障 S1:1人",
+            "action": {
+              "type": "wait",
+              "seconds": 6,
+              "reason": "已在S1首位，等待安检办理完成"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，6 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 4473,
+              "outputTokens": 32,
+              "thinkingTokens": null,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 6648,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 9,
+            "t": 36.1,
+            "triggers": [
+              {
+                "kind": "wait_done",
+                "text": "等待结束"
+              }
+            ],
+            "observationSummary": "t=36.1s 售票厅（未安检区） 正在 S1 办理 | 可见 TVM-1:故障 S1:1人",
+            "action": {
+              "type": "wait",
+              "seconds": 6,
+              "reason": "安检正在办理，继续等待其完成"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，6 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 4776,
+              "outputTokens": 29,
+              "thinkingTokens": null,
+              "cacheReadTokens": 3840
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 8749,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 10,
+            "t": 39.5,
+            "triggers": [
+              {
+                "kind": "service_done",
+                "text": "通过 S1 安检，进入安检后大厅"
+              }
+            ],
+            "observationSummary": "t=39.5s 安检后大厅（闸机外） 空闲，等待指令 | 可见 S1:3人 保安:9.4m面朝东",
+            "action": {
+              "type": "move_to",
+              "target": "G1",
+              "reason": "已安检，前往最近的北侧闸机以尽快进站"
+            },
+            "result": {
+              "ok": true,
+              "text": "出发前往1号闸机附近"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 5067,
+              "outputTokens": 75,
+              "thinkingTokens": 33,
+              "cacheReadTokens": 1536
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 6965,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 11,
+            "t": 40,
+            "triggers": [
+              {
+                "kind": "broadcast",
+                "text": "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。"
+              },
+              {
+                "kind": "facility_changed",
+                "text": "看到 S1 临时停用"
+              }
+            ],
+            "observationSummary": "t=40s 安检后大厅（闸机外） 正在走向1号闸机附近 | 可见 S1:停用 S2:0人 保安:9.2m面朝东",
+            "action": {
+              "type": "wait",
+              "seconds": 10,
+              "reason": "继续前往G1，已通过安检且北侧路线最直接"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，10 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 5432,
+              "outputTokens": 36,
+              "thinkingTokens": null,
+              "cacheReadTokens": 4224
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 8902,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 12,
+            "t": 45.7,
+            "triggers": [
+              {
+                "kind": "facility_changed",
+                "text": "看到 G3 故障"
+              }
+            ],
+            "observationSummary": "t=45.7s 安检后大厅（闸机外） 正在走向1号闸机附近 | 可见 S1:停用 G1:0人 G2:1人 G3:故障 保安:10.8m面朝东,5m面朝北",
+            "action": {
+              "type": "join_queue",
+              "facility": "G1",
+              "reason": "G1无排队且当前开放，直接刷票进站"
+            },
+            "result": {
+              "ok": true,
+              "text": "走向 G1 队尾"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 5940,
+              "outputTokens": 36,
+              "thinkingTokens": null,
+              "cacheReadTokens": 0
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 7282,
+            "error": null,
+            "fallback": false
+          },
+          {
+            "index": 13,
+            "t": 51,
+            "triggers": [
+              {
+                "kind": "joined_queue",
+                "text": "已加入 G1 队伍，前面还有 0 人"
+              }
+            ],
+            "observationSummary": "t=51s 安检后大厅（闸机外） 正在 G1 办理 | 可见 G1:0人 G2:0人 G3:故障 保安:2.4m面朝南",
+            "action": {
+              "type": "wait",
+              "seconds": 3,
+              "reason": "已在G1首位，等待刷票完成"
+            },
+            "result": {
+              "ok": true,
+              "text": "保持当前动作，3 秒后再评估"
+            },
+            "classification": null,
+            "thinking": null,
+            "usage": {
+              "inputTokens": 6326,
+              "outputTokens": 31,
+              "thinkingTokens": null,
+              "cacheReadTokens": 4480
+            },
+            "model": "gpt-6-luna",
+            "latencyMs": 8574,
+            "error": null,
+            "fallback": false
+          }
+        ],
+        "events": [
+          {
+            "t": 0,
+            "kind": "facility_status",
+            "text": "3号闸机故障",
+            "playerVisible": false
+          },
+          {
+            "t": 0,
+            "kind": "start",
+            "text": "开局：你站在车站入口，需要买票、安检并通过闸机。",
+            "playerVisible": true
+          },
+          {
+            "t": 7.1,
+            "kind": "arrived",
+            "text": "已到达2号售票机附近",
+            "playerVisible": true
+          },
+          {
+            "t": 12.4,
+            "kind": "joined_queue",
+            "text": "已加入 TVM-1 队伍，前面还有 0 人",
+            "playerVisible": true
+          },
+          {
+            "t": 20.4,
+            "kind": "wait_done",
+            "text": "等待结束",
+            "playerVisible": true
+          },
+          {
+            "t": 21,
+            "kind": "service_done",
+            "text": "在 TVM-1 买到单程票",
+            "playerVisible": true
+          },
+          {
+            "t": 25,
+            "kind": "facility_status",
+            "text": "1号售票机故障",
+            "playerVisible": false
+          },
+          {
+            "t": 25,
+            "kind": "facility_changed",
+            "text": "看到 TVM-1 故障",
+            "playerVisible": true
+          },
+          {
+            "t": 28.7,
+            "kind": "arrived",
+            "text": "已到达1号安检通道附近",
+            "playerVisible": true
+          },
+          {
+            "t": 30.1,
+            "kind": "joined_queue",
+            "text": "已加入 S1 队伍，前面还有 0 人",
+            "playerVisible": true
+          },
+          {
+            "t": 36.1,
+            "kind": "wait_done",
+            "text": "等待结束",
+            "playerVisible": true
+          },
+          {
+            "t": 39.5,
+            "kind": "service_done",
+            "text": "通过 S1 安检，进入安检后大厅",
+            "playerVisible": true
+          },
+          {
+            "t": 40,
+            "kind": "facility_status",
+            "text": "1号安检通道临时停用",
+            "playerVisible": false
+          },
+          {
+            "t": 40,
+            "kind": "broadcast",
+            "text": "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
+            "playerVisible": true
+          },
+          {
+            "t": 40,
+            "kind": "facility_changed",
+            "text": "看到 S1 临时停用",
+            "playerVisible": true
+          },
+          {
+            "t": 45.7,
+            "kind": "facility_changed",
+            "text": "看到 G3 故障",
+            "playerVisible": true
+          },
+          {
+            "t": 51,
+            "kind": "joined_queue",
+            "text": "已加入 G1 队伍，前面还有 0 人",
+            "playerVisible": true
+          },
+          {
+            "t": 52.7,
+            "kind": "service_done",
+            "text": "刷票通过 G1",
+            "playerVisible": true
+          },
+          {
+            "t": 52.7,
+            "kind": "success",
+            "text": "通过闸机，用时 52.7 秒",
+            "playerVisible": true
+          }
+        ],
+        "trail": [
+          {
+            "x": 2,
+            "y": 15
+          },
+          {
+            "x": 2.6884830163624223,
+            "y": 14.87354393577017
+          },
+          {
+            "x": 3.3769660327248445,
+            "y": 14.74708787154034
+          },
+          {
+            "x": 4.065449049087267,
+            "y": 14.620631807310511
+          },
+          {
+            "x": 4.753932065449689,
+            "y": 14.494175743080682
+          },
+          {
+            "x": 5.442415081812111,
+            "y": 14.367719678850849
+          },
+          {
+            "x": 6.130898098174534,
+            "y": 14.241263614621014
+          },
+          {
+            "x": 6.819381114536956,
+            "y": 14.11480755039118
+          },
+          {
+            "x": 7.507864130899378,
+            "y": 13.988351486161346
+          },
+          {
+            "x": 8.1963471472618,
+            "y": 13.861895421931512
+          },
+          {
+            "x": 8.884830163624223,
+            "y": 13.735439357701678
+          },
+          {
+            "x": 9.573313179986645,
+            "y": 13.608983293471844
+          },
+          {
+            "x": 10.261796196349067,
+            "y": 13.48252722924201
+          },
+          {
+            "x": 10.95027921271149,
+            "y": 13.356071165012176
+          },
+          {
+            "x": 11.638762229073912,
+            "y": 13.229615100782343
+          },
+          {
+            "x": 11.92148105637845,
+            "y": 12.653335246296987
+          },
+          {
+            "x": 12.073332376851512,
+            "y": 11.97000430416822
+          },
+          {
+            "x": 12.225183697324574,
+            "y": 11.286673362039455
+          },
+          {
+            "x": 12.377035017797636,
+            "y": 10.603342419910689
+          },
+          {
+            "x": 12.528886338270695,
+            "y": 9.920011477781923
+          },
+          {
+            "x": 12.680737658743752,
+            "y": 9.236680535653157
+          },
+          {
+            "x": 12.832588979216808,
+            "y": 8.553349593524391
+          },
+          {
+            "x": 12.984440299689867,
+            "y": 7.870018651395625
+          },
+          {
+            "x": 13.136291620162924,
+            "y": 7.1866877092668595
+          },
+          {
+            "x": 13.28814294063598,
+            "y": 6.503356767138094
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13.4,
+            "y": 6
+          },
+          {
+            "x": 13,
+            "y": 7.2
+          },
+          {
+            "x": 13.700000000000003,
+            "y": 7.2
+          },
+          {
+            "x": 14.400000000000006,
+            "y": 7.2
+          },
+          {
+            "x": 15.100000000000009,
+            "y": 7.2
+          },
+          {
+            "x": 15.800000000000011,
+            "y": 7.2
+          },
+          {
+            "x": 16.500000000000014,
+            "y": 7.2
+          },
+          {
+            "x": 17.200000000000017,
+            "y": 7.2
+          },
+          {
+            "x": 17.90000000000002,
+            "y": 7.2
+          },
+          {
+            "x": 18.600000000000023,
+            "y": 7.2
+          },
+          {
+            "x": 19.300000000000026,
+            "y": 7.2
+          },
+          {
+            "x": 20.00000000000003,
+            "y": 7.2
+          },
+          {
+            "x": 20.70000000000003,
+            "y": 7.2
+          },
+          {
+            "x": 21.400000000000034,
+            "y": 7.2
+          },
+          {
+            "x": 22.100000000000037,
+            "y": 7.2
+          },
+          {
+            "x": 22.80000000000004,
+            "y": 7.2
+          },
+          {
+            "x": 23.500000000000043,
+            "y": 7.2
+          },
+          {
+            "x": 24.135999999999992,
+            "y": 6.948000000000001
+          },
+          {
+            "x": 24.69599999999999,
+            "y": 6.528000000000003
+          },
+          {
+            "x": 25.255999999999993,
+            "y": 6.108000000000005
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 25.4,
+            "y": 6
+          },
+          {
+            "x": 27.4,
+            "y": 6
+          },
+          {
+            "x": 28.09994531890785,
+            "y": 6.008749316486347
+          },
+          {
+            "x": 28.7998906378157,
+            "y": 6.0174986329726945
+          },
+          {
+            "x": 29.49983595672355,
+            "y": 6.026247949459042
+          },
+          {
+            "x": 30.199781275631402,
+            "y": 6.034997265945389
+          },
+          {
+            "x": 30.899726594539253,
+            "y": 6.043746582431736
+          },
+          {
+            "x": 31.599671913447104,
+            "y": 6.0524958989180835
+          },
+          {
+            "x": 32.299617232354954,
+            "y": 6.061245215404431
+          },
+          {
+            "x": 32.999562551262805,
+            "y": 6.069994531890778
+          },
+          {
+            "x": 33.699507870170656,
+            "y": 6.078743848377125
+          },
+          {
+            "x": 34.39945318907851,
+            "y": 6.0874931648634725
+          },
+          {
+            "x": 35.09939850798636,
+            "y": 6.09624248134982
+          },
+          {
+            "x": 35.79934382689421,
+            "y": 6.104991797836167
+          },
+          {
+            "x": 36.4945883634945,
+            "y": 6.045612199327925
+          },
+          {
+            "x": 37.18669904522309,
+            "y": 5.940813324156624
+          },
+          {
+            "x": 37.87880972695167,
+            "y": 5.836014448985322
+          },
+          {
+            "x": 38.57092040868026,
+            "y": 5.731215573814021
+          },
+          {
+            "x": 39.263031090408845,
+            "y": 5.6264166986427195
+          },
+          {
+            "x": 39.95514177213743,
+            "y": 5.521617823471418
+          },
+          {
+            "x": 40.64725245386602,
+            "y": 5.4168189483001195
+          },
+          {
+            "x": 41.3393631355946,
+            "y": 5.3120200731288225
+          },
+          {
+            "x": 42.03147381732319,
+            "y": 5.207221197957526
+          },
+          {
+            "x": 42.723584499051775,
+            "y": 5.102422322786229
+          },
+          {
+            "x": 43.4,
+            "y": 5
+          },
+          {
+            "x": 43.4,
+            "y": 5
+          },
+          {
+            "x": 43.4,
+            "y": 5
+          },
+          {
+            "x": 43.4,
+            "y": 5
+          }
+        ],
+        "thinkingRealSeconds": 95,
+        "totals": {
+          "decisions": 13,
+          "inputTokens": 52935,
+          "outputTokens": 695,
+          "thinkingTokens": null
+        }
+      }
+    }
+  ],
+  "classifications": [
+    {
+      "intent": "从栏杆上翻过闸机",
+      "expected": "jump_gate",
+      "result": {
+        "mechanic": "jump_gate",
+        "reason": "这是不刷票直接从闸机或栏杆上翻越进入站台。",
+        "source": "llm"
+      }
+    },
+    {
+      "intent": "挤到队伍最前面插队",
+      "expected": "cut_in_line",
+      "result": {
+        "mechanic": "cut_in_line",
+        "reason": "这是不从队尾排队而挤进队伍前部的插队行为。",
+        "source": "llm"
+      }
+    },
+    {
+      "intent": "长出翅膀飞过去",
+      "expected": "unsupported",
+      "result": {
+        "mechanic": "unsupported",
+        "reason": "环境里没有长出翅膀飞过去这种可执行方式。",
+        "source": "llm"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "action": {
+        "type": "move_to",
+        "target": "TVM-2",
+        "reason": "先前往最近的售票机，获取队列和设备状态"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 1931,
+        "outputTokens": 97,
+        "thinkingTokens": 56,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 12594,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "join_queue",
+        "facility": "TVM-1",
+        "reason": "1号机空队，步行和办理总耗时预计最短"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 2316,
+        "outputTokens": 93,
+        "thinkingTokens": 51,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 2589,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 8,
+        "reason": "正在办理车票，等待自动完成"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 2643,
+        "outputTokens": 28,
+        "thinkingTokens": null,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 7326,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 2,
+        "reason": "继续等待售票办理完成"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 2944,
+        "outputTokens": 40,
+        "thinkingTokens": 12,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 6960,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "move_to",
+        "target": "S1",
+        "reason": "前往高效的S1安检通道，路程与效率均有优势"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 3243,
+        "outputTokens": 107,
+        "thinkingTokens": 64,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 8553,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 6,
+        "reason": "继续前往S1，途中已确认队列较短且效率高"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 3700,
+        "outputTokens": 56,
+        "thinkingTokens": 18,
+        "cacheReadTokens": 1536
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 2436,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "join_queue",
+        "facility": "S1",
+        "reason": "S1当前无排队且效率最高，立即安检"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 4144,
+        "outputTokens": 35,
+        "thinkingTokens": null,
+        "cacheReadTokens": 1536
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 7393,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 6,
+        "reason": "已在S1首位，等待安检办理完成"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 4473,
+        "outputTokens": 32,
+        "thinkingTokens": null,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 6648,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 6,
+        "reason": "安检正在办理，继续等待其完成"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 4776,
+        "outputTokens": 29,
+        "thinkingTokens": null,
+        "cacheReadTokens": 3840
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 8749,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "move_to",
+        "target": "G1",
+        "reason": "已安检，前往最近的北侧闸机以尽快进站"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 5067,
+        "outputTokens": 75,
+        "thinkingTokens": 33,
+        "cacheReadTokens": 1536
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 6965,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 10,
+        "reason": "继续前往G1，已通过安检且北侧路线最直接"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 5432,
+        "outputTokens": 36,
+        "thinkingTokens": null,
+        "cacheReadTokens": 4224
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 8902,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "join_queue",
+        "facility": "G1",
+        "reason": "G1无排队且当前开放，直接刷票进站"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 5940,
+        "outputTokens": 36,
+        "thinkingTokens": null,
+        "cacheReadTokens": 0
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 7282,
+      "error": null
+    },
+    {
+      "action": {
+        "type": "wait",
+        "seconds": 3,
+        "reason": "已在G1首位，等待刷票完成"
+      },
+      "thinking": null,
+      "usage": {
+        "inputTokens": 6326,
+        "outputTokens": 31,
+        "thinkingTokens": null,
+        "cacheReadTokens": 4480
+      },
+      "model": "gpt-6-luna",
+      "latencyMs": 8574,
+      "error": null
+    }
+  ]
+}

@@ -2,7 +2,9 @@
 
 玩家用最多 300 字指导一个角色，让它在动态地铁站里自主完成 **买票 → 安检 → 过闸机**。世界由程序模拟，Agent 只能请求行动，不能改写世界事实。
 
-**当前状态：本地 Web MVP 已实现，离线流程已跑通；真实大模型整局尚未验收。** 本轮只在 `mvp-dev` 分支进行本地原子化提交，不推送、不更改已有远端，等待用户提供仓库链接。
+项目仓库：[AI-hunter-team/Agent-go](https://github.com/AI-hunter-team/Agent-go)。
+
+**当前状态：本地 Web MVP 已实现，支持 Luna 兼容 API 与 Anthropic 两种模型接入。** 实测记录见 [验收记录](docs/验收记录.md)。功能修改通过独立的 `codex/` 分支向 `main` 提交 PR，审核后合并。
 
 ## 本地启动
 
@@ -32,15 +34,18 @@ npm run dev
 cp .env.example .env
 ```
 
-编辑 `.env`，填入自己的 `ANTHROPIC_API_KEY`，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
+编辑 `.env`，填入自己的 `OPENAI_API_KEY`，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
 
-- 默认 `AGENT_MODEL=claude-opus-5-5`，由服务端官方 Anthropic SDK 调用。
-- 可使用 `ANTHROPIC_AUTH_TOKEN`；采用 SDK 已配置认证档案时可设 `AGENT_FORCE_LLM=1`。
+- 模板默认 `AGENT_PROVIDER=openai`、`OPENAI_BASE_URL=https://lax.toklens.ai/v1`、`AGENT_MODEL=gpt-6-luna`，使用兼容 OpenAI 的 Chat Completions 协议，由 Node 服务端发出请求。
+- Luna 决策使用 `reasoning_effort=low`、强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
+- 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
+- 使用 Anthropic 时设置 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_API_KEY`、`AGENT_MODEL=claude-opus-5-5`；也支持 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL` 与 `AGENT_FORCE_LLM=1`。
 - `GET /api/health` 只检查凭据是否配置，**不代表额度、认证或模型可用性已验证**。
-- 每次模型请求会产生真实费用；本轮没有执行付费模型实测。
-- `DECISION_MAX_TOKENS` 不可超过 1024：当前实现将**思考与动作输出合计**限制为 1024 token，是比“仅思考 ≤1024”更严格的预算。被截断的动作不执行。
-- 每个决策最多重试一次，每次请求分别受 1024 上限约束，复盘累计两次用量。模型 SDK 禁用自动重试，20 秒超时；浏览器请求 30 秒超时。
-- `AGENT_FALLBACK=default` 开启服务端拒答回退，可能切换实际服务模型；严格比较单一模型时设为 `off`。
+- 每次模型请求会消耗接口额度。可显式运行 `npm run test:model` 做真实整局测试；普通 `npm test` 使用模拟响应，不调用付费模型。
+- `DECISION_THINKING_TOKENS=1024` **仅约束思考**，动作与说明另计；`DECISION_MAX_TOKENS=4096` 是独立的总输出保护值，并为非思考输出保留至少 1024 token 空间。
+- 当前兼容协议没有经确认的独立数值思考硬上限。应用通过提示、`low` 强度及返回的 `reasoning_tokens` 检查；思考超限的动作不执行。缺少思考明细时标为无法验证，不能声称供应商生成时已硬截断到 1024。[官方推理参数说明](https://developers.openai.com/api/docs/guides/reasoning)。
+- 每个决策最多重试一次，思考用量逐次检查，复盘累计两次用量。模型传输层不自动重试，20 秒超时；浏览器请求 30 秒超时。
+- 兼容 API 接入固定关闭应用侧模型回退；Anthropic 可通过 `AGENT_FALLBACK=default` 开启服务端拒答回退。日志记录供应商响应的模型名。
 - 指导整理属于赛前操作，输出上限 4096；创造性归类独立调用，上限 1024。报告的 token 统计仅含局内角色决策（含其重试），**不是全局账单**。
 
 ### 常用命令
@@ -59,9 +64,17 @@ npm run build
 
 `npm run build` 生成 `dist/` 静态前端。模型 API 是独立 Node 进程，静态前端发布不会自动包含 API；本版先用于本机验证，不作为公网服务直接部署。
 
+真实模型测试（消耗接口额度）：
+
+```bash
+npm run test:model -- --seeds=1,2 --compare
+```
+
+默认只跑种子 1；上述命令跑种子 1、2，并在种子 1 加跑“优先 TVM-2”的指导对照，最后测试三类创造性意图。通过本地 HTTP API 验证指导整理、会话、决策与清理，完整报告写入 `docs/model-tests/`，不含密钥。辅助调用不计入对局 token 总数，费用以供应商账单为准。
+
 ## 已实现
 
-- React + TypeScript + Vite，Canvas 2D 地图；Express 模型代理。
+- React + TypeScript + Vite，Canvas 2D 地图；Express 模型代理，兼容 OpenAI API 与 Anthropic。
 - 固定步长模拟、带种子的 NPC/耗时、队列与服务、设施故障与广播。
 - 角色局部观察、墙体/柱子遮挡、保安视野及违规发现判负。
 - 事件触发决策、思考期间整个世界与倒计时暂停、每局决策预算。
@@ -72,7 +85,7 @@ npm run build
 
 ## 验证与边界
 
-见 [验收记录](docs/验收记录.md)。规则 Agent 在种子 1–6 的自动化测试中均能通关；此前浏览器完整跑通种子 1，用时 72.9 秒。模型接口使用伪响应测试了请求参数、预算、工具解析及会话行为，但未进行真实模型整局验证。
+见 [验收记录](docs/验收记录.md)。规则 Agent 在种子 1–6 的自动化测试中均能通关；此前浏览器完整跑通种子 1，用时 72.9 秒。模型协议回归测试覆盖请求参数、预算、工具解析、多轮会话和失败处理；Luna 实测由独立命令执行并保存报告。
 
 - 玩家采用上帝视角；模型只拿局部观察。图上的圆/扇形是视距和朝向示意，**不是经过遮挡裁剪后的实际可见区域**；规则判定会检查遮挡。
 - 相同种子固定初始环境与随机序列；玩家动作会影响后续状态，不代表不同指导下 NPC 轨迹永远相同。真实模型输出也不保证确定性。
