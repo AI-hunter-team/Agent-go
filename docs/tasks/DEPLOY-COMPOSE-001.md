@@ -1,6 +1,6 @@
 # DEPLOY-COMPOSE-001：Docker Compose 部署
 
-状态：实施中。单一负责人及本任务集成协调：本次 Codex 会话；人工审核待用户进行。
+状态：实现与本地/CI 验证完成，[PR #5](https://github.com/AI-hunter-team/Agent-go/pull/5) 待用户审核。单一负责人及本任务集成协调：本次 Codex 会话；人工审核尚未进行。
 
 ## 目标与基线
 
@@ -31,3 +31,5 @@
 - 本任务兼集成协调仅限允许路径；不自行修改中央记录、他人任务或长期维护策略。
 - 回退：撤回本任务提交，恢复原 Vite + 独立 API 启动；Compose `down` 清理本任务容器/网络，无数据库迁移。Key/对局仍为临时内存，容器重启会清空。
 - 实现、软件检查、实际容器验收、远端合入分别记录。真实供应商调用、生产公网部署和 TLS 不属于本次验收；用户审核后再决定合入。
+- 交付功能提交：`72c8e9da5bbf8ef4b9635fc60fa79dc959bf19b2`，已推送 `origin/codex/docker-compose`。142 项测试/生产构建、本地编译后服务冒烟、[Linux Compose 实际构建和运行](https://github.com/AI-hunter-team/Agent-go/actions/runs/41051814331)及 [Ubuntu/Windows CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41051838597) 均通过。
+- 最后交接提交只补记任务/验证文档，不改受测代码。下一步为用户审核；PR #1 合并后迁移至最新 `main` 并复验，中央记录由其指定集成人登记。未执行远端合并、镜像发布或实际环境部署。
