@@ -9,6 +9,7 @@ import type {
   GameReport,
 } from "../shared/types";
 import type { OperationDebug } from "../shared/debug";
+import type { GameSettings } from "../shared/gameSettings";
 import { classifyByKeywords } from "../sim/intent";
 import type { Agent, Classifier, NpcNegotiator } from "./agent";
 
@@ -50,8 +51,8 @@ export const Api = {
   },
   health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
   normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
-  createSession: (guidance: string, normalized: NormalizedGuidance | null, runId?: string) =>
-    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId } }),
+  createSession: (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings) =>
+    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings } }),
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn } }),
   classify: (intent: string, observation: Observation, sessionId?: string, runId?: string) =>
     api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId } }),
@@ -65,8 +66,8 @@ export class RemoteAgent implements Agent {
   readonly kind = "llm" as const;
   private constructor(private sessionId: string, private runId?: string) {}
 
-  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string): Promise<RemoteAgent> {
-    const { sessionId } = await Api.createSession(guidance, normalized, runId);
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings): Promise<RemoteAgent> {
+    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings);
     return new RemoteAgent(sessionId, runId);
   }
 

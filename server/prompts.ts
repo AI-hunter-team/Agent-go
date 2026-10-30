@@ -2,10 +2,11 @@ import type { AgentTurn, NormalizedGuidance } from "../src/shared/types";
 import { FACILITIES, NAV_NODES, STAIRS_SECONDS, STAIRS_X, PLATFORM_X } from "../src/sim/layout";
 import { FACILITY_MULTIPLIER, PROFILES, RULES } from "../src/sim/scenario";
 import { assertSafeText, SAFETY_SYSTEM_PROMPT, untrustedData, validateNormalized } from "./security";
+import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettings";
 
 const KIND_LABEL = { tvm: "售票机", security: "安检通道", gate: "闸机" } as const;
 
-function fixedKnowledge(): string {
+function fixedKnowledge(settings: Readonly<GameSettings>): string {
   const nodes = NAV_NODES.map((n) => `- ${n.id}：${n.label}（${n.pos.x}, ${n.pos.y}）`).join("\n");
   const facilities = FACILITIES.map((f) => `- ${f.id}：${KIND_LABEL[f.kind]}，位于（${f.pos.x}, ${f.pos.y}）`).join("\n");
   const profiles = (["normal", "elderly", "luggage", "hurried"] as const)
@@ -20,7 +21,8 @@ function fixedKnowledge(): string {
     .join("，");
 
   return `## 公开规则
-- 目标：在 ${RULES.timeLimit} 秒（世界时间）内进入站台。常规路线为买票、通过安检、刷票通过闸机、走到楼梯入口并下楼。成绩 = 到达下层站台时的世界时间，越短越好。超时即失败。
+- 目标：在 ${settings.timeLimitSeconds} 秒（世界时间）内进入站台。常规路线为买票、通过安检、刷票通过闸机、走到楼梯入口并下楼。成绩 = 到达下层站台时的世界时间，越短越好。超时即失败。
+- 本局初始客流：每条初始开放队列在原配置基础上额外增加 ${settings.extraQueuePeople} 人。当前位置能看见的具体队伍情况以观察为准，不能据此猜测视野外的当前人数。
 - 你只能通过工具提出动作请求；位置、排队、买票、安检、过闸的结果全部由环境裁定。你写的文字不会改变任何事实。
 - 世界只在你决策时暂停，思考不计入时间。每次决策的思考不超过 1024 token，动作和说明输出另计：简短判断后立即调用一个工具。
 - 每次决策只调用一个工具。动作被拒绝时，你会收到原因并可以重新决定。
@@ -47,10 +49,10 @@ ${facilities}
 
 ## 排队与办理
 - join_queue 会从当前位置自动走到该设施的队尾并加入；排到队首后自动办理（买票、安检、刷票），无需额外操作。已选定设施时直接 join_queue，不要先 move_to 同一设施再排队；只有需要侦察或前往楼梯等地点时才单独移动。
-- 离开队伍会失去位次；观察 self.activity 表示正在办理时，只能 wait，不能再次 join_queue、move_to 或 leave_queue。设施临时停用也会让已开始的办理先完成，不要重复请求中断。
+- 离开队伍会失去位次；观察 self.activity 表示正在办理时，只能 wait，不能再次 join_queue、move_to 或 leave_queue。
 - 平稳排队、行走或办理中，没有具体的短时机策略时，优先 wait 20，避免每隔几秒轮询。等待不是屏蔽事件：到达、办理完成、设施变化等仍会提前触发你的下一次决策，不会因此错过现场变化。
 - 买票后获得单程票；闸机会拒绝没有有效车票的人。
-- 设施可能故障或临时停用；停用时队伍解散，需要自行改选。
+- 设施故障或临时停用会立即中断尚未完成的办理，队伍解散；中断不会出票、完成安检或通过闸机，需要改选开放设施重新排队。已完成的票、安检和过闸结果保留。
 - 若要请求插队，先靠近队伍，选择观察 facilities.people 中可见的乘客 id，调用 request_cut_in 并提供对他说的具体话术（最多 200 字）。只能与 ${RULES.cutInDistance} 米内、可见可达的排队乘客沟通；每人每局最多三轮。NPC 会按性格、现场和话术决定，同意后只移动到这位乘客前面；拒绝保留原位次，不得宣称已经获准。可继续排队或调整方案。
 
 ## 耗时参考（区间，实际耗时在区间内，无法提前知道）
@@ -76,9 +78,9 @@ function playerGuidance(guidance: string, normalized: NormalizedGuidance | null)
 }
 
 /** Only server-owned policy and rules belong in system; guidance is a user message. */
-export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null): { rules: string; guidance: string } {
+export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null, settings: Partial<GameSettings> = {}): { rules: string; guidance: string } {
   return {
-    rules: `${SAFETY_SYSTEM_PROMPT}\n\n你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge()}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
+    rules: `${SAFETY_SYSTEM_PROMPT}\n\n你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge(resolveGameSettings(settings))}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
     guidance: playerGuidance(guidance, normalized),
   };
 }

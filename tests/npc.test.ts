@@ -5,7 +5,8 @@ import { World } from "../src/sim/world";
 
 function simulate(seconds: number, seed = 1) {
   const world = new World(seed);
-  const director = new NpcDirector(world, buildScenario(seed));
+  // Isolate the original NPC/scripted-event fixture from default crowd balancing.
+  const director = new NpcDirector(world, buildScenario(seed, { extraQueuePeople: 0 }));
   for (let i = 0; i < seconds * 10; i++) {
     world.t = Math.round((world.t + 0.1) * 10) / 10;
     director.step();

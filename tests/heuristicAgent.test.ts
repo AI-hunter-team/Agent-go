@@ -2,9 +2,10 @@ import { describe, expect, test } from "vitest";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { Engine } from "../src/sim/engine";
 import { classifyByKeywords } from "../src/sim/intent";
+import { LEGACY_GAME_SETTINGS, type GameSettings } from "../src/shared/gameSettings";
 
-async function play(seed: number) {
-  const engine = new Engine(seed);
+async function play(seed: number, settings?: Readonly<GameSettings>) {
+  const engine = new Engine(seed, settings);
   const agent = new HeuristicAgent();
   let decisions = 0;
   let lastResult = null;
@@ -22,17 +23,29 @@ async function play(seed: number) {
 }
 
 describe("offline heuristic agent", () => {
-  test("default orderly play passes the gate in time on the default seed", async () => {
-    const { engine, decisions } = await play(1);
+  test("original 180-second orderly fixture still completes on seed 1", async () => {
+    const { engine, decisions } = await play(1, LEGACY_GAME_SETTINGS);
     expect(engine.status).toBe("success");
     expect(engine.score).toBeLessThan(180);
     expect(engine.creative.violations).toHaveLength(0);
     expect(decisions).toBeLessThanOrEqual(60);
   });
 
-  test.each([2, 3, 4, 5, 6])("also passes on seed %i", async (seed) => {
-    const { engine } = await play(seed);
+  test.each([2, 3, 4, 5, 6])("original orderly fixture also passes on seed %i", async (seed) => {
+    const { engine } = await play(seed, LEGACY_GAME_SETTINGS);
     expect(engine.status).toBe("success");
+  });
+
+  test("new fixed crowd can time out orderly play while retaining a legal route on other seeds", async () => {
+    const difficult = await play(1);
+    expect(difficult.engine.status).toBe("failed");
+    expect(difficult.engine.t).toBe(120);
+    expect(difficult.engine.failReason).toContain("超时");
+    expect(difficult.engine.creative.violations).toHaveLength(0);
+    const possible = await play(5);
+    expect(possible.engine.status).toBe("success");
+    expect(possible.engine.t).toBeLessThan(120);
+    expect(possible.engine.creative.violations).toHaveLength(0);
   });
 
   test("after a gate the next destination is the stairs, even without a ticket", async () => {

@@ -70,7 +70,7 @@ export interface RunDebug {
   runId: string;
   startedAt: string;
   endedAt: string | null;
-  parameters: { seed: number; agentKind: "llm" | "offline"; maxDecisions: number; timeLimitSeconds: number; stepSeconds: number; simulationRules: Record<string, number>; decisionLimits: Record<string, number> };
+  parameters: { seed: number; agentKind: "llm" | "offline"; maxDecisions: number; timeLimitSeconds: number; extraQueuePeople?: number; stepSeconds: number; simulationRules: Record<string, number>; decisionLimits: Record<string, number> };
   preparation: { durationMs: number; server: OperationDebug | null };
   attempts: DebugAttempt[];
   summary: {

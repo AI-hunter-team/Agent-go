@@ -1,5 +1,6 @@
 import { countChars } from "../shared/guidance";
 import { GUIDANCE_MAX_CHARS, type NormalizedGuidance } from "../shared/types";
+import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
 
 export type AgentChoice = "llm" | "offline";
 
@@ -24,7 +25,7 @@ export function SetupPanel(p: SetupProps) {
     <section className="card">
       <h2>出发之前</h2>
       <p className="muted">
-        目标：限时 180 秒内进入站台。常规流程是买票、安检、刷票过闸、下楼到站台。成绩看进入站台的用时，角色进场后自主行动。
+        {`目标：在 ${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒内进入站台。常规流程是买票、安检、刷票过闸、下楼到站台。成绩看进入站台的用时，角色进场后自主行动。`}
       </p>
 
       <div className="field" role="group" aria-label="角色驱动方式">
@@ -62,10 +63,11 @@ export function SetupPanel(p: SetupProps) {
 
       <label className="field inline">
         <span>情景种子</span>
-        <input aria-label="情景种子" type="number" min={1} value={p.seed} onChange={(e) => p.onSeed(Math.max(1, Number(e.target.value) || 1))} />
+        <input aria-label="情景种子" type="number" min={1} value={p.seed} disabled={p.busy !== null} onChange={(e) => p.onSeed(Math.max(1, Number(e.target.value) || 1))} />
         <small className="muted">相同种子固定初始条件，角色行动会影响后续演化。</small>
       </label>
 
+      <p className="small muted">{`本局规则固定：${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒，每条初始开放队列额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人。`}</p>
       <button className="primary" disabled={over || p.busy !== null} onClick={p.onPrepare}>
         {p.busy ?? (p.agentKind === "llm" && p.guidance.trim() ? "整理指导" : "准备开局")}
       </button>
