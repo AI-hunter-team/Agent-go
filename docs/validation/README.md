@@ -6,6 +6,7 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [DIFFICULTY-001 / FACILITY-FAIL-001](DIFFICULTY-001.md) | 可调时限/初始队列、办理中故障结算、314 项回归、浏览器与 600 局离线对照；不代表真实模型验收 |
 | [BRAND-001](BRAND-001.md) | Agent Go 品牌文字与现行文档核对、软件检查及品牌浏览器验证 |
 | [PR-REMAINING-001](PR-REMAINING-001.md) | 剩余 PR #6、#8 的串行冲突处理、消费者核对及集成验证 |
 | [PR7-MERGE-001](PR7-MERGE-001.md) | 3D PR #7 与 main 的冲突解决、模型配置/调试衔接及集成软件检查；最终合入见 PR |

@@ -21,4 +21,4 @@ Use integer time limits60–300 and extra queue people0–8. No paid model calls
 - [x] Add setup controls, safe input validation, previews, confirmation/clock/report values and preserve settings on start/retry.
 - [x] Run a fixed-seed offline difficulty comparison, retain summarized reproducible results and explain its limits.
 - [x] Run full checks and browser validation, request a read-only review and resolve findings.
-- [ ] Integrate only this task into the local preview workspace.
+- [x] Integrate only this task into the local preview workspace.
