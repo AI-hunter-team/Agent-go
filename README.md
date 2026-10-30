@@ -8,7 +8,21 @@
 
 新开发者与开发 Agent 先读 [AGENTS.md](AGENTS.md)、[文档导航](docs/README.md)和[开发流程](docs/DEVELOPMENT.md)，阶段状态见[工作记录](docs/开发计划.md)。功能修改通过独立 `codex/` 分支向 `main` 提交 PR；历史任务的分支及推送限制不是后续任务的永久规则。
 
-## 本地启动
+## Docker Compose 部署
+
+**完整教程：[Docker Compose 部署与配置](docs/DOCKER.md)。** 包含首次安装、页面 API Key 配置、自定义端口、宿主机网关、更新和停止步骤。
+
+默认 `main` 已包含 Docker/Compose、页面模型配置和 3D 界面。首次部署：
+
+```bash
+git clone --branch main --single-branch https://github.com/AI-hunter-team/Agent-go.git Agent-go-docker
+cd Agent-go-docker
+docker compose up --build -d --wait
+```
+
+打开 [http://localhost:8080](http://localhost:8080)，点击「模型 API 配置」，填写域名和 Key、验证连接、选择模型并启用；也可直接使用离线规则 Agent。需要 Docker Engine / Docker Desktop 和 Docker Compose v2.20+，无需在宿主机安装 Node.js。没有 `.env` 也可以启动。
+
+## 本地开发启动
 
 建议 Node.js 24 LTS、npm，使用仓库 `package-lock.json`。仓库尚未用 `engines` 或版本文件固定 Node；验证报告需记实际版本。首次安装：
 
@@ -42,31 +56,6 @@ npm run dev
 仅在验收时运行 `node --import tsx tests/browser-fixture.ts`，它在本机端口 8891 提供标明“伪模型（无费用）”的 API，不读取模型凭据。另一个 PowerShell 中设置 `$env:PORT = '8891'`，再运行 `node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5178 --strictPort`，即可用隔离端口验收。
 
 指导包含 `FAIL-NORMALIZE` 可检查整理失败；`SLOW` 使伪决策等待 10 秒；`FAIL-DECISION` 检查重试/保底/终局；`JUMP` 供已有翻闸机制的展示验证使用。这些只属于测试服务，不是真实模型能力。验收结束后停止该服务；日常使用沿用 `npm run dev`。
-
-### Docker Compose 部署
-
-需要 Docker Engine / Docker Desktop 和 Docker Compose v2.20+。在仓库根目录执行：
-
-```bash
-docker compose up --build -d --wait
-```
-
-打开 [http://localhost:8080](http://localhost:8080)。同一容器提供前端和 `/api`，不需要另启 Vite、反向代理或配置浏览器跨域；默认映射到本机回环地址。没有 `.env` 也可以启动，之后通过页面的「模型 API 配置」填入自己的域名和 Key，或先使用离线 Agent。
-
-也可在根目录 `.env` 中设置服务端默认模型，沿用下面的模型环境变量说明；Compose 会读取并传给容器，不将 `.env` 复制进镜像。更改后执行 `docker compose up -d --force-recreate`。页面填写的 Key 与对局只在内存中保存，刷新或容器重启后需重新配置/开局。
-
-- 自定义网页端口：在 `.env` 中设置 `APP_PORT=8081`；本地开发的 `PORT` 不改变容器固定内部端口 8787。
-- 需要从其他机器访问时，显式设置 `APP_HOST` 为宿主机对应地址；当前默认 `127.0.0.1`。这不提供账号鉴权或 TLS，公网托管需另行配置。
-- 连接宿主机上的模型网关时，容器中的 `localhost` 指容器自身；使用 `http://host.docker.internal:<网关端口>/v1`。Compose 已兼容 Linux 的 host-gateway 映射，宿主机网关还需要监听容器能够访问的接口。
-- 更换代码后重新执行 `docker compose up --build -d --wait`。镜像由官方 Node 24 多架构基础镜像构建，跟随 Docker 本机平台；实际验证的平台以任务验证报告为准。
-
-```bash
-docker compose ps
-docker compose logs -f app
-docker compose down
-```
-
-容器使用非 root 用户、生产依赖和健康检查；检查 `/api/health` 只说明进程与路由就绪，离线模式也会健康，不代表模型认证或额度已验证。`npm run test:compose` 会对已启动的本机 Compose 实例执行模拟接口冒烟并停止容器，供开发/CI 使用，不在实际用户对局期间运行。
 
 ### 接入真实模型
 
