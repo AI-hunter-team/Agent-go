@@ -6,6 +6,8 @@
 
 ## 项目文档
 
+本项目核心文件统一同步到 [AI-hunter-team/AI-hunter](https://github.com/AI-hunter-team/AI-hunter)，后续更新沿用此仓库。默认只同步核心设计文档、实现代码与必要配置；本地凭据、依赖、临时产物和生成效果图按 `.gitignore` 排除。
+
 [项目基线与规则说明](PROJECT.md) 保存已确认的规则和待讨论问题，包括实力匹配、局内记忆、基础交互、创造力、世界反馈和复盘。
 
 [当前轻量 3D 方案](design/ui-concepts-v2/README.md) 是围绕两天原型范围制作的第二轮视觉方向，采用低第三人称视角与闸机大厅。其文档优先于[第一轮探索](design/ui-concepts/README.md)作为当前视觉参考。第一轮 B、C 的画质目标已被收紧。
