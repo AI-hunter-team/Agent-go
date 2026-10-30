@@ -14,7 +14,7 @@ test("custom deadline ends exactly at that time and is reflected in observations
 });
 
 test("adds exactly N people to each initially open lane including empty ones", () => {
-  const base = new Engine(1);
+  const base = new Engine(1, { extraQueuePeople: 0 });
   const crowded = new Engine(1, { timeLimitSeconds: 90, extraQueuePeople: 2 });
   for (const [id, f] of base.world.facilities) {
     const expected = f.status === "open" ? f.queue.length + 2 : f.queue.length;
@@ -25,7 +25,7 @@ test("adds exactly N people to each initially open lane including empty ones", (
 });
 
 test("zero extra people preserves the old scenario and extra crowd does not alter background arrivals", () => {
-  const plain = buildScenario(7);
+  const plain = buildScenario(7, { extraQueuePeople: 0 });
   expect(buildScenario(7, { timeLimitSeconds: 180, extraQueuePeople: 0 })).toEqual(plain);
   const crowded = buildScenario(7, { timeLimitSeconds: 90, extraQueuePeople: 4 });
   expect(crowded.spawns.filter((p) => !p.startQueue)).toEqual(plain.spawns.filter((p) => !p.startQueue));
@@ -37,7 +37,7 @@ test("settings are validated and copied so later UI changes cannot alter a runni
   const e = new Engine(1, input); input.timeLimitSeconds = 180; input.extraQueuePeople = 0;
   expect(e.settings).toEqual({ timeLimitSeconds: 90, extraQueuePeople: 2 });
   expect(Object.isFrozen(e.settings)).toBe(true);
-  expect(resolveGameSettings()).toEqual({ timeLimitSeconds: 180, extraQueuePeople: 0 });
+  expect(resolveGameSettings()).toEqual({ timeLimitSeconds: 120, extraQueuePeople: 3 });
 });
 
 test.each([

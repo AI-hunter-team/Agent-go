@@ -6,7 +6,7 @@ import { ModelConfigPanel } from "./ModelConfigPanel";
 import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS } from "../sim/scenario";
-import { DEFAULT_GAME_SETTINGS, gameSettingsError, type GameSettings } from "../shared/gameSettings";
+import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
 import { GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
@@ -45,7 +45,7 @@ export function App() {
   const [showModelConfig, setShowModelConfig] = useState(false);
   const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
   const [seed, setSeed] = useState(1);
-  const [settings, setSettings] = useState<GameSettings>({ ...DEFAULT_GAME_SETTINGS });
+  const settings = DEFAULT_GAME_SETTINGS;
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
   const [intent, setIntent] = useState<Stage>("setup");
@@ -94,8 +94,6 @@ export function App() {
 
   const prepare = async () => {
     if (busy) return;
-    const settingsError = gameSettingsError(settings);
-    if (settingsError) { setError(settingsError); return; }
     const request = ++requests.current;
     setError(null); setBusy("正在整理指导…");
     const runId = crypto.randomUUID();
@@ -111,8 +109,6 @@ export function App() {
   };
   const start = async () => {
     if (busy) return;
-    const settingsError = gameSettingsError(settings);
-    if (settingsError) { setError(settingsError); return; }
     const request = ++requests.current;
     setError(null); setBusy("正在开局…");
     const preparation = preparationRef.current;
@@ -133,10 +129,6 @@ export function App() {
     finally { if (request === requests.current) setBusy(null); }
   };
   const edit = () => { requests.current++; preparationRef.current = null; setIntent("setup"); setError(null); session.preview(seed); };
-  const changeSettings = (value: GameSettings) => {
-    setSettings(value); preparationRef.current = null; setNormalized(null); setError(null);
-    if (!gameSettingsError(value)) session.preview(seed, value);
-  };
   const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
   const applyAsset = (path: string) => {
     if (path && (!path.startsWith("/models/") || path.includes("..") || !/\.(gltf|glb)$/i.test(path))) { setAssetError("请输入 /models/ 下的 .glb 或 .gltf 文件路径。"); return; }
@@ -186,7 +178,7 @@ export function App() {
             preparationRef.current = null;
             setError(null);
           }} />}
-          {intent === "setup" && !showModelConfig && <SetupPanel settings={settings} onSettings={changeSettings} llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); if (!gameSettingsError(settings)) session.preview(value, settings); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
+          {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
           {intent === "confirm" && <section className="card"><span className={styles.eyebrow}>READY TO DEPART</span><h2>确认这次出发</h2><p className="muted">{agentKind === "llm" ? "角色将依据以下指导自主行动。" : "离线规则 Agent 按默认守序方案行动。"}</p><p className="small">时限 {settings.timeLimitSeconds} 秒 · 每条开放队列额外 {settings.extraQueuePeople} 人</p><GuidanceCard guidance={agentKind === "llm" ? guidance : ""} normalized={normalized} /><div className="row"><button className="primary" disabled={busy !== null} onClick={start}>{busy ?? "出发"} <span aria-hidden="true">→</span></button><button className="ghost" disabled={busy !== null} onClick={() => setIntent("setup")}>返回修改</button></div></section>}
           {intent === "playing" && runner && <>
             <section className={styles.runHeading}><span className={styles.eyebrow}>本次行程 / {agentKind === "llm" ? "大模型" : "离线规则"}</span><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {session.engine.settings.timeLimitSeconds}s</span></div><JourneyProgress player={player} status={session.engine.status} /></section>

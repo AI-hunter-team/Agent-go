@@ -10,7 +10,7 @@ import { ReportSummary, EventTimeline } from "../src/ui/ReportView";
 const props = { onRetry: () => undefined, onEdit: () => undefined };
 
 test("a completed run renders a score, breakdown and export action", async () => {
-  const runner = new GameRunner(new Engine(1), new HeuristicAgent(), offlineClassifier);
+  const runner = new GameRunner(new Engine(5), new HeuristicAgent(), offlineClassifier);
   await runner.runToEnd();
   const report = runner.report();
   const html = renderToStaticMarkup(createElement(ReportSummary, { ...props, report }));
@@ -24,6 +24,16 @@ test("a completed run renders a score, breakdown and export action", async () =>
   expect(html).toContain("任务阶段");
   expect(html).toContain("不能单独测出纯思考时间");
   expect(JSON.parse(JSON.stringify(report)).totals.decisions).toBe(report.decisions.length);
+});
+
+test("legacy reports without settings retain their original 180-second zero-extra labels", () => {
+  const runner = new GameRunner(new Engine(1), new HeuristicAgent(), offlineClassifier);
+  runner.stop();
+  const report = runner.report();
+  delete report.settings;
+  const html = renderToStaticMarkup(createElement(ReportSummary, { ...props, report }));
+  expect(html).toContain("时限 180 秒");
+  expect(html).toContain("每条开放队列 +0 人");
 });
 
 test("a canceled run renders failure without awarding a score", () => {

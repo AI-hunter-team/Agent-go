@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { extname, resolve } from "node:path";
 import { configFromEnv } from "./claude";
 import { countChars, guidanceError } from "../src/shared/guidance";
-import { gameSettingsError } from "../src/shared/gameSettings";
+import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
 import type {
   AgentTurn,
   CreativeClassification,
@@ -130,8 +130,11 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     validateNormalized(normalized);
     const settingsError = gameSettingsError(settings);
     if (settingsError) return void res.status(400).json({ error: settingsError });
+    if (settings && (settings.timeLimitSeconds !== DEFAULT_GAME_SETTINGS.timeLimitSeconds || settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople)) {
+      return void res.status(400).json({ error: `对局规则固定为 ${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒、每条初始开放队列额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
+    }
     const binding = runtime(req);
-    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings);
+    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
     void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });

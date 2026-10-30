@@ -4,7 +4,7 @@ import { MECHANIC_NAME } from "./format";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
 import { DebugPanel } from "./DebugPanel";
-import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { LEGACY_GAME_SETTINGS } from "../shared/gameSettings";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "walking", label: "行走", color: "#1f4e79" },
@@ -17,7 +17,7 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
 ];
 
 export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport; onRetry: () => void; onEdit: () => void }) {
-  const settings = report.settings ?? DEFAULT_GAME_SETTINGS;
+  const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });

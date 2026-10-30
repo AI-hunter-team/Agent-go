@@ -5,7 +5,7 @@ import { Engine } from "../src/sim/engine";
 
 const count = Number(process.argv.find((arg) => arg.startsWith("--seeds="))?.split("=")[1] ?? 30);
 if (!Number.isInteger(count) || count < 1 || count > 200) throw new Error("--seeds 须为 1–200 的整数");
-const cases = [[180, 0], [120, 0], [100, 0], [90, 0], [80, 0], [120, 2], [100, 2], [90, 2], [120, 4], [100, 4], [90, 4], [180, 8]];
+const cases = [[180, 0], [120, 0], [100, 0], [90, 0], [80, 0], [120, 2], [120, 3], [100, 2], [90, 2], [120, 4], [100, 4], [90, 4], [180, 8]];
 const rows = [];
 for (const [timeLimitSeconds, extraQueuePeople] of cases) {
   const scores: number[] = []; let queueSeconds = 0; let exhausted = 0;

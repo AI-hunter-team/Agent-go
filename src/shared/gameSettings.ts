@@ -1,5 +1,7 @@
 export interface GameSettings { timeLimitSeconds: number; extraQueuePeople: number }
-export const DEFAULT_GAME_SETTINGS: Readonly<GameSettings> = Object.freeze({ timeLimitSeconds: 180, extraQueuePeople: 0 });
+export const DEFAULT_GAME_SETTINGS: Readonly<GameSettings> = Object.freeze({ timeLimitSeconds: 120, extraQueuePeople: 3 });
+/** Reports exported before settings were recorded used the original scenario. */
+export const LEGACY_GAME_SETTINGS: Readonly<GameSettings> = Object.freeze({ timeLimitSeconds: 180, extraQueuePeople: 0 });
 export function gameSettingsError(value: unknown): string | null {
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value)) return "难度设置必须是对象";
