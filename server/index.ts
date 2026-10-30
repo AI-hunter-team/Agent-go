@@ -1,12 +1,8 @@
 import "dotenv/config";
-import express from "express";
+import { createApp } from "./app";
+import { SessionStore } from "./sessions";
 
-const app = express();
-app.use(express.json({ limit: "1mb" }));
-
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
-});
+const app = createApp({ llm: null, sessions: new SessionStore() });
 
 const port = Number(process.env.PORT ?? 8787);
 app.listen(port, () => console.log(`API listening on http://localhost:${port}`));

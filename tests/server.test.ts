@@ -1,0 +1,111 @@
+import type { AddressInfo } from "node:net";
+import type { Server } from "node:http";
+import { afterEach, describe, expect, test } from "vitest";
+import { createApp, type LlmService } from "../server/app";
+import { SessionStore } from "../server/sessions";
+import { countChars } from "../src/shared/guidance";
+import { Engine } from "../src/sim/engine";
+
+let server: Server | null = null;
+
+async function start(llm: LlmService | null = null) {
+  const sessions = new SessionStore();
+  server = createApp({ llm, sessions }).listen(0);
+  await new Promise((r) => server!.once("listening", r));
+  const base = `http://127.0.0.1:${(server!.address() as AddressInfo).port}`;
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await fetch(base + path, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null };
+  };
+  return { call, sessions };
+}
+
+afterEach(() => {
+  server?.close();
+  server = null;
+});
+
+const fakeLlm: LlmService = {
+  model: "fake-model",
+  decide: async () => ({
+    action: { type: "wait", seconds: 1, reason: "测试" },
+    thinking: null,
+    usage: null,
+    model: "fake-model",
+    latencyMs: 1,
+    error: null,
+  }),
+  normalize: async (text) => ({
+    summary: text,
+    priorities: [],
+    risk: "",
+    rules: [],
+    creativeIdeas: [],
+    notExecutable: [],
+    initialPlan: [],
+  }),
+  classify: async () => ({ mechanic: "jump_gate", reason: "fake", source: "llm" }),
+};
+
+describe("API without a model", () => {
+  test("health reports no model", async () => {
+    const { call } = await start();
+    expect((await call("GET", "/api/health")).body).toEqual({ llm: false, model: null });
+  });
+
+  test("guidance over 300 characters is rejected", async () => {
+    const { call } = await start();
+    const text = "快".repeat(301);
+    expect(countChars(text)).toBe(301);
+    const r = await call("POST", "/api/guidance/normalize", { text });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toContain("300");
+  });
+
+  test("empty guidance needs no model", async () => {
+    const { call } = await start();
+    expect((await call("POST", "/api/guidance/normalize", { text: "  " })).body).toEqual({ guidance: null });
+  });
+
+  test("model endpoints return 503", async () => {
+    const { call } = await start();
+    expect((await call("POST", "/api/guidance/normalize", { text: "稳一点" })).status).toBe(503);
+    const { body } = await call("POST", "/api/session", { guidance: "" });
+    const turn = { triggers: [], lastResult: null, observation: new Engine(1).observe() };
+    expect((await call("POST", "/api/agent/decide", { sessionId: body.sessionId, turn })).status).toBe(503);
+  });
+
+  test("classification falls back to keywords", async () => {
+    const { call } = await start();
+    expect((await call("POST", "/api/creative/classify", { intent: "插队到前面" })).body.mechanic).toBe("cut_in_line");
+  });
+});
+
+describe("API with a model", () => {
+  test("session lifecycle: create, decide, delete", async () => {
+    const { call, sessions } = await start(fakeLlm);
+    const { body } = await call("POST", "/api/session", { guidance: "稳一点", normalized: null });
+    expect(sessions.size).toBe(1);
+    const turn = { triggers: [], lastResult: null, observation: new Engine(1).observe() };
+    const d = await call("POST", "/api/agent/decide", { sessionId: body.sessionId, turn });
+    expect(d.body.action.type).toBe("wait");
+    expect((await call("DELETE", `/api/session/${body.sessionId}`)).status).toBe(204);
+    expect(sessions.size).toBe(0);
+    expect((await call("POST", "/api/agent/decide", { sessionId: body.sessionId, turn })).status).toBe(404);
+  });
+
+  test("session guidance is length-checked too", async () => {
+    const { call } = await start(fakeLlm);
+    expect((await call("POST", "/api/session", { guidance: "a".repeat(301) })).status).toBe(400);
+  });
+
+  test("classification uses the model when available", async () => {
+    const { call } = await start(fakeLlm);
+    expect((await call("POST", "/api/creative/classify", { intent: "随便", observation: null })).body.source).toBe("llm");
+  });
+});
