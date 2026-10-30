@@ -1,0 +1,65 @@
+import { describe, expect, test } from "vitest";
+import { GuardSystem } from "../src/sim/guards";
+import { NpcDirector } from "../src/sim/npc";
+import { buildObservation, summarizeObservation } from "../src/sim/observation";
+import { buildScenario } from "../src/sim/scenario";
+import { World } from "../src/sim/world";
+
+function worldWithPlayerAt(x: number, y: number) {
+  const world = new World(1);
+  new NpcDirector(world, buildScenario(1));
+  const guards = new GuardSystem();
+  const p = world.addPerson("player", { x, y }, { isPlayer: true });
+  return { world, guards, p };
+}
+
+describe("observation", () => {
+  test("only nearby facilities are visible", () => {
+    const { world, guards } = worldWithPlayerAt(19, 15);
+    const ids = buildObservation(world, guards).facilities.map((f) => f.id);
+    expect(ids).toContain("TVM-2");
+    expect(ids).toContain("S2");
+    expect(ids.some((id) => id.startsWith("G"))).toBe(false);
+  });
+
+  test("gates are hidden behind the security wall", () => {
+    const { world, guards } = worldWithPlayerAt(24, 10);
+    const ids = buildObservation(world, guards).facilities.map((f) => f.id);
+    expect(ids.some((id) => id.startsWith("G"))).toBe(false);
+  });
+
+  test("a broken gate is only known once it is in view", () => {
+    const far = worldWithPlayerAt(31, 7);
+    expect(buildObservation(far.world, far.guards).facilities.find((f) => f.id === "G3")).toBeUndefined();
+    const near = worldWithPlayerAt(38, 15);
+    expect(buildObservation(near.world, near.guards).facilities.find((f) => f.id === "G3")?.status).toBe("broken");
+  });
+
+  test("queues report visible traits, not hidden service times", () => {
+    const { world, guards } = worldWithPlayerAt(19, 15);
+    const s2 = buildObservation(world, guards).facilities.find((f) => f.id === "S2")!;
+    expect(s2.queueLength).toBe(5);
+    expect(s2.queue).toContain("携带大件行李");
+    expect(s2.serviceRange).toEqual([5, 8]);
+    expect(JSON.stringify(s2)).not.toMatch(/serviceTime/);
+  });
+
+  test("lane efficiency scales the advertised range", () => {
+    const { world, guards } = worldWithPlayerAt(19, 22);
+    const s3 = buildObservation(world, guards).facilities.find((f) => f.id === "S3")!;
+    expect(s3.serviceRange).toEqual([7, 11.2]);
+    expect(s3.efficiency).toMatch(/较慢/);
+  });
+
+  test("guards are reported only when visible", () => {
+    const hall = worldWithPlayerAt(10, 15);
+    expect(buildObservation(hall.world, hall.guards).guards).toHaveLength(0);
+    const conc = worldWithPlayerAt(33, 15);
+    expect(buildObservation(conc.world, conc.guards).guards.map((g) => g.id)).toContain("guard-A");
+  });
+
+  test("summary is a single line", () => {
+    const { world, guards } = worldWithPlayerAt(19, 15);
+    expect(summarizeObservation(buildObservation(world, guards))).not.toContain("\n");
+  });
+});
