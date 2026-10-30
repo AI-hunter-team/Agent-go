@@ -247,7 +247,8 @@ aside {
 }
 
 textarea,
-input {
+input,
+select {
   font: inherit;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -548,6 +549,22 @@ details summary {
 .row.between {
   justify-content: space-between;
 }
+
+.model-config { overflow-wrap: anywhere; }
+.model-config h2 { margin: 0; }
+.model-config .field > label { font-weight: 600; }
+.model-config fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.model-config input, .model-config select { width: 100%; min-width: 0; }
+.model-config select { text-overflow: ellipsis; }
+.key-input { display: flex; gap: 8px; }
+.key-input input { flex: 1; }
+.key-input button { flex-shrink: 0; }
+.config-steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 16px 0; font-size: 12px; }
+.config-steps li { flex: 1; padding: 8px 4px; border-bottom: 2px solid var(--line); color: var(--ink-soft); text-align: center; }
+.config-steps li.on { border-color: var(--green); color: #2f4a36; }
+.config-status { color: #2f4a36; font-size: 13px; }
+.config-model-selection { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.config-success { background: #e3ebe4; border: 1px solid var(--green); border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 13px; color: #2f4a36; }
 
 @media (max-width: 1100px) {
   main { flex-direction: column; }

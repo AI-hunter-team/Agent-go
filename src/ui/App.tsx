@@ -13,12 +13,14 @@ import { MapCanvas } from "./MapCanvas";
 import { EventTimeline, ReportSummary } from "./ReportView";
 import type { RenderOptions } from "./render";
 import type { OperationDebug } from "../shared/debug";
+import { ModelConfigPanel } from "./ModelConfigPanel";
 
 type Stage = "setup" | "confirm" | "playing" | "ended";
 
 export function App() {
   const [health, setHealth] = useState<{ llm: boolean; model: string | null }>({ llm: false, model: null });
   const [agentKind, setAgentKind] = useState<AgentChoice>("offline");
+  const [showModelConfig, setShowModelConfig] = useState(false);
   const [seed, setSeed] = useState(1);
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
@@ -200,7 +202,14 @@ export function App() {
         <aside>
           {error && <div className="error">{error}</div>}
 
-          {stage === "setup" && (
+          {stage === "setup" && showModelConfig && (
+            <ModelConfigPanel health={health} onClose={() => setShowModelConfig(false)} onEnabled={(h) => {
+              setHealth(h);
+              setAgentKind(h.llm ? "llm" : "offline");
+              setError(null);
+            }} />
+          )}
+          {stage === "setup" && !showModelConfig && (
             <SetupPanel
               llmAvailable={health.llm}
               model={health.model}
@@ -212,6 +221,7 @@ export function App() {
               onGuidance={setGuidance}
               busy={busy}
               onPrepare={prepare}
+              onConfigureModel={() => setShowModelConfig(true)}
             />
           )}
 

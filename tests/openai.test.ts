@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { createLlm } from "../server/llm";
 import { OpenAIClient, OpenAILlmService } from "../server/openai";
 import { SessionStore } from "../server/sessions";
+import { SAFETY_SYSTEM_PROMPT } from "../server/security";
 import { Engine } from "../src/sim/engine";
 
 const cfg = { model: "gpt-6-luna", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false };
@@ -46,11 +47,13 @@ describe("OpenAI-compatible model", () => {
     await service.decide(session, turn());
     await service.decide(session, { ...turn(), lastResult: { ok: true, text: "已排队" } });
     const messages = requests[1].body.messages;
-    expect(messages[0].content).toContain("优先第二台售票机");
-    expect(messages[2].tool_calls[0].id).toBe("call1");
-    expect(messages[3]).toMatchObject({ role: "tool", tool_call_id: "call1" });
-    expect(messages[3].content).toContain("已排队");
-    expect(requests[0].body.messages).toHaveLength(2);
+    expect(messages[0].content.startsWith(SAFETY_SYSTEM_PROMPT)).toBe(true);
+    expect(messages[0].content).not.toContain("优先第二台售票机");
+    expect(messages[1]).toMatchObject({ role: "user", content: expect.stringContaining("优先第二台售票机") });
+    expect(messages[3].tool_calls[0].id).toBe("call1");
+    expect(messages[4]).toMatchObject({ role: "tool", tool_call_id: "call1" });
+    expect(messages[4].content).toContain("已排队");
+    expect(requests[0].body.messages).toHaveLength(3);
     store.delete(session.id);
     expect(store.create("", null).chatMessages).toEqual([]);
   });
@@ -75,7 +78,7 @@ describe("OpenAI-compatible model", () => {
     const session = new SessionStore().create("", null);
     await service.decide(session, turn());
     await service.decide(session, { ...turn(), retry: true });
-    expect(requests[1].body.messages.slice(3)).toEqual([
+    expect(requests[1].body.messages.slice(4)).toEqual([
       expect.objectContaining({ role: "tool", tool_call_id: "call1" }),
       expect.objectContaining({ role: "tool", tool_call_id: "call2" }),
     ]);
@@ -113,6 +116,10 @@ describe("OpenAI-compatible model", () => {
     expect(requests[0].body.response_format.json_schema).toMatchObject({ name: "guidance", strict: true });
     expect(requests[0].body.max_completion_tokens).toBe(4096);
     expect(requests[1].body.max_completion_tokens).toBe(1024);
+    for (const request of requests) {
+      expect(request.body.messages[0].content.startsWith(SAFETY_SYSTEM_PROMPT)).toBe(true);
+      expect(request.body.messages[1].role).toBe("user");
+    }
   });
 
   test.each([null, {}, { summary: "x", risk: "x", priorities: [123] }])("rejects malformed structured guidance %#", async (value) => {

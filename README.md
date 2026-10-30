@@ -28,7 +28,38 @@ npm run dev
 
 离线规则 Agent **不是大模型，不理解自然语言指导**，只用于运行规则演示及回归测试。不能据此认定真实模型会通关。
 
+### Docker Compose 部署
+
+需要 Docker Engine / Docker Desktop 和 Docker Compose v2.20+。在仓库根目录执行：
+
+```bash
+docker compose up --build -d --wait
+```
+
+打开 [http://localhost:8080](http://localhost:8080)。同一容器提供前端和 `/api`，不需要另启 Vite、反向代理或配置浏览器跨域；默认映射到本机回环地址。没有 `.env` 也可以启动，之后通过页面的「模型 API 配置」填入自己的域名和 Key，或先使用离线 Agent。
+
+也可在根目录 `.env` 中设置服务端默认模型，沿用下面的模型环境变量说明；Compose 会读取并传给容器，不将 `.env` 复制进镜像。更改后执行 `docker compose up -d --force-recreate`。页面填写的 Key 与对局只在内存中保存，刷新或容器重启后需重新配置/开局。
+
+- 自定义网页端口：在 `.env` 中设置 `APP_PORT=8081`；本地开发的 `PORT` 不改变容器固定内部端口 8787。
+- 需要从其他机器访问时，显式设置 `APP_HOST` 为宿主机对应地址；当前默认 `127.0.0.1`。这不提供账号鉴权或 TLS，公网托管需另行配置。
+- 连接宿主机上的模型网关时，容器中的 `localhost` 指容器自身；使用 `http://host.docker.internal:<网关端口>/v1`。Compose 已兼容 Linux 的 host-gateway 映射，宿主机网关还需要监听容器能够访问的接口。
+- 更换代码后重新执行 `docker compose up --build -d --wait`。镜像由官方 Node 24 多架构基础镜像构建，跟随 Docker 本机平台；实际验证的平台以任务验证报告为准。
+
+```bash
+docker compose ps
+docker compose logs -f app
+docker compose down
+```
+
+容器使用非 root 用户、生产依赖和健康检查；检查 `/api/health` 只说明进程与路由就绪，离线模式也会健康，不代表模型认证或额度已验证。`npm run test:compose` 会对已启动的本机 Compose 实例执行模拟接口冒烟并停止容器，供开发/CI 使用，不在实际用户对局期间运行。
+
 ### 接入真实模型
+
+可直接在页面点击 **模型 API 配置**，填写 OpenAI 兼容接口的 **API 域名和 Key → 验证连接并获取模型 → 选择模型 → 验证模型并启用大模型**。只填写域名时自动补上 `/v1`；填写完整基础路径时会保留。模型列表接口不受支持时，可手动填写模型 ID。启用前会发起一次与游戏相同的真实工具调用，验证认证、模型权限与工具协议，可能消耗少量接口额度；失败时不会启用。
+
+页面配置按浏览器页面隔离，Key 仅存于临时内存，不写入浏览器存储、`.env` 或日志；刷新后需重新配置，闲置 30 分钟后失效。配置只影响当前页面的新对局，不更改服务端默认配置或其他用户的模型。可通过「清除页面配置」恢复服务端默认配置。
+
+也可继续使用服务端默认配置：
 
 尚无 `.env` 时复制本地配置模板（PowerShell）；已有配置则直接编辑，避免覆盖：
 
@@ -72,7 +103,7 @@ npm run typecheck
 npm run build
 ```
 
-`npm run build` 生成 `dist/` 静态前端。模型 API 是独立 Node 进程，静态前端发布不会自动包含 API；本版先用于本机验证，不作为公网服务直接部署。
+`npm run build` 完成类型检查并生成 `dist/` 静态前端和 `build/server.js` 生产服务。`npm run build:web`、`npm run build:server` 可分别构建；`npm start` 执行编译后的服务，生产环境需设置 `NODE_ENV=production` 才提供前端静态页面。Compose 已设置该变量和容器监听地址。单独发布 `dist/` 仍不会自动包含 API；本版没有新增公网账号、鉴权或 TLS。
 
 真实模型测试（消耗接口额度）：
 

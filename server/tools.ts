@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentAction } from "../src/shared/types";
 import { FACILITIES, NAV_NODES } from "../src/sim/layout";
+import { assertSafeText, SafetyError } from "./security";
 
 const FACILITY_IDS = FACILITIES.map((f) => f.id);
 const TARGETS = [...NAV_NODES.map((n) => n.id), ...FACILITY_IDS];
@@ -45,22 +46,35 @@ export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
 
 /** Convert a tool call into an action, rejecting anything malformed. */
 export function parseToolUse(name: string, input: unknown): { action: AgentAction } | { error: string } {
-  const i = (input ?? {}) as Record<string, unknown>;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "工具参数必须是对象" };
+  const i = input as Record<string, unknown>;
+  const allowed: Record<string, string[]> = {
+    move_to: ["target", "reason"], join_queue: ["facility", "reason"], leave_queue: ["reason"],
+    wait: ["seconds", "reason"], attempt_creative: ["intent", "reason"],
+  };
+  if (!Object.hasOwn(allowed, name)) return { error: "未知工具，未执行" };
+  if (Object.keys(i).some((key) => !allowed[name].includes(key))) return { error: "工具含有未授权参数，未执行" };
+  if (i.reason !== undefined && typeof i.reason !== "string") return { error: "工具的 reason 必须是文字" };
+  try { assertSafeText(JSON.stringify(i)); }
+  catch (error) {
+    if (error instanceof SafetyError) return { error: error.message };
+    throw error;
+  }
   const why = typeof i.reason === "string" ? i.reason.slice(0, 80) : "";
   switch (name) {
     case "move_to":
       if (typeof i.target === "string" && TARGETS.includes(i.target)) return { action: { type: "move_to", target: i.target, reason: why } };
-      return { error: `move_to 的 target 无效：${String(i.target)}` };
+      return { error: "move_to 的 target 无效" };
     case "join_queue":
       if (typeof i.facility === "string" && FACILITY_IDS.includes(i.facility)) {
         return { action: { type: "join_queue", facility: i.facility, reason: why } };
       }
-      return { error: `join_queue 的 facility 无效：${String(i.facility)}` };
+      return { error: "join_queue 的 facility 无效" };
     case "leave_queue":
       return { action: { type: "leave_queue", reason: why } };
     case "wait": {
-      const s = Number(i.seconds);
-      if (!Number.isFinite(s)) return { error: "wait 的 seconds 无效" };
+      const s = i.seconds;
+      if (typeof s !== "number" || !Number.isFinite(s)) return { error: "wait 的 seconds 无效" };
       return { action: { type: "wait", seconds: Math.min(20, Math.max(1, Math.round(s))), reason: why } };
     }
     case "attempt_creative":
