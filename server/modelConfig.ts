@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { debugFetch } from "./debug";
 import type { LlmService } from "./app";
 import { configFromEnv } from "./claude";
 import { OpenAIClient, OpenAILlmService } from "./openai";
@@ -78,7 +79,7 @@ export class ModelConfigStore {
       throw new ModelConfigError("请选择或填写有效的模型 ID");
     }
     const cfg = configFromEnv({ AGENT_MODEL: model.trim(), AGENT_FALLBACK: "off" });
-    const llm = new OpenAILlmService(new OpenAIClient(config.baseUrl, config.apiKey, this.fetcher), cfg);
+    const llm = new OpenAILlmService(new OpenAIClient(config.baseUrl, config.apiKey, debugFetch(this.fetcher)), cfg);
     // Exercise the same tool-calling request as gameplay, without starting or changing a real game.
     const probe = await llm.decide(new SessionStore().create("", null), {
       triggers: [{ kind: "start", text: "连通性验证，请选择一个合法行动。" }],

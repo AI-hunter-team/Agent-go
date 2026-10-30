@@ -29,3 +29,12 @@
 同步 PR #1 后再同步 PR #3，保留其 Debug README 段并复验适用软件检查，结果在下方追加。PR #1 的 GitHub CI 将由 push 触发，远端结果以 Actions 为准。PR #3 暂以功能分支为 base，不符合现行 CI 的 main 过滤条件，不声称其远端 CI 已运行。
 
 风险：主分支后续继续修改相同段落可能再次冲突。回退使用新提交撤销此次集成并核对依赖，不 force push。中央记录和路线图仍保留原任务快照，本任务未重写其他任务的历史或负责人。
+
+
+## Debug 依赖同步复验
+
+PR #3 在 `16ffebc1eede9c83319886b818dfd7d03b956b77` 上合入已推送的 PR #1 修复 commit `72190d9`，README 自动合并，Debug 说明完整保留；`git diff HEAD -- src server scripts tests package.json package-lock.json` 为空。
+
+在同步后的待提交树执行：`npm run typecheck` 通过；`npm test` 17 文件、136 项通过；`npm run build` 通过；`git diff --cached --check` 通过。环境同上，未调用付费模型或操作浏览器。Debug 工作区已有的 node_modules 链接由 `.gitignore` 忽略，未入库。
+
+GitHub 读取 PR #1 已显示 `MERGEABLE`；Ubuntu CI 已通过，Windows 当时仍运行中，最终状态需查看 [CI 运行](https://github.com/AI-hunter-team/Agent-go/actions/runs/41049500137)。两份 PR 都保持 Open，等待人工审核。

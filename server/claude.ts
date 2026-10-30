@@ -52,11 +52,11 @@ export class ClaudeDecider {
   async decide(session: Session, turn: AgentTurn): Promise<DecisionResult> {
     const text = renderTurn(turn);
     session.messages.push(
-      session.pendingToolUseId
-        ? { role: "user", content: [{ type: "tool_result", tool_use_id: session.pendingToolUseId, content: text }] }
+      session.pendingToolUseIds.length
+        ? { role: "user", content: session.pendingToolUseIds.map((id) => ({ type: "tool_result" as const, tool_use_id: id, content: text })) }
         : { role: "user", content: text },
     );
-    session.pendingToolUseId = null;
+    session.pendingToolUseIds = [];
 
     const prompt = buildSystemPrompt(session.guidance, session.normalized);
     const started = Date.now();
@@ -80,17 +80,17 @@ export class ClaudeDecider {
         cache_control: { type: "ephemeral" },
         system: [
           { type: "text", text: prompt.rules, cache_control: { type: "ephemeral" } },
-          { type: "text", text: `${prompt.guidance}\n本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
+          { type: "text", text: `本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
         ],
         tools: AGENT_TOOLS,
         tool_choice: { type: "auto", disable_parallel_tool_use: true },
-        messages: session.messages,
+        messages: [{ role: "user", content: prompt.guidance }, ...session.messages],
       });
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) return fail("模型限流，请稍后再试");
       if (err instanceof Anthropic.AuthenticationError) return fail("模型认证失败，请检查 ANTHROPIC_API_KEY");
-      if (err instanceof Anthropic.APIError) return fail(`模型接口错误 ${err.status}：${err.message}`);
-      return fail(`无法连接模型：${String(err)}`);
+      if (err instanceof Anthropic.APIError) return fail(`模型接口错误 ${err.status}，请检查接口配置或稍后重试`);
+      return fail("无法连接模型，请检查接口配置或稍后重试");
     }
 
     session.messages.push({ role: "assistant", content: response.content });
@@ -114,12 +114,14 @@ export class ClaudeDecider {
     };
 
     if (response.stop_reason === "refusal") return fail("模型拒绝了这次请求", result);
-    const toolUse = response.content.find((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
-    if (!toolUse) {
+    const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
+    session.pendingToolUseIds = toolUses.map((tool) => tool.id);
+    if (!toolUses.length) {
       const why = response.stop_reason === "max_tokens" ? `超出单次决策 ${this.cfg.maxTokens} token 上限仍未调用工具` : "模型没有调用工具";
       return fail(why, result);
     }
-    session.pendingToolUseId = toolUse.id;
+    if (toolUses.length !== 1) return fail(`模型必须调用且只调用一个工具，实际 ${toolUses.length} 个，未执行`, result);
+    const toolUse = toolUses[0];
     if ((result.usage?.thinkingTokens ?? 0) > this.cfg.maxThinkingTokens) {
       return fail(`思考用量 ${result.usage!.thinkingTokens} 超过 ${this.cfg.maxThinkingTokens} token，未执行`, result);
     }

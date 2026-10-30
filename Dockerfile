@@ -17,6 +17,7 @@ COPY --from=production-dependencies --chown=node:node /app/package.json /app/pac
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/build ./build
 COPY --from=build --chown=node:node /app/dist ./dist
+RUN mkdir -p /app/logs && chown node:node /app/logs
 USER node
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

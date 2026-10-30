@@ -5,6 +5,7 @@ import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
 import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM } from "./structured";
 import { AGENT_TOOLS, parseToolUse } from "./tools";
+import { assertSafeText, untrustedData, validateNormalized } from "./security";
 
 interface ToolCall {
   id: string;
@@ -47,23 +48,24 @@ export class OpenAIClient {
   }
 
   async complete(params: Record<string, unknown>): Promise<Completion> {
+    let response: Response;
     try {
-      const response = await this.fetcher(this.endpoint, {
+      response = await this.fetcher(this.endpoint, {
         method: "POST",
         headers: { authorization: `Bearer ${this.apiKey}`, "content-type": "application/json" },
         body: JSON.stringify(params),
         signal: AbortSignal.timeout(20_000),
         redirect: "error",
       });
-      if (response.status === 401 || response.status === 403) throw new Error("模型认证失败，请检查 OPENAI_API_KEY 和模型权限");
-      if (response.status === 429) throw new Error("模型限流或额度不足，请稍后再试");
-      if (!response.ok) throw new Error(`模型接口错误 ${response.status}：${(await response.text()).slice(0, 1000)}`);
-      return await response.json() as Completion;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // Some gateways echo request data in errors. Never return the credential.
-      throw new Error(this.apiKey ? message.split(this.apiKey).join("[REDACTED]") : message);
+    } catch {
+      // Gateways and transports may echo prompts or credentials in error text.
+      throw new Error("无法连接模型，请检查接口配置或稍后重试");
     }
+    if (response.status === 401 || response.status === 403) throw new Error("模型认证失败，请检查 OPENAI_API_KEY 和模型权限");
+    if (response.status === 429) throw new Error("模型限流或额度不足，请稍后再试");
+    if (!response.ok) throw new Error(`模型接口错误 ${response.status}，请检查接口配置或稍后重试`);
+    try { return await response.json() as Completion; }
+    catch { throw new Error("模型接口返回了无效 JSON"); }
   }
 }
 
@@ -98,7 +100,11 @@ export class OpenAILlmService implements LlmService {
         model: this.model,
         max_completion_tokens: this.cfg.maxTokens,
         reasoning_effort: "low",
-        messages: [{ role: "system", content: `${prompt.rules}\n\n${prompt.guidance}\n本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` }, ...session.chatMessages],
+        messages: [
+          { role: "system", content: `${prompt.rules}\n本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
+          { role: "user", content: prompt.guidance },
+          ...session.chatMessages,
+        ],
         tools: CHAT_TOOLS,
         tool_choice: "required",
         parallel_tool_calls: false,
@@ -154,18 +160,22 @@ export class OpenAILlmService implements LlmService {
   }
 
   async normalize(text: string): Promise<NormalizedGuidance> {
-    const data = await this.structured(GUIDANCE_SYSTEM, `玩家指导原文：\n${text}`, GUIDANCE_SCHEMA, "guidance", 4096) as NormalizedGuidance | null;
+    assertSafeText(text);
+    const data = await this.structured(GUIDANCE_SYSTEM, untrustedData("玩家指导原文", { text }), GUIDANCE_SCHEMA, "guidance", 4096) as NormalizedGuidance | null;
     const lists = ["priorities", "rules", "creativeIdeas", "notExecutable", "initialPlan"] as const;
     if (!data || typeof data.summary !== "string" || typeof data.risk !== "string" ||
       !lists.every((k) => Array.isArray(data[k]) && data[k].every((v) => typeof v === "string"))) {
       throw new Error("模型返回的指导格式无效");
     }
+    validateNormalized(data);
     return data;
   }
 
   async classify(intent: string, observation: Observation | null): Promise<CreativeClassification> {
-    const where = observation ? `角色当前位置：${observation.self.zone}，${observation.self.activity}` : "";
-    const data = await this.structured(CLASSIFY_SYSTEM, `角色想做的行动：「${intent}」\n${where}`, CLASSIFY_SCHEMA, "classification", 1024) as CreativeClassification | null;
+    assertSafeText(intent);
+    const context = { intent, zone: observation?.self.zone, activity: observation?.self.activity };
+    assertSafeText(JSON.stringify(context));
+    const data = await this.structured(CLASSIFY_SYSTEM, untrustedData("行动及角色位置", context), CLASSIFY_SCHEMA, "classification", 1024) as CreativeClassification | null;
     if (!data || typeof data.reason !== "string" || !["cut_in_line", "jump_gate", "unsupported"].includes(data.mechanic)) {
       throw new Error("模型返回的意图分类格式无效");
     }

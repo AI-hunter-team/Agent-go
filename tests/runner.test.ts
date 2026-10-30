@@ -174,3 +174,36 @@ test("classifier failure falls back without rejecting the runner promise", async
   expect(runner.phase).toBe("running");
   expect(runner.decisions[0].classification?.source).toBe("keywords");
 });
+
+test("debug accounts for first attempts, retries and classification exactly once", async () => {
+  let clock = 0;
+  const agent = new ScriptedAgent((_, n) => {
+    clock += n === 1 ? 20 : 30;
+    return ok(n === 1 ? null : { type: "attempt_creative", intent: "飞过去", reason: "测试" });
+  });
+  const runner = new GameRunner(new Engine(1), agent, async () => { clock += 50; throw new Error("classifier offline"); }, {
+    now: () => clock, preparation: { durationMs: 100, server: null },
+  });
+  runner.start(); await runner.pending; runner.stop();
+  const debug = runner.report().debug!;
+  expect(debug.summary.aiWaitMs).toBe(100);
+  expect(debug.summary.includingPreparationMs).toBe(200);
+  expect(debug.summary.byOperationMs).toEqual({ decision: 20, retry: 30, classification: 50 });
+  expect(debug.summary.byStageMs).toEqual({ ticket: 100, security: 0, gate: 0 });
+  expect(debug.summary.slowestAttempt).toEqual({ index: 3, durationMs: 50 });
+  expect(debug.attempts[0].error).toBe("no tool call");
+  expect(debug.attempts[2].error).toContain("classifier offline");
+  expect(runner.report().thinkingRealSeconds).toBe(0.1);
+  expect(debug.summary.internalReasoningMs).toBeNull();
+});
+
+test("ending an in-flight call freezes debug timing and ignores late telemetry", async () => {
+  let clock = 0;
+  let release!: (r: DecisionResult) => void;
+  const runner = new GameRunner(new Engine(1), new ScriptedAgent(() => new Promise((resolve) => { release = resolve; })), keywords, { now: () => clock });
+  runner.start(); clock = 40; runner.stop();
+  const stopped = JSON.stringify(runner.report().debug);
+  expect(runner.report().debug!.attempts[0]).toMatchObject({ status: "cancelled", durationMs: 40 });
+  clock = 900; release(ok({ type: "wait", seconds: 1, reason: "late" })); await runner.pending;
+  expect(JSON.stringify(runner.report().debug)).toBe(stopped);
+});

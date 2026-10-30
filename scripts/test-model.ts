@@ -5,6 +5,8 @@ import { createApp } from "../server/app";
 import { createLlm } from "../server/llm";
 import { configFromEnv } from "../server/claude";
 import { SessionStore } from "../server/sessions";
+import { debugLoggerFromEnv } from "../server/debug";
+import type { OperationDebug } from "../src/shared/debug";
 import type { Agent } from "../src/agent/agent";
 import { GameRunner } from "../src/agent/runner";
 import type { CreativeClassification, DecisionResult, GameReport, NormalizedGuidance } from "../src/shared/types";
@@ -15,7 +17,7 @@ const llm = createLlm();
 const budgets = configFromEnv();
 if (!llm) throw new Error("请先在 .env 配置模型凭据");
 const sessions = new SessionStore();
-const server = createApp({ llm, sessions }).listen(0, "127.0.0.1");
+const server = createApp({ llm, sessions, debugLogger: debugLoggerFromEnv(), modelParameters: { ...budgets, model: llm.model, effort: "low", timeoutMs: 20_000 } }).listen(0, "127.0.0.1");
 await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 async function api<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
@@ -42,8 +44,12 @@ try {
   const configs = seeds.map((seed) => ({ name: `default-seed-${seed}`, seed, guidance: "" }));
   if (compare) configs.push({ name: `guided-seed-${seeds[0]}`, seed: seeds[0], guidance: "全程守序。买票时优先选择 TVM-2，即使另一台队伍更短也不换；买票后正常选择合适的安检通道和闸机。" });
   for (const config of configs) {
-    const { guidance: normalized } = await api<{ guidance: NormalizedGuidance | null }>("/api/guidance/normalize", { text: config.guidance });
-    const { sessionId } = await api<{ sessionId: string }>("/api/session", { guidance: config.guidance, normalized });
+    const runId = crypto.randomUUID();
+    const preparedAt = performance.now();
+    const { guidance: normalized, debug: preparationDebug } = await api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { text: config.guidance, runId });
+    const preparationMs = config.guidance ? performance.now() - preparedAt : 0;
+    const { sessionId } = await api<{ sessionId: string }>("/api/session", { guidance: config.guidance, normalized, runId });
+    let disposal: Promise<void> | null = null;
     const agent: Agent = {
       kind: "llm",
       decide: async (turn) => {
@@ -52,11 +58,14 @@ try {
         console.log(JSON.stringify({ case: config.name, worldTime: turn.observation.t, action: result.action, model: result.model, usage: result.usage, latencyMs: result.latencyMs, error: result.error }));
         return result;
       },
-      dispose: () => api(`/api/session/${sessionId}`, undefined, "DELETE"),
+      dispose: (report) => disposal ??= (async () => {
+        try { if (report) await api(`/api/session/${sessionId}/report`, { report }); }
+        finally { await api(`/api/session/${sessionId}`, undefined, "DELETE"); }
+      })(),
     };
     const runner = new GameRunner(new Engine(config.seed), agent,
-      (intent, observation) => api("/api/creative/classify", { intent, observation }),
-      { guidance: config.guidance, normalizedGuidance: normalized });
+      (intent, observation) => api("/api/creative/classify", { intent, observation, sessionId, runId }),
+      { guidance: config.guidance, normalizedGuidance: normalized, runId, preparation: { durationMs: preparationMs, server: preparationDebug ?? null } });
     try {
       await runner.runToEnd();
       const report = runner.report();

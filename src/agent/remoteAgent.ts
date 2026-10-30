@@ -4,7 +4,9 @@ import type {
   DecisionResult,
   NormalizedGuidance,
   Observation,
+  GameReport,
 } from "../shared/types";
+import type { OperationDebug } from "../shared/debug";
 import { classifyByKeywords } from "../sim/intent";
 import type { Agent, Classifier } from "./agent";
 
@@ -42,38 +44,40 @@ export const Api = {
     return Api.health();
   },
   health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
-  normalize: (text: string) => api<{ guidance: NormalizedGuidance | null }>("/api/guidance/normalize", { body: { text } }),
-  createSession: (guidance: string, normalized: NormalizedGuidance | null) =>
-    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized } }),
+  normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
+  createSession: (guidance: string, normalized: NormalizedGuidance | null, runId?: string) =>
+    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId } }),
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn } }),
-  classify: (intent: string, observation: Observation, sessionId?: string) =>
-    api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId } }),
+  classify: (intent: string, observation: Observation, sessionId?: string, runId?: string) =>
+    api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId } }),
+  saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report } }),
   deleteSession: (sessionId: string) => api<null>(`/api/session/${sessionId}`, { method: "DELETE" }),
 };
 
 /** Model-driven agent: each decision is a call to the API server, which holds in-run memory. */
 export class RemoteAgent implements Agent {
   readonly kind = "llm" as const;
-  private constructor(private sessionId: string) {}
+  private constructor(private sessionId: string, private runId?: string) {}
 
-  static async create(guidance: string, normalized: NormalizedGuidance | null): Promise<RemoteAgent> {
-    const { sessionId } = await Api.createSession(guidance, normalized);
-    return new RemoteAgent(sessionId);
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string): Promise<RemoteAgent> {
+    const { sessionId } = await Api.createSession(guidance, normalized, runId);
+    return new RemoteAgent(sessionId, runId);
   }
 
   decide(turn: AgentTurn): Promise<DecisionResult> {
     return Api.decide(this.sessionId, turn);
   }
 
-  readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId);
+  readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId, this.runId);
 
-  async dispose() {
-    await Api.deleteSession(this.sessionId).catch(() => undefined);
+  async dispose(report?: GameReport) {
+    try { if (report) await Api.saveReport(this.sessionId, report); }
+    finally { await Api.deleteSession(this.sessionId).catch(() => undefined); }
   }
 }
 
-/** Server classifier (model, with keyword fallback server-side); keywords if the server is unreachable. */
+/** Standalone server classifier; the runner records transport errors and applies keyword fallback. */
 export const remoteClassifier: Classifier = (intent, observation) =>
-  Api.classify(intent, observation).catch(() => classifyByKeywords(intent));
+  Api.classify(intent, observation);
 
 export const offlineClassifier: Classifier = async (intent) => classifyByKeywords(intent);

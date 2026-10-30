@@ -24,3 +24,10 @@ services:
       AGENT_FALLBACK: "${AGENT_FALLBACK:-off}"
       DECISION_THINKING_TOKENS: "${DECISION_THINKING_TOKENS:-1024}"
       DECISION_MAX_TOKENS: "${DECISION_MAX_TOKENS:-4096}"
+      DEBUG_LOG_ENABLED: "${DEBUG_LOG_ENABLED:-1}"
+      DEBUG_LOG_DIR: /app/logs
+    volumes:
+      - debug-logs:/app/logs
+
+volumes:
+  debug-logs:

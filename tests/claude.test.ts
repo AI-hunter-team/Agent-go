@@ -4,6 +4,7 @@ import { ClaudeDecider, configFromEnv } from "../server/claude";
 import { buildSystemPrompt, renderTurn } from "../server/prompts";
 import { SessionStore } from "../server/sessions";
 import { AGENT_TOOLS, parseToolUse } from "../server/tools";
+import { SAFETY_SYSTEM_PROMPT } from "../server/security";
 import { Engine } from "../src/sim/engine";
 import type { AgentTurn } from "../src/shared/types";
 
@@ -56,6 +57,7 @@ describe("separate reasoning and completion budgets", () => {
     expect(p.output_config?.effort).toBe("low");
     expect(p.tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
     expect(p.fallbacks).toBe("default");
+    expect((p.system as { text: string }[])[0].text.startsWith(SAFETY_SYSTEM_PROMPT)).toBe(true);
     expect(r.usage?.thinkingTokens).toBe(30);
   });
 
@@ -81,13 +83,32 @@ describe("conversation memory", () => {
     await d.decide(session, { ...turn(), lastResult: { ok: true, text: "走向 TVM-2 队尾" } });
 
     const second = calls[1].messages;
-    expect(second).toHaveLength(3);
-    expect(second[1]).toEqual({ role: "assistant", content: [thinking, toolUse("t1", "join_queue", { facility: "TVM-2", reason: "最近" })] });
-    const toolResult = (second[2].content as Anthropic.Beta.BetaToolResultBlockParam[])[0];
+    expect(second).toHaveLength(4);
+    expect(JSON.stringify(calls[1].system)).not.toContain("求稳");
+    expect(second[0]).toMatchObject({ role: "user", content: expect.stringContaining("求稳") });
+    expect(second[2]).toEqual({ role: "assistant", content: [thinking, toolUse("t1", "join_queue", { facility: "TVM-2", reason: "最近" })] });
+    const toolResult = (second[3].content as Anthropic.Beta.BetaToolResultBlockParam[])[0];
     expect(toolResult.type).toBe("tool_result");
     expect(toolResult.tool_use_id).toBe("t1");
     expect(String(toolResult.content)).toContain("走向 TVM-2 队尾");
-    expect(session.pendingToolUseId).toBe("t2");
+    expect(session.pendingToolUseIds).toEqual(["t2"]);
+  });
+
+  test("rejects batched actions and answers all tool ids on retry", async () => {
+    const { client, calls } = fakeClient([
+      { content: [toolUse("t1", "wait", { seconds: 1 }), toolUse("t2", "wait", { seconds: 2 })] as never },
+      { content: [toolUse("t3", "wait", { seconds: 1 })] as never },
+    ]);
+    const session = new SessionStore().create("", null);
+    const decider = new ClaudeDecider(client, cfg);
+    const result = await decider.decide(session, turn());
+    expect(result.action).toBeNull();
+    expect(result.error).toContain("实际 2");
+    await decider.decide(session, { ...turn(), retry: true });
+    expect(calls[1].messages[3].content).toEqual([
+      expect.objectContaining({ type: "tool_result", tool_use_id: "t1" }),
+      expect.objectContaining({ type: "tool_result", tool_use_id: "t2" }),
+    ]);
   });
 
   test("the system prompt is identical across decisions (cacheable)", async () => {
@@ -120,7 +141,7 @@ describe("prompts and tools", () => {
   test("a turn renders triggers, last result and observation", () => {
     const text = renderTurn({ ...turn(), lastResult: { ok: false, text: "未知地点" }, retry: true });
     expect(text).toContain("开局");
-    expect(text).toContain("被拒绝 — 未知地点");
+    expect(text).toContain('"ok":false,"text":"未知地点"');
     expect(text).toContain("立即调用一个工具");
   });
 
