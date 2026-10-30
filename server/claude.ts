@@ -104,6 +104,7 @@ export class ClaudeDecider {
     const u = response.usage;
     const result: Partial<DecisionResult> = {
       thinking,
+      output: { id: response.id ?? null, stopReason: response.stop_reason ?? null, content: structuredClone(response.content) },
       model: response.model,
       usage: {
         inputTokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),

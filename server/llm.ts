@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { LlmService } from "./app";
 import { ClaudeDecider, configFromEnv } from "./claude";
 import { OpenAIClient, OpenAILlmService } from "./openai";
-import { classifyIntent, normalizeGuidance } from "./structured";
+import { classifyIntent, negotiateNpc, normalizeGuidance } from "./structured";
 import { debugFetch } from "./debug";
 
 export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | null {
@@ -29,5 +29,6 @@ export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | nu
     decide: (session, turn) => decider.decide(session, turn),
     normalize: (text) => normalizeGuidance(client, cfg, text),
     classify: (intent, observation) => classifyIntent(client, cfg, intent, observation),
+    negotiate: (request) => negotiateNpc(client, cfg, request),
   };
 }

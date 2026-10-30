@@ -6,6 +6,7 @@ import type {
   GameStatus,
   Observation,
   TimeBreakdown,
+  TrailPoint,
   Trigger,
   Vec,
 } from "../shared/types";
@@ -37,10 +38,10 @@ export class Engine {
 
   status: GameStatus = "running";
   failReason: string | null = null;
-  /** Gate-crossing time in world seconds (plan v1.1 score). */
+  /** Time of arrival at the lower platform in world seconds. */
   score: number | null = null;
-  readonly trail: Vec[] = [];
-  readonly timeBreakdown: TimeBreakdown = { walking: 0, queueing: 0, service: 0, waiting: 0, creative: 0, idle: 0 };
+  readonly trail: TrailPoint[] = [];
+  readonly timeBreakdown: TimeBreakdown = { walking: 0, queueing: 0, service: 0, waiting: 0, creative: 0, idle: 0, stairs: 0 };
 
   private triggers: Trigger[] = [];
   private knownStatus = new Map<string, FacilityStatus>();
@@ -53,8 +54,8 @@ export class Engine {
     this.npcs = new NpcDirector(this.world, buildScenario(seed));
     this.creative = new CreativeSystem(this.world, this.guards);
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
-    this.trail.push({ ...this.player.pos });
-    this.world.notifyPlayer("start", "开局：你站在车站入口，需要买票、安检并通过闸机。");
+    this.recordTrail();
+    this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内进入站台。");
     this.perceive();
     this.collect();
   }
@@ -88,7 +89,7 @@ export class Engine {
       return;
     }
     if (w.t >= RULES.timeLimit - 1e-9) {
-      this.end("failed", `超时：${RULES.timeLimit} 秒内未通过闸机`);
+      this.end("failed", `超时：${RULES.timeLimit} 秒内未下楼梯到达站台`);
       return;
     }
 
@@ -121,7 +122,8 @@ export class Engine {
   private end(status: GameStatus, reason: string | null) {
     this.status = status;
     this.failReason = reason;
-    this.world.log(status === "success" ? "success" : "failed", reason ?? `通过闸机，用时 ${this.world.t} 秒`, true);
+    this.recordTrail();
+    this.world.log(status === "success" ? "success" : "failed", reason ?? `已下楼梯进入站台，用时 ${this.world.t} 秒`, true);
   }
 
   /** Attribute this step's time to what the player was doing when it began. */
@@ -132,8 +134,15 @@ export class Engine {
     else if (kind === "service") tb.service += DT;
     else if (kind === "waiting") tb.waiting += DT;
     else if (kind === "creative") tb.creative += DT;
+    else if (kind === "stairs") tb.stairs = (tb.stairs ?? 0) + DT;
     else if (kind === "idle") tb.idle += DT;
-    if (Math.round(this.world.t * 10) % 5 === 0) this.trail.push({ ...this.player.pos });
+    if (Math.round(this.world.t * 10) % 5 === 0) this.recordTrail();
+  }
+
+  private recordTrail() {
+    const point = { t: this.t, ...this.player.pos };
+    if (this.trail.at(-1)?.t === this.t) this.trail[this.trail.length - 1] = point;
+    else this.trail.push(point);
   }
 
   /** Notice status changes of facilities that are currently in view. */
@@ -182,6 +191,7 @@ export class Engine {
     if (action.type !== "wait") {
       if (p.activity.kind === "service") return { ok: false, text: "正在办理中，请等办理完成" };
       if (p.activity.kind === "creative") return { ok: false, text: "上一个行动尚未完成" };
+      if (p.activity.kind === "stairs") return { ok: false, text: "正在下楼梯，请等到达站台" };
     }
     this.wakeAt = null;
 
@@ -221,6 +231,12 @@ export class Engine {
         this.wakeAt = round1(w.t + s);
         return { ok: true, text: `保持当前动作，${s} 秒后再评估` };
       }
+      case "descend_stairs": {
+        const err = w.descendStairs(p);
+        return err ? { ok: false, text: err } : { ok: true, text: "开始下楼梯，约 6 秒后到达下层站台" };
+      }
+      case "request_cut_in":
+        return { ok: false, text: "请通过 NPC 协商流程请求让位" };
       case "attempt_creative": {
         if (!mechanic) return { ok: false, text: "创造性行动尚未归类" };
         return this.creative.start(p, mechanic, action.reason);

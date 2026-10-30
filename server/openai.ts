@@ -1,9 +1,9 @@
-import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult } from "../src/shared/types";
+import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
 import type { LlmService } from "./app";
 import type { ClaudeConfig } from "./claude";
 import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
-import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM } from "./structured";
+import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
 import { AGENT_TOOLS, parseToolUse } from "./tools";
 import { assertSafeText, untrustedData, validateNormalized } from "./security";
 
@@ -21,6 +21,7 @@ export interface ChatMessage {
 }
 
 interface Completion {
+  id?: string;
   model?: string;
   choices?: { finish_reason: string; message: ChatMessage & { refusal?: string | null } }[];
   usage?: {
@@ -118,6 +119,9 @@ export class OpenAILlmService implements LlmService {
         cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
       } : null;
       const choice = response.choices?.[0];
+      result.output = { id: response.id ?? null, stopReason: choice?.finish_reason ?? null, content: choice?.message ? [structuredClone(choice.message)] : [] };
+      const exposed = choice?.message as (ChatMessage & { reasoning_content?: string; reasoning?: string }) | undefined;
+      result.thinking = exposed?.reasoning_content ?? exposed?.reasoning ?? null;
       if (!choice?.message) throw new Error("模型返回中缺少 choices.message");
       if (choice.message.refusal || choice.finish_reason === "content_filter") throw new Error("模型拒绝了这次请求");
       const message = choice.message;
@@ -142,6 +146,34 @@ export class OpenAILlmService implements LlmService {
     }
     result.latencyMs = Date.now() - started;
     return result;
+  }
+
+  async negotiate(request: CutInDialogueRequest): Promise<NpcReply> {
+    let metadata: Pick<NpcReply, "model" | "usage" | "output"> = { model: this.model, usage: null };
+    try {
+      const response = await this.client.complete({
+        model: this.model, max_completion_tokens: 1024, reasoning_effort: "low",
+        messages: [{ role: "system", content: NPC_SYSTEM }, { role: "user", content: untrustedData("NPC 对话资料", request) }],
+        response_format: { type: "json_schema", json_schema: { name: "npc_reply", strict: true, schema: NPC_SCHEMA } },
+      });
+      const choice = response.choices?.[0];
+      const usage = response.usage;
+      metadata = {
+        model: response.model ?? this.model,
+        usage: usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0,
+          thinkingTokens: usage.completion_tokens_details?.reasoning_tokens ?? null, cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? 0 } : null,
+        output: { id: response.id ?? null, stopReason: choice?.finish_reason ?? null, content: choice?.message ? [structuredClone(choice.message)] : [] },
+      };
+      if (choice?.message?.refusal || choice?.finish_reason === "content_filter") throw new Error("模型拒绝了这次请求");
+      if (choice?.finish_reason === "length") throw new Error("输出被截断");
+      const value = JSON.parse(choice?.message?.content ?? "null");
+      if (!value || typeof value.accepted !== "boolean" || typeof value.reply !== "string" || !value.reply.trim() || [...value.reply].length > 500
+        || typeof value.reason !== "string" || !value.reason.trim() || [...value.reason].length > 300
+        || Object.keys(value).some((key) => !["accepted", "reply", "reason"].includes(key))) throw new Error("模型未返回有效的 NPC 答复");
+      return { accepted: value.accepted, reply: value.reply, reason: value.reason, source: "llm", ...metadata };
+    } catch (error) {
+      return { accepted: false, reply: "暂时无法答复，请保持原来的排队位置。", reason: `NPC 对话失败，未获得插队许可：${error instanceof Error ? error.message : String(error)}`, source: "error", ...metadata };
+    }
   }
 
   private async structured(system: string, user: string, schema: object, name: string, maxTokens: number): Promise<unknown> {

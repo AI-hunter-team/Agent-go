@@ -100,7 +100,9 @@ describe("browser model configuration", () => {
       if (request.response_format) {
         const value = request.response_format.json_schema.name === "guidance"
           ? { summary: "自定义模型指导", risk: "保守", priorities: [], rules: [], creativeIdeas: [], notExecutable: [], initialPlan: [] }
-          : { mechanic: "unsupported", reason: "自定义模型分类" };
+          : request.response_format.json_schema.name === "npc_reply"
+            ? { accepted: true, reply: "可以，你先吧", reason: "愿意帮助" }
+            : { mechanic: "unsupported", reason: "自定义模型分类" };
         return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(value) } }] });
       }
       return completion();
@@ -127,7 +129,13 @@ describe("browser model configuration", () => {
     const classification = { sessionId: session.body.sessionId, intent: "飞过去", observation: turn.observation };
     expect((await call("/api/creative/classify", classification)).status).toBe(403);
     expect((await call("/api/creative/classify", classification, token)).body).toMatchObject({ reason: "自定义模型分类", source: "llm" });
-    expect(requestedModels).toEqual(["model-a", "model-a", "model-b", "model-a", "model-a"]);
+    const dialogue = { sessionId: session.body.sessionId, npc: { id: "p2", trait: "普通乘客", temperament: "愿意帮助", facility: "TVM-1", queuePosition: 1, queueLength: 2 }, message: "能让我先吗", history: [] };
+    expect((await call("/api/npc/negotiate", dialogue)).status).toBe(403);
+    const npc = await call("/api/npc/negotiate", dialogue, token);
+    expect(npc.body).toMatchObject({ accepted: true, source: "llm", model: "model-a", debug: { runId: "configured-debug-run", operation: "negotiate" } });
+    expect(npc.body.debug.calls).toHaveLength(1);
+    expect(JSON.stringify(npc.body.debug)).not.toContain(secret);
+    expect(requestedModels).toEqual(["model-a", "model-a", "model-b", "model-a", "model-a", "model-a"]);
     const report = { status: "success", debug: { runId: "configured-debug-run" } };
     expect((await call(`/api/session/${session.body.sessionId}/report`, { report })).status).toBe(403);
     expect((await call(`/api/session/${session.body.sessionId}/report`, { report }, token)).status).toBe(204);

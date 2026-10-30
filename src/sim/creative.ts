@@ -1,8 +1,8 @@
 import type { ActionResult, CreativeMechanic, Vec } from "../shared/types";
-import { dist } from "./geometry";
 import type { GuardSystem } from "./guards";
 import { GATE_X, HEIGHT, queueSlot, zoneOf } from "./layout";
 import { DT, RULES } from "./scenario";
+import { prepareCutIn } from "./negotiation";
 import { round1, type Person, type World } from "./world";
 
 export interface Violation {
@@ -12,15 +12,13 @@ export interface Violation {
 }
 
 /**
- * Settles creative actions with world rules (docs/MVP技术方案.md §8). Every mechanic
- * here is a violation: if a guard sees the act while it is happening (or during the
- * attention window after a complaint), the run is lost.
+ * Settles physical actions. Jumping is a violation; queue movement requires an
+ * explicit NPC consent obtained by Runner and is not treated as a violation.
  */
 export class CreativeSystem {
   readonly violations: Violation[] = [];
   caught: { guard: string; mechanic: CreativeMechanic } | null = null;
-  /** Seconds during which a just-finished cut-in can still be noticed. */
-  private attentionLeft = 0;
+  private consentTarget: string | null = null;
   private current: Violation | null = null;
 
   constructor(
@@ -31,29 +29,23 @@ export class CreativeSystem {
   start(p: Person, mechanic: CreativeMechanic, reason: string): ActionResult {
     if (mechanic === "unsupported") return { ok: false, text: `环境不支持这种行动：${reason}` };
     if (p.activity.kind === "service") return { ok: false, text: "正在办理中，无法进行其他行动" };
-    return mechanic === "cut_in_line" ? this.startCutIn(p) : this.startJump(p);
+    return mechanic === "cut_in_line"
+      ? { ok: false, text: "插队需要先沟通：使用 request_cut_in 向可见的具体 NPC 提出请求，获得同意后才能移动" }
+      : this.startJump(p);
   }
 
-  private startCutIn(p: Person): ActionResult {
+  startConsentedCutIn(p: Person, npcId: string): ActionResult {
     const w = this.world;
+    const valid = prepareCutIn(w, npcId, "已获得同意", []);
+    if (!valid.ok) return valid;
     const mine = w.queuePosition(p);
-    let target: { id: string; d: number } | null = null;
-    for (const f of w.facilities.values()) {
-      if (f.status !== "open" || f.queue.length === 0) continue;
-      const others = f.queue.filter((id) => id !== p.id);
-      const near = Math.min(...others.map((id) => dist(p.pos, w.persons.get(id)!.pos)));
-      if (near <= RULES.cutInDistance && (!target || near < target.d)) target = { id: f.def.id, d: near };
-    }
-    if (!target) return { ok: false, text: `附近 ${RULES.cutInDistance} 米内没有可以插队的队伍` };
-    if (mine && mine.facility.def.id === target.id && mine.index <= 1) {
-      return { ok: false, text: "你已经在队伍最前部，不需要插队" };
-    }
-    const f = w.facility(target.id)!;
-    const dest = queueSlot(f.def, Math.min(1, f.queue.length));
+    const f = w.facility(valid.request.npc.facility)!;
+    const dest = queueSlot(f.def, f.queue.indexOf(npcId));
     if (mine) w.removeFromQueue(p);
-    p.activity = { kind: "creative", mechanic: "cut_in_line", remaining: RULES.cutInSeconds, facility: target.id, dest };
-    this.begin("cut_in_line");
-    return { ok: true, text: `开始插队到 ${target.id} 队伍前部` };
+    p.activity = { kind: "creative", mechanic: "cut_in_line", remaining: RULES.cutInSeconds, facility: f.def.id, dest };
+    this.consentTarget = npcId;
+    this.current = null;
+    return { ok: true, text: `${npcId} 同意让位，开始移动到这位乘客前面（${f.def.id}）` };
   }
 
   private startJump(p: Person): ActionResult {
@@ -64,6 +56,8 @@ export class CreativeSystem {
     if (this.world.queuePosition(p)) this.world.removeFromQueue(p);
     p.activity = { kind: "creative", mechanic: "jump_gate", remaining: RULES.jumpGateSeconds, facility: "", dest };
     this.begin("jump_gate");
+    // A guard may turn on the very next tick; seeing the start still counts.
+    this.detect(p);
     return { ok: true, text: "开始翻越闸机" };
   }
 
@@ -85,45 +79,32 @@ export class CreativeSystem {
       if (a.remaining <= 1e-9) this.finish(p, a);
       return;
     }
-    if (this.attentionLeft > 0) {
-      this.attentionLeft -= DT;
-      this.detect(p);
-      if (this.attentionLeft <= 0) this.current = null;
-    }
   }
 
   private finish(p: Person, a: Extract<Person["activity"], { kind: "creative" }>) {
     const w = this.world;
     p.pos = { ...a.dest };
     if (a.mechanic === "jump_gate") {
-      p.onPlatform = true;
-      p.activity = { kind: "done" };
+      p.passedGate = true;
+      p.activity = { kind: "idle" };
       w.gatePassed++;
-      w.notifyPlayer("creative_done", "翻越闸机成功，进入站台");
+      w.notifyPlayer("creative_done", "翻越闸机成功，已到闸机内连接区；请前往楼梯入口下楼到站台");
       this.current = null;
       return;
     }
     const f = w.facility(a.facility)!;
-    if (f.status !== "open") {
+    const index = this.consentTarget ? f.queue.indexOf(this.consentTarget) : -1;
+    this.consentTarget = null;
+    if (f.status !== "open" || index < 0) {
       p.activity = { kind: "idle" };
-      w.notifyPlayer("action_failed", `插队途中 ${f.def.id} 停用了`);
+      w.notifyPlayer("action_failed", "让位已失效：同意的乘客已离队或设施已停用，请重新选择行动");
       this.current = null;
       return;
     }
-    const index = Math.min(1, f.queue.length);
     f.queue.splice(index, 0, p.id);
     p.activity = { kind: "queued", facility: f.def.id };
-    w.notifyPlayer("creative_done", `已插队到 ${f.def.id} 第 ${index + 1} 位`);
-
-    const victim = w.persons.get(f.queue[index + 1] ?? "");
-    if (victim?.irritable) {
-      const heard = this.guards.attract(p.pos);
-      w.notifyPlayer("complaint", "身后的乘客大声抱怨你插队" + (heard.length ? "，附近的保安转头看了过来" : ""));
-      this.attentionLeft = RULES.attentionSeconds;
-      this.detect(p);
-    } else {
-      this.current = null;
-    }
+    w.notifyPlayer("creative_done", `经乘客同意，已移动到 ${f.def.id} 第 ${index + 1} 位`);
+    this.current = null;
   }
 
   private detect(p: Person) {

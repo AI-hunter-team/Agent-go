@@ -42,7 +42,9 @@ describe("jump_gate", () => {
     expect(creative.start(p, "jump_gate", "").ok).toBe(true);
     step(3);
     expect(creative.caught).toBeNull();
-    expect(p.onPlatform).toBe(true);
+    expect(p.passedGate).toBe(true);
+    expect(p.onPlatform).toBe(false);
+    expect(p.activity.kind).toBe("idle");
     expect(creative.violations).toEqual([{ t: 0, mechanic: "jump_gate", detected: false }]);
   });
 
@@ -67,24 +69,27 @@ describe("jump_gate", () => {
 });
 
 describe("cut_in_line", () => {
-  test("moves the player to second place in a nearby queue", () => {
+  test("moves before the consenting NPC in a nearby queue", () => {
     const { world, creative, step } = setup();
     fillQueue(world, "S3", 4);
     const p = world.addPerson("player", { x: 21, y: 25 }, { isPlayer: true });
-    expect(creative.start(p, "cut_in_line", "").ok).toBe(true);
+    const target = world.facility("S3")!.queue[1];
+    p.pos = { x: 23.8, y: 25 };
+    expect(creative.startConsentedCutIn(p, target).ok).toBe(true);
     step(2);
     expect(world.facility("S3")!.queue.indexOf("player")).toBe(1);
     expect(creative.caught).toBeNull(); // hidden from guards by the security wall
   });
 
-  test("a complaining passenger draws a guard who then sees the cut-in", () => {
+  test("a direct cut without dialogue cannot move the player or provoke a complaint", () => {
     const { world, creative, step } = setup();
     fillQueue(world, "S2", 3, true);
     const p = world.addPerson("player", { x: 23, y: 16 }, { isPlayer: true });
-    creative.start(p, "cut_in_line", "");
+    expect(creative.start(p, "cut_in_line", "").ok).toBe(false);
     step(5);
-    expect(world.playerTriggers.some((t) => t.kind === "complaint")).toBe(true);
-    expect(creative.caught?.mechanic).toBe("cut_in_line");
+    expect(world.playerTriggers.some((t) => t.kind === "complaint")).toBe(false);
+    expect(creative.caught).toBeNull();
+    expect(world.facility("S2")!.queue).not.toContain(p.id);
   });
 
   test("fails when no queue is close enough", () => {

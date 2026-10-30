@@ -48,3 +48,23 @@ test("jump height is a visual offset, and guard facing maps the planar axes corr
   expect(engine.player.pos).toEqual(actual);
   expect(engine.score).toBeNull();
 });
+
+test("stairs lower the displayed player to the platform without changing simulation facts", () => {
+  const engine = new Engine(1);
+  engine.player.pos = { x: 48, y: 15 };
+  engine.player.passedGate = true;
+  expect(engine.applyAction({ type: "descend_stairs", reason: "test" }).ok).toBe(true);
+  const buffer = new PresentationBuffer(engine);
+  for (let i = 0; i < 30; i++) engine.step();
+  buffer.capture(engine);
+  const pose = { x: 0, y: 0, z: 0, yaw: 0 };
+  sampleActor(buffer, "player", 1, pose);
+  expect(pose.y).toBeCloseTo(-1);
+  expect(engine.player.onPlatform).toBe(false);
+  for (let i = 0; i < 30; i++) engine.step();
+  buffer.capture(engine);
+  sampleActor(buffer, "player", 1, pose);
+  expect(pose.y).toBe(-2);
+  expect(engine.status).toBe("success");
+  expect(engine.player.pos).toEqual({ x: 57, y: 15 });
+});

@@ -1,12 +1,15 @@
 import { useState } from "react";
 import type { GameReport, TimeBreakdown } from "../shared/types";
 import { MECHANIC_NAME } from "./format";
+import { DecisionTrace } from "./DecisionTrace";
+import { NpcDialogue } from "./NpcDialogue";
 import { DebugPanel } from "./DebugPanel";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "walking", label: "行走", color: "#1f4e79" },
   { key: "queueing", label: "排队", color: "#c3912f" },
   { key: "service", label: "办理", color: "#6e8a74" },
+  { key: "stairs", label: "下楼梯", color: "#7a7194" },
   { key: "waiting", label: "等待", color: "#b8ad94" },
   { key: "creative", label: "创造性行动", color: "#b4533c" },
   { key: "idle", label: "空闲", color: "#d9d3c4" },
@@ -28,7 +31,7 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
       <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
         {report.status === "success" ? (
           <>
-            <span>通过闸机</span>
+            <span>已下楼到达站台</span>
             <strong>{report.score!.toFixed(1)} 秒</strong>
           </>
         ) : (
@@ -45,19 +48,19 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
 
       <h3>时间花在哪里</h3>
       <div className="bar">
-        {SEGMENTS.filter((s) => report.timeBreakdown[s.key] > 0).map((s) => (
+        {SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0).map((s) => (
           <i
             key={s.key}
             title={`${s.label} ${report.timeBreakdown[s.key]} 秒`}
-            style={{ width: `${(report.timeBreakdown[s.key] / total) * 100}%`, background: s.color }}
+            style={{ width: `${((report.timeBreakdown[s.key] ?? 0) / total) * 100}%`, background: s.color }}
           />
         ))}
       </div>
       <div className="bar-legend">
-        {SEGMENTS.filter((s) => report.timeBreakdown[s.key] > 0).map((s) => (
+        {SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0).map((s) => (
           <span key={s.key}>
             <i style={{ background: s.color }} />
-            {s.label} {report.timeBreakdown[s.key].toFixed(1)}s
+            {s.label} {(report.timeBreakdown[s.key] ?? 0).toFixed(1)}s
           </span>
         ))}
       </div>
@@ -82,6 +85,7 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
           ` · 输入 ${report.totals.inputTokens} / 输出 ${report.totals.outputTokens} / 思考 ${report.totals.thinkingTokens ?? "未完整返回"} token`}
       </p>
 
+      {!!report.npcTotals?.calls && <p className="small">NPC 沟通 {report.npcTotals.calls} 次 · 输入 {report.npcTotals.inputTokens} / 输出 {report.npcTotals.outputTokens} token · 现实等待 {report.npcTotals.realSeconds} 秒（另计）</p>}
       <DebugPanel report={report} />
 
       {report.guidance && (
@@ -90,6 +94,16 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
           <p className="quote">「{report.guidance}」</p>
         </>
       )}
+
+      {report.attempts && report.attempts.length > 0 && (
+        <details className="run-trace">
+          <summary>{`全部调用记录（${report.attempts.length} 次）`}</summary>
+          <p className="muted">保留接口实际返回的内容、重试与执行结果，导出 JSON 可完整保存。</p>
+          <DecisionTrace attempts={report.attempts} />
+        </details>
+      )}
+
+      {!!report.dialogues?.length && <details className="run-trace"><summary>全部 NPC 沟通（{report.dialogues.length} 次）</summary>{report.dialogues.map((record, i) => <NpcDialogue key={i} record={record} />)}</details>}
 
       <div className="row">
         <button className="primary" onClick={onEdit}>

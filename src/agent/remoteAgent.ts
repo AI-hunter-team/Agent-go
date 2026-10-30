@@ -4,11 +4,13 @@ import type {
   DecisionResult,
   NormalizedGuidance,
   Observation,
+  NpcReply,
+  CutInDialogueRequest,
   GameReport,
 } from "../shared/types";
 import type { OperationDebug } from "../shared/debug";
 import { classifyByKeywords } from "../sim/intent";
-import type { Agent, Classifier } from "./agent";
+import type { Agent, Classifier, NpcNegotiator } from "./agent";
 
 let activeModelToken: string | null = null;
 
@@ -24,7 +26,10 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
   let data;
   try { data = text ? JSON.parse(text) : null; }
   catch { throw new Error("API 服务返回格式异常，请检查服务是否已启动"); }
-  if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+  // NPC failures also carry their raw model response and paid usage for the run log.
+  if (!res.ok && !(path === "/api/npc/negotiate" && data?.source === "error" && data?.accepted === false)) {
+    throw new Error(data?.error ?? `HTTP ${res.status}`);
+  }
   return data as T;
 }
 
@@ -52,6 +57,7 @@ export const Api = {
     api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId } }),
   saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report } }),
   deleteSession: (sessionId: string) => api<null>(`/api/session/${sessionId}`, { method: "DELETE" }),
+  negotiate: (request: CutInDialogueRequest, sessionId?: string) => api<NpcReply>("/api/npc/negotiate", { body: { ...request, sessionId } }),
 };
 
 /** Model-driven agent: each decision is a call to the API server, which holds in-run memory. */
@@ -70,6 +76,8 @@ export class RemoteAgent implements Agent {
 
   readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId, this.runId);
 
+  readonly negotiate: NpcNegotiator = (request) => Api.negotiate(request, this.sessionId);
+
   async dispose(report?: GameReport) {
     try { if (report) await Api.saveReport(this.sessionId, report); }
     finally { await Api.deleteSession(this.sessionId).catch(() => undefined); }
@@ -81,3 +89,5 @@ export const remoteClassifier: Classifier = (intent, observation) =>
   Api.classify(intent, observation);
 
 export const offlineClassifier: Classifier = async (intent) => classifyByKeywords(intent);
+
+export const remoteNpcNegotiator: NpcNegotiator = (request) => Api.negotiate(request);

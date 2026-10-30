@@ -1,5 +1,7 @@
 import type { DecisionRecord } from "../shared/types";
 import { MECHANIC_NAME, describeAction, describeUsage } from "./format";
+import { DecisionTrace } from "./DecisionTrace";
+import { NpcDialogue } from "./NpcDialogue";
 
 export function DecisionLog({ decisions, limit }: { decisions: DecisionRecord[]; limit?: number }) {
   const shown = [...decisions].reverse().slice(0, limit ?? decisions.length);
@@ -24,10 +26,16 @@ export function DecisionLog({ decisions, limit }: { decisions: DecisionRecord[];
             </div>
           )}
           {d.result && <div className={d.result.ok ? "result ok" : "result rejected"}>{d.result.text}</div>}
+          {d.dialogue && <NpcDialogue record={d.dialogue} />}
           {d.error && <div className="result rejected">决策错误：{d.error}</div>}
-          {d.thinking && (
+          {d.attempts?.length ? (
+            <details className="decision-trace">
+              <summary>{`思考与调用记录（${d.attempts.length} 次尝试）`}</summary>
+              <DecisionTrace attempts={d.attempts} />
+            </details>
+          ) : d.thinking && (
             <details>
-              <summary>思考摘要</summary>
+              <summary>模型返回的思考</summary>
               <p className="thinking">{d.thinking}</p>
             </details>
           )}

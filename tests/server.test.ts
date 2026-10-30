@@ -50,6 +50,7 @@ const fakeLlm: LlmService = {
     initialPlan: [],
   }),
   classify: async () => ({ mechanic: "jump_gate", reason: "fake", source: "llm" }),
+  negotiate: async () => ({ accepted: false, reply: "请去队尾排队。", reason: "重视公平。", source: "llm", model: "fake-model", usage: null }),
 };
 
 describe("API without a model", () => {

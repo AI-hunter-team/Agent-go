@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, DoubleSide, SRGBColorSpace, type Mesh, type MeshBasicMaterial } from "three";
-import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_WALL, SECURITY_X, WIDTH, type FacilityDef } from "../../sim/layout";
+import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_WALL, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
 import type { GameSession } from "../gameSession";
 import { box, materials, plane, type colors } from "./resources";
 
@@ -61,11 +61,18 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
 
 export const Station = memo(function Station({ session }: { session: GameSession }) {
   return <group>
-    <Block position={[WIDTH / 2, -0.09, HEIGHT / 2]} scale={[WIDTH + 2, 0.18, HEIGHT + 2]} color="chalk" />
+    <Block position={[STAIRS_TOP.x / 2, -0.09, HEIGHT / 2]} scale={[STAIRS_TOP.x, 0.18, HEIGHT + 2]} color="chalk" />
+    <Block position={[(STAIRS_BOTTOM.x + WIDTH) / 2, -2.09, HEIGHT / 2]} scale={[WIDTH - STAIRS_BOTTOM.x + 2, 0.18, HEIGHT + 2]} color="sage" />
+    {Array.from({ length: 12 }, (_, index) => {
+      const width = (STAIRS_BOTTOM.x - STAIRS_TOP.x) / 12;
+      const top = -2 * index / 12;
+      return <Block key={`stairs${index}`} position={[STAIRS_TOP.x + width * (index + 0.5), top - 0.1, STAIRS_TOP.y]} scale={[width, 0.2, 4]} color={index % 2 ? "chalk" : "ochre"} />;
+    })}
+    <Sign text="04   下楼梯 / PLATFORM  ↓" position={[47.5, 2.8, 15]} width={5.8} />
     <Block position={[(SECURITY_X + GATE_X) / 2, -0.015, HEIGHT / 2]} scale={[GATE_X - SECURITY_X, 0.025, HEIGHT]} color="white" />
-    <Block position={[(GATE_X + WIDTH) / 2, -0.012, HEIGHT / 2]} scale={[WIDTH - GATE_X, 0.025, HEIGHT]} color="sage" />
-    {Array.from({ length: 21 }, (_, i) => <mesh key={`x${i}`} geometry={box} material={materials.line} position={[i * 3, 0.002, HEIGHT / 2]} scale={[0.015, 0.005, HEIGHT]} />)}
-    {Array.from({ length: 11 }, (_, i) => <mesh key={`z${i}`} geometry={box} material={materials.line} position={[WIDTH / 2, 0.003, i * 3]} scale={[WIDTH, 0.005, 0.015]} />)}
+    <Block position={[(GATE_X + STAIRS_TOP.x) / 2, -0.012, HEIGHT / 2]} scale={[STAIRS_TOP.x - GATE_X, 0.025, HEIGHT]} color="sage" />
+    {Array.from({ length: Math.floor(STAIRS_TOP.x / 3) + 1 }, (_, i) => <mesh key={`x${i}`} geometry={box} material={materials.line} position={[i * 3, 0.002, HEIGHT / 2]} scale={[0.015, 0.005, HEIGHT]} />)}
+    {Array.from({ length: 11 }, (_, i) => <mesh key={`z${i}`} geometry={box} material={materials.line} position={[STAIRS_TOP.x / 2, 0.003, i * 3]} scale={[STAIRS_TOP.x, 0.005, 0.015]} />)}
     {SECURITY_WALL.map((r, i) => <Block key={`wall${i}`} position={[r.x + r.w / 2, 1.75, r.y + r.h / 2]} scale={[r.w, 3.5, r.h]} color="ochre" />)}
     {PILLARS.map((r, i) => <group key={`pillar${i}`}>
       <Block position={[r.x + r.w / 2, 1.75, r.y + r.h / 2]} scale={[r.w, 3.5, r.h]} color="chalk" />
@@ -80,7 +87,7 @@ export const Station = memo(function Station({ session }: { session: GameSession
     <Sign text="01   购票 / TICKETS  →" position={[10.8, 3.15, 15]} width={6.2} />
     <Sign text="02   安检 / SECURITY  →" position={[24, 3.25, 15]} width={5.5} />
     <Sign text="03   进站 / DEPARTURES  →" position={[42, 3.2, 15]} width={5.8} />
-    <Sign text="下一程，由你决定" position={[58, 2.5, 15]} width={6} dark={false} />
+    <Sign text="下一程，由你决定" position={[65, 0.5, 15]} width={6} dark={false} />
     {FACILITIES.map((def) => <Device key={def.id} def={def} session={session} />)}
     {[7, 20, 31, 39].map((x) => <group key={`arrow${x}`} position={[x, 0.012, 15]}>
       <mesh geometry={box} material={materials.ochre} scale={[0.9, 0.008, 0.06]} />

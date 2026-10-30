@@ -1,4 +1,4 @@
-import type { AgentTurn, CreativeClassification, DecisionResult, Observation, GameReport } from "../shared/types";
+import type { AgentTurn, CreativeClassification, DecisionResult, Observation, CutInDialogueRequest, NpcReply, GameReport } from "../shared/types";
 
 /** Anything that turns a decision request into an action request. */
 export interface Agent {
@@ -10,3 +10,5 @@ export interface Agent {
 
 /** Environment-side mapping of a creative intent onto the closed mechanic list. */
 export type Classifier = (intent: string, observation: Observation) => Promise<CreativeClassification>;
+
+export type NpcNegotiator = (request: CutInDialogueRequest) => Promise<NpcReply>;

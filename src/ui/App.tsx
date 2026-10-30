@@ -7,6 +7,10 @@ import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS, RULES } from "../sim/scenario";
 import { GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
+import { DecisionTrace } from "./DecisionTrace";
+import { NpcDialogue } from "./NpcDialogue";
+import { JourneyProgress } from "./JourneyProgress";
+import { TrajectoryReplayView } from "./TrajectoryReplay";
 import { DecisionLog } from "./DecisionLog";
 import { EventTimeline, ReportSummary } from "./ReportView";
 import { MapCanvas } from "./MapCanvas";
@@ -112,6 +116,7 @@ export function App() {
       if (request !== requests.current) { await agent.dispose(); return; }
       session.start(agent, agent instanceof RemoteAgent ? agent.classify : offlineClassifier, {
         runId,
+        negotiate: agent instanceof RemoteAgent ? agent.negotiate : undefined,
         preparation: agentKind === "llm" && preparation ? { durationMs: preparation.durationMs, server: preparation.server } : undefined,
         guidance: agentKind === "llm" ? guidance : "",
         normalizedGuidance: agentKind === "llm" ? normalized : null,
@@ -158,7 +163,7 @@ export function App() {
           <div className={styles.events}><span className={styles.eyebrow}>最近事件</span>{recent.map((event, index) => <div key={`${event.t}-${index}`}><time>{event.t.toFixed(1)}s</time><span>{event.text}</span></div>)}</div>
           <div className={`${styles.phaseChip} ${runner?.phase === "thinking" ? styles.thinking : ""}`} role="status"><i />{runner?.phase === "thinking" ? "角色思考中 · 世界暂停" : session.paused ? "已暂停" : "角色自主行动中"}</div>
         </div>}
-        {!playing && !ended && <div className={styles.introCaption}><span className={styles.eyebrow}>YOUR WORDS. THEIR WAY.</span><h1>你的指导，<br />它的下一程。</h1><p>买票、安检、过闸。<br />把计划交给角色，观看它如何应对现场。</p></div>}
+        {!playing && !ended && <div className={styles.introCaption}><span className={styles.eyebrow}>YOUR WORDS. THEIR WAY.</span><h1>你的指导，<br />它的下一程。</h1><p>买票、安检、过闸、下楼到站台。<br />把计划交给角色，观看它如何应对现场。</p></div>}
         {ended && <div className={styles.endCaption}><span className={styles.eyebrow}>JOURNEY COMPLETE</span><h2>{session.engine.status === "success" ? "这一次，顺利抵达。" : "每次出发，都有新的答案。"}</h2><p>在右侧查看本次行程记录。</p></div>}
       </section>
       <aside className={styles.sidebar} aria-label="对局面板">
@@ -174,14 +179,16 @@ export function App() {
           {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
           {intent === "confirm" && <section className="card"><span className={styles.eyebrow}>READY TO DEPART</span><h2>确认这次出发</h2><p className="muted">{agentKind === "llm" ? "角色将依据以下指导自主行动。" : "离线规则 Agent 按默认守序方案行动。"}</p><GuidanceCard guidance={agentKind === "llm" ? guidance : ""} normalized={normalized} /><div className="row"><button className="primary" disabled={busy !== null} onClick={start}>{busy ?? "出发"} <span aria-hidden="true">→</span></button><button className="ghost" disabled={busy !== null} onClick={() => setIntent("setup")}>返回修改</button></div></section>}
           {intent === "playing" && runner && <>
-            <section className={styles.runHeading}><span className={styles.eyebrow}>本次行程 / {agentKind === "llm" ? "大模型" : "离线规则"}</span><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {RULES.timeLimit}s</span></div><div className={styles.steps}>{[[player.hasTicket, "01", "购票"], [player.screened, "02", "安检"], [player.onPlatform, "03", "过闸"]].map(([done, number, name]) => <div key={String(number)} className={done ? styles.stepDone : ""}><span>{done ? "✓" : number}</span>{name}</div>)}</div></section>
+            <section className={styles.runHeading}><span className={styles.eyebrow}>本次行程 / {agentKind === "llm" ? "大模型" : "离线规则"}</span><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {RULES.timeLimit}s</span></div><JourneyProgress player={player} status={session.engine.status} /></section>
             {playing && <>
               <section className={styles.actionCard}><span className={styles.eyebrow}>当前行动</span><h2>{describeActivity(session.engine.world, player)}</h2><p>{latest?.action?.reason ?? "角色正在观察环境，准备作出选择。"}</p><div className={styles.decisionCount}><span>决策 {runner.decisions.length} / {DECISION_LIMITS.maxDecisions}</span><span>{latest ? describeAction(latest.action) : "准备中"}</span></div></section>
               <div className={styles.playControls}><button onClick={() => session.setPaused(!session.paused)}>{session.paused ? "继续" : "暂停"}</button><div className="segmented" aria-label="播放速度">{[1, 2, 4].map((value) => <button key={value} aria-pressed={session.speed === value} className={session.speed === value ? "on" : ""} onClick={() => session.setSpeed(value)}>{value}×</button>)}</div></div>
               {runner.budgetExhausted && <p className="badge brick">决策次数已用完，世界继续运行。</p>}
               <button className="ghost full-width" onClick={() => session.stop()}>结束本局</button>
             </>}
-            {ended && <ReportSummary report={runner.report()} onRetry={start} onEdit={edit} />}
+            {ended && <><ReportSummary report={runner.report()} onRetry={start} onEdit={edit} /><Modal title="轨迹回放" description="回看角色位置、路线与当时决策；NPC 和设施显示终局状态。" wide trigger={<button className="full-width">查看轨迹回放</button>}><TrajectoryReplayView key={session.generation} report={runner.report()} engine={session.engine} /></Modal></>}
+            {playing && runner.attempts.at(-1)?.status === "pending" && <details><summary>当前调用（请求中）</summary><DecisionTrace attempts={[runner.attempts.at(-1)!]} /></details>}
+            {playing && runner.dialogues.at(-1)?.status === "pending" && <NpcDialogue record={runner.dialogues.at(-1)!} />}
             <Modal title="行程记录" description="查看角色的决策依据、执行结果和已经发生的事件。" wide trigger={<button className={styles.logButton}>查看完整行程记录 <span aria-hidden="true">↗</span></button>}>
               <h3>决策记录</h3><DecisionLog decisions={runner.decisions} />{ended && <EventTimeline report={runner.report()} />}
             </Modal>

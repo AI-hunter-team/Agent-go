@@ -54,7 +54,7 @@ describe("observation", () => {
   test("guards are reported only when visible", () => {
     const hall = worldWithPlayerAt(10, 15);
     expect(buildObservation(hall.world, hall.guards).guards).toHaveLength(0);
-    const conc = worldWithPlayerAt(33, 15);
+    const conc = worldWithPlayerAt(42, 10);
     expect(buildObservation(conc.world, conc.guards).guards.map((g) => g.id)).toContain("guard-A");
   });
 
@@ -71,4 +71,13 @@ test("seeing a machine does not reveal passengers outside sight", () => {
   const view = buildObservation(world, guards).facilities.find((f) => f.id === "TVM-2")!;
   expect(view.queue).not.toContain("携带大件行李");
   expect(view.queueLength).toBe(4);
+  expect(view.people?.some((p) => p.id === hidden.id)).toBe(false);
+});
+
+test("visible queue members are individually addressable without revealing private temperament", () => {
+  const { world, guards } = worldWithPlayerAt(19, 15);
+  const view = buildObservation(world, guards).facilities.find((f) => f.id === "S2")!;
+  expect(view.people?.length).toBe(5);
+  expect(view.people?.[0].id).toBe(world.facility("S2")!.queue[0]);
+  expect(JSON.stringify(view)).not.toMatch(/irritable|temperament/);
 });

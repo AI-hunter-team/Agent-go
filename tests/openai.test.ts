@@ -136,3 +136,34 @@ describe("OpenAI-compatible model", () => {
     expect(() => createLlm({ AGENT_PROVIDER: "typo" })).toThrow("AGENT_PROVIDER");
   });
 });
+
+test("compatible API traces retain returned reasoning, messages and invalid tool arguments", async () => {
+  const message = { role: "assistant", content: "先看附近", reasoning_content: "接口返回的摘要", tool_calls: [call("{")] };
+  const response = { ...completion(), id: "chat-trace", choices: [{ finish_reason: "tool_calls", message }] };
+  const { service } = fake([response]);
+  const result = await service.decide(new SessionStore().create("", null), turn());
+  expect(result.action).toBeNull();
+  expect(result.error).toContain("JSON");
+  expect(result.thinking).toBe("接口返回的摘要");
+  expect(result.output).toEqual({ id: "chat-trace", stopReason: "tool_calls", content: [message] });
+});
+
+test("compatible NPC calls retain paid usage on refusal, malformed output and truncation", async () => {
+  const request = { npc: { id: "p2", trait: "普通乘客", temperament: "不赶时间", facility: "TVM-1", queuePosition: 1, queueLength: 2 }, message: "可以让我先吗？", history: [] };
+  for (const [value, finish, source] of [
+    [{ accepted: true, reply: "可以", reason: "愿意帮忙" }, "stop", "llm"],
+    [{ accepted: "true", reply: "可以", reason: "愿意帮忙" }, "stop", "error"],
+    [{ accepted: true, reply: "可以", reason: "愿意帮忙" }, "length", "error"],
+  ] as const) {
+    const response = { ...completion(), choices: [{ finish_reason: finish, message: { role: "assistant", content: JSON.stringify(value) } }] };
+    const { service, requests } = fake([response]);
+    const result = await service.negotiate(request);
+    expect(result.source).toBe(source);
+    expect(result.accepted).toBe(source === "llm");
+    expect(result.usage?.outputTokens).toBe(30);
+    expect(result.output?.content).toEqual([response.choices[0].message]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.response_format.json_schema.name).toBe("npc_reply");
+    expect(requests[0].body.messages[0].content).toContain(SAFETY_SYSTEM_PROMPT);
+  }
+});

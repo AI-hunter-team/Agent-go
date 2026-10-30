@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrthographicCamera, PerspectiveCamera, Vector3, type Mesh } from "three";
+import { WIDTH, HEIGHT } from "../../sim/layout";
+import { platformElevation } from "../presentation";
 import { RULES } from "../../sim/scenario";
 import type { GameSession } from "../gameSession";
 import type { FrameMetrics } from "../frameMetrics";
@@ -68,7 +70,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
   useFrame((state, delta) => {
     const { target, desired, eye } = vectors;
     if (settings.mode === "overview") {
-      state.camera.position.set(7, 45, 51); state.camera.lookAt(30, 0, 15); return;
+      state.camera.position.set(WIDTH / 2 - 23, 50, HEIGHT + 23); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
     }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
     target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
@@ -106,20 +108,20 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   useFrame(() => {
     if (!geometry.current || !trail) return;
     const count = Math.min(points.length, 2048);
-    for (let i = 0; i < count; i++) { linePoints[i * 3] = points[i].x; linePoints[i * 3 + 1] = 0.025; linePoints[i * 3 + 2] = points[i].y; }
+    for (let i = 0; i < count; i++) { linePoints[i * 3] = points[i].x; linePoints[i * 3 + 1] = platformElevation(points[i].x) + 0.025; linePoints[i * 3 + 2] = points[i].y; }
     geometry.current.setDrawRange(0, count); geometry.current.attributes.position.needsUpdate = true;
     if (pathGeometry.current) {
       const path = session.presentation.current.path;
       const player = session.presentation.current.actors.get("player");
-      pathPoints[0] = player?.x ?? 0; pathPoints[1] = 0.03; pathPoints[2] = player?.z ?? 0;
+      pathPoints[0] = player?.x ?? 0; pathPoints[1] = (player?.elevation ?? 0) + 0.03; pathPoints[2] = player?.z ?? 0;
       const pathCount = Math.min(path.length, 2047);
-      for (let i = 0; i < pathCount; i++) { pathPoints[(i + 1) * 3] = path[i].x; pathPoints[(i + 1) * 3 + 1] = 0.03; pathPoints[(i + 1) * 3 + 2] = path[i].z; }
+      for (let i = 0; i < pathCount; i++) { pathPoints[(i + 1) * 3] = path[i].x; pathPoints[(i + 1) * 3 + 1] = platformElevation(path[i].x) + 0.03; pathPoints[(i + 1) * 3 + 2] = path[i].z; }
       pathGeometry.current.setDrawRange(0, path.length ? pathCount + 1 : 0); pathGeometry.current.attributes.position.needsUpdate = true;
     }
   });
   return <group>
     {vision && [...session.presentation.current.actors.values()].filter((actor) => actor.kind === "guard").map((actor) => <GuardVision key={actor.id} id={actor.id} session={session} />)}
-    {vision && player && <mesh position={[player.x, 0.02, player.z]} rotation={[-Math.PI / 2, 0, 0]}>
+    {vision && player && <mesh position={[player.x, (player.elevation ?? 0) + 0.02, player.z]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[11.96, 12, 64]} /><meshBasicMaterial color="#315c65" transparent opacity={0.6} depthWrite={false} />
     </mesh>}
     {trail && <line>

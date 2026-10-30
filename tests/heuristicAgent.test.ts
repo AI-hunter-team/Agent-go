@@ -34,6 +34,21 @@ describe("offline heuristic agent", () => {
     const { engine } = await play(seed);
     expect(engine.status).toBe("success");
   });
+
+  test("after a gate the next destination is the stairs, even without a ticket", async () => {
+    const engine = new Engine(1);
+    const observation = engine.observe();
+    Object.assign(observation.self, { passedGate: true, position: { x: 45.4, y: 25 } });
+    const { action } = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
+    expect(action).toMatchObject({ type: "move_to", target: "STAIRS_TOP" });
+    observation.self.position = { x: 48, y: 15 };
+    const atEntrance = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
+    expect(atEntrance.action).toMatchObject({ type: "descend_stairs" });
+    observation.self.activity = "正在下楼梯（剩余 3 秒）";
+    observation.self.position = { x: 52.5, y: 15 };
+    const descending = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
+    expect(descending.action).toMatchObject({ type: "wait" });
+  });
 });
 
 describe("keyword intent classifier", () => {

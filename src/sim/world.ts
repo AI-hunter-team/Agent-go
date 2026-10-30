@@ -1,6 +1,6 @@
 import type { FacilityStatus, GameEvent, PassengerKind, Trigger, TriggerKind, Vec } from "../shared/types";
 import { dist, moveToward } from "./geometry";
-import { FACILITIES, queueSlot, type FacilityDef } from "./layout";
+import { FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, queueSlot, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
 import { DT, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
@@ -12,6 +12,7 @@ export type Activity =
   | { kind: "queued"; facility: string }
   | { kind: "service"; facility: string }
   | { kind: "waiting"; remaining: number }
+  | { kind: "stairs"; remaining: number; start: Vec }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
 
@@ -23,6 +24,7 @@ export interface Person {
   speed: number;
   hasTicket: boolean;
   screened: boolean;
+  passedGate: boolean;
   onPlatform: boolean;
   irritable: boolean;
   activity: Activity;
@@ -74,6 +76,7 @@ export class World {
       speed: profile.speed,
       hasTicket: opts.hasTicket ?? false,
       screened: false,
+      passedGate: false,
       onPlatform: false,
       irritable: opts.irritable ?? false,
       activity: { kind: "idle" },
@@ -110,6 +113,7 @@ export class World {
 
   /** Walk to a point. Returns an error message when it cannot be reached on foot. */
   walkTo(p: Person, to: Vec, label: string): string | null {
+    if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
     const path = findPath(p.pos, to);
     if (!path) return `无法步行到达${label}：需要先通过安检或闸机`;
     p.activity = { kind: "walking", path, label };
@@ -120,6 +124,7 @@ export class World {
   joinQueue(p: Person, facilityId: string): string | null {
     const f = this.facilities.get(facilityId);
     if (!f) return `不存在设施 ${facilityId}`;
+    if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
     if (p.activity.kind === "queued" || p.activity.kind === "service") return "已经在队伍中，需先离队";
     const tail = queueSlot(f.def, f.queue.length);
     const path = findPath(p.pos, tail);
@@ -148,6 +153,16 @@ export class World {
       const i = f.queue.indexOf(p.id);
       if (i >= 0) return { facility: f, index: i };
     }
+    return null;
+  }
+
+  /** The only connection from the upper landing to the lower platform. */
+  descendStairs(p: Person): string | null {
+    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "stairs") return "当前行动尚未完成";
+    if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
+    if (dist(p.pos, STAIRS_TOP) > STAIRS_REACH) return "请先前往 STAIRS_TOP 下楼梯入口";
+    this.removeFromQueue(p);
+    p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos } };
     return null;
   }
 
@@ -180,6 +195,13 @@ export class World {
     const a = p.activity;
     const stride = p.speed * DT;
     switch (a.kind) {
+      case "idle": {
+        if (!p.isPlayer && p.passedGate && !p.onPlatform) {
+          if (dist(p.pos, STAIRS_TOP) <= STAIRS_REACH) this.descendStairs(p);
+          else this.walkTo(p, STAIRS_TOP, "下楼梯入口");
+        }
+        break;
+      }
       case "walking": {
         if (followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
@@ -213,6 +235,21 @@ export class World {
         if (a.remaining <= 1e-9) {
           p.activity = { kind: "idle" };
           this.personEvent(p, "wait_done", "等待结束");
+        }
+        break;
+      }
+      case "stairs": {
+        a.remaining = Math.max(0, a.remaining - DT);
+        const progress = Math.min(1, (STAIRS_SECONDS - a.remaining) / STAIRS_SECONDS);
+        p.pos = {
+          x: a.start.x + (STAIRS_BOTTOM.x - a.start.x) * progress,
+          y: a.start.y + (STAIRS_BOTTOM.y - a.start.y) * progress,
+        };
+        if (a.remaining <= 1e-9) {
+          p.pos = { ...STAIRS_BOTTOM };
+          p.onPlatform = true;
+          p.activity = { kind: p.isPlayer ? "done" : "idle" };
+          this.personEvent(p, "arrived", "已下楼梯，到达下层站台");
         }
         break;
       }
@@ -274,10 +311,11 @@ export class World {
         break;
       case "gate":
         p.pos = { ...f.def.exit! };
-        p.onPlatform = true;
-        p.activity = { kind: "done" };
+        p.passedGate = true;
+        p.onPlatform = false;
+        p.activity = { kind: "idle" };
         this.gatePassed++;
-        this.personEvent(p, "service_done", `刷票通过 ${f.def.id}`);
+        this.personEvent(p, "service_done", `刷票通过 ${f.def.id}，到达上层平台；请前往 STAIRS_TOP 下楼梯进入站台`);
         break;
     }
   }

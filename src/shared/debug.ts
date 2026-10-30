@@ -1,7 +1,7 @@
 import type { AgentTurn, AgentAction, DecisionUsage, CreativeClassification } from "./types";
 
-export type AiStage = "ticket" | "security" | "gate";
-export type AiOperation = "decision" | "retry" | "classification";
+export type AiStage = "ticket" | "security" | "gate" | "stairs";
+export type AiOperation = "decision" | "retry" | "classification" | "negotiation";
 
 export interface ModelCallDebug {
   id: string;
@@ -30,7 +30,7 @@ export interface OperationDebug {
   id: string;
   runId: string | null;
   sessionId: string | null;
-  operation: "normalize" | "decide" | "classify";
+  operation: "normalize" | "decide" | "classify" | "negotiate";
   startedAt: string;
   durationMs: number;
   calls: ModelCallDebug[];
@@ -79,8 +79,8 @@ export interface RunDebug {
 export function summarizeDebug(attempts: DebugAttempt[], preparationMs = 0): RunDebug["summary"] {
   const summary: RunDebug["summary"] = {
     aiWaitMs: 0, includingPreparationMs: preparationMs,
-    byOperationMs: { decision: 0, retry: 0, classification: 0 },
-    byStageMs: { ticket: 0, security: 0, gate: 0 },
+    byOperationMs: { decision: 0, retry: 0, classification: 0, negotiation: 0 },
+    byStageMs: { ticket: 0, security: 0, gate: 0, stairs: 0 },
     providerWaitHeadersMs: 0, providerReadBodyMs: 0, otherMs: 0,
     measuredRequests: 0, unmeasuredRequests: 0, slowestAttempt: null,
     internalReasoningMs: null,

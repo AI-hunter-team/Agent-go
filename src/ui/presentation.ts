@@ -1,5 +1,7 @@
 import type { FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
 import type { Engine } from "../sim/engine";
+import { STAIRS_TOP, STAIRS_BOTTOM } from "../sim/layout";
+import type { ReplayFrame } from "../replay/trajectory";
 import { RULES } from "../sim/scenario";
 
 export type Motion = "idle" | "walk" | "interact" | "jump";
@@ -7,6 +9,7 @@ export interface ActorFrame {
   readonly id: string;
   readonly kind: PassengerKind | "guard";
   readonly x: number;
+  readonly elevation?: number;
   readonly z: number;
   readonly yaw: number;
   readonly motion: Motion;
@@ -29,6 +32,7 @@ export interface ViewOptions {
   showVision: boolean;
   showTrail: boolean;
   thinking: boolean;
+  replay?: ReplayFrame;
   trail?: readonly { readonly x: number; readonly y: number }[];
 }
 
@@ -46,6 +50,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving || a.kind === "walking" || a.kind === "to_queue" ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
+      elevation: platformElevation(person.pos.x),
       jump: a.kind === "creative" && a.mechanic === "jump_gate" ? Math.max(0, Math.min(1, 1 - a.remaining / RULES.jumpGateSeconds)) : 0,
     }));
   }
@@ -85,6 +90,11 @@ export class PresentationBuffer {
   time(alpha: number) { return this.previous.t + (this.current.t - this.previous.t) * alpha; }
 }
 
+/** Rendering height only; this never changes pathfinding or action results. */
+export function platformElevation(x: number) {
+  return -2 * Math.max(0, Math.min(1, (x - STAIRS_TOP.x) / (STAIRS_BOTTOM.x - STAIRS_TOP.x)));
+}
+
 export interface ActorPose { x: number; y: number; z: number; yaw: number; }
 /** Reuses an output object; no allocation or React state update in the frame loop. */
 export function sampleActor(buffer: PresentationBuffer, id: string, alpha: number, out: ActorPose): ActorFrame | undefined {
@@ -96,6 +106,6 @@ export function sampleActor(buffer: PresentationBuffer, id: string, alpha: numbe
   out.z = previous.z + (current.z - previous.z) * a;
   out.yaw = previous.yaw + Math.atan2(Math.sin(current.yaw - previous.yaw), Math.cos(current.yaw - previous.yaw)) * a;
   const jump = current.motion === "jump" ? previous.jump + (current.jump - previous.jump) * a : 0;
-  out.y = Math.sin(jump * Math.PI) * 0.85;
+  out.y = (previous.elevation ?? 0) + ((current.elevation ?? 0) - (previous.elevation ?? 0)) * a + Math.sin(jump * Math.PI) * 0.85;
   return current;
 }

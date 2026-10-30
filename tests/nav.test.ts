@@ -32,6 +32,15 @@ describe("navigation", () => {
     expect(nearestNode({ x: 27.4, y: 15 })!.id).toBe("CONC_C");
     expect(zoneOf({ x: 27.4, y: 15 })).toBe("concourse");
   });
+
+  test("the upper landing and stairs are distinct from the lower platform", () => {
+    expect(zoneOf({ x: 45.4, y: 15 })).toBe("landing");
+    expect(zoneOf({ x: 52, y: 15 })).toBe("stairs");
+    expect(zoneOf({ x: 57, y: 15 })).toBe("platform");
+    expect(nearestNode({ x: 45.4, y: 25 })?.id).toBe("STAIRS_TOP");
+    expect(findPath({ x: 45.4, y: 25 }, nodeById("STAIRS_TOP")!.pos)).not.toBeNull();
+    expect(findPath(nodeById("STAIRS_TOP")!.pos, nodeById("PLATFORM")!.pos)).toBeNull();
+  });
 });
 
 describe("sight", () => {
