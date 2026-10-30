@@ -9,6 +9,10 @@ export function describeAction(a: AgentAction | null): string {
       return `排队 ${a.facility}`;
     case "leave_queue":
       return "离开队伍";
+    case "descend_stairs":
+      return "下楼梯到站台";
+    case "request_cut_in":
+      return `向 ${a.npcId} 请求让位`;
     case "wait":
       return `等待 ${a.seconds} 秒`;
     case "attempt_creative":

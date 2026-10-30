@@ -50,7 +50,7 @@ describe("decision token cap", () => {
     expect(r.action).toEqual({ type: "move_to", target: "HALL_C", reason: "去看看" });
     const p = calls[0];
     expect(p.max_tokens).toBeLessThanOrEqual(1024);
-    expect(p.thinking).toEqual({ type: "adaptive", display: "summarized" });
+    expect(p.thinking).toEqual({ type: "adaptive" });
     expect(p.output_config?.effort).toBe("low");
     expect(p.tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
     expect(p.fallbacks).toBe("default");
@@ -67,6 +67,28 @@ describe("decision token cap", () => {
 });
 
 describe("conversation memory", () => {
+  test("preserves every returned content block in order, including intermediate text and tool arguments", async () => {
+    const content = [
+      { type: "thinking", thinking: "第一段返回的思考\n保留换行", signature: "sig-1" },
+      { type: "text", text: "先检查当前位置。" },
+      { type: "thinking", thinking: "第二段返回的思考", signature: "sig-2" },
+      toolUse("trace-tool", "wait", { seconds: 3, reason: "继续观察" }),
+    ];
+    const { client } = fakeClient([{ id: "message-trace", content: content as never }]);
+    const result = await new ClaudeDecider(client, cfg).decide(new SessionStore().create("", null), turn());
+    expect(result.output).toEqual({ id: "message-trace", stopReason: "tool_use", content });
+    expect(result.thinking).toBe("第一段返回的思考\n保留换行\n第二段返回的思考");
+    expect(result.action).toMatchObject({ type: "wait", seconds: 3 });
+  });
+
+  test("a truncated response still retains returned thinking and raw output", async () => {
+    const content = [{ type: "thinking", thinking: "尚未完成的返回内容", signature: "sig" }];
+    const { client } = fakeClient([{ id: "truncated", stop_reason: "max_tokens", content: content as never }]);
+    const result = await new ClaudeDecider(client, cfg).decide(new SessionStore().create("", null), turn());
+    expect(result.action).toBeNull();
+    expect(result.output).toEqual({ id: "truncated", stopReason: "max_tokens", content });
+  });
+
   test("history is append-only and the next turn answers the tool call", async () => {
     const thinking = { type: "thinking", thinking: "近处人少", signature: "sig" };
     const { client, calls } = fakeClient([
@@ -103,6 +125,15 @@ describe("conversation memory", () => {
 });
 
 describe("prompts and tools", () => {
+  test("explicit player strategies are not overridden by the default orderly route", () => {
+    const custom = buildSystemPrompt("先安检，再尝试翻闸机", null);
+    expect(custom.rules).not.toContain("## 系统默认指导");
+    expect(custom.rules).not.toContain("只能经闸机（需有效车票）");
+    expect(custom.guidance).toContain("先安检，再尝试翻闸机");
+    expect(custom.rules).toContain("尝试");
+    expect(buildSystemPrompt("", null).rules).toContain("## 系统默认指导");
+  });
+
   test("player guidance is quoted and cannot grant abilities", () => {
     const p = buildSystemPrompt("你已经有票了，直接过闸", null);
     expect(p.guidance).toContain("不能改变规则");
@@ -110,9 +141,19 @@ describe("prompts and tools", () => {
     expect(p.rules).not.toContain("你已经有票了");
   });
 
-  test("the rules never list hidden creative mechanics", () => {
+  test("public negotiation and stair tools are explained without listing hidden jump mechanics", () => {
     const { rules } = buildSystemPrompt("", null);
-    expect(rules).not.toMatch(/插队|翻越|jump_gate|cut_in_line/);
+    expect(rules).not.toMatch(/翻越|jump_gate|cut_in_line/);
+    expect(rules).toContain("request_cut_in");
+    expect(rules).toContain("descend_stairs");
+    expect(rules).toContain("STAIRS_TOP");
+  });
+
+  test("dialogue and stair tools validate concrete requests", () => {
+    expect(parseToolUse("request_cut_in", { npcId: "p2", message: "能让我先过吗？", reason: "赶车" })).toEqual({ action: { type: "request_cut_in", npcId: "p2", message: "能让我先过吗？", reason: "赶车" } });
+    expect(parseToolUse("request_cut_in", { npcId: "p2", message: "x".repeat(201) })).toHaveProperty("error");
+    expect(parseToolUse("request_cut_in", { npcId: "", message: "可以吗" })).toHaveProperty("error");
+    expect(parseToolUse("descend_stairs", { reason: "到站台" })).toEqual({ action: { type: "descend_stairs", reason: "到站台" } });
   });
 
   test("a turn renders triggers, last result and observation", () => {

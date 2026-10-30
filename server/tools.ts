@@ -36,6 +36,11 @@ export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
   tool("wait", "等待若干秒（1–20）后重新评估。正在走路或排队时调用不会打断当前动作。", {
     seconds: { type: "integer", description: "1 到 20 之间的整数" },
   }),
+  tool("descend_stairs", "过闸后走到 STAIRS_TOP 楼梯入口，再下楼到站台；下楼期间不能改向。", {}),
+  tool("request_cut_in", "向附近可见的具体排队乘客请求让位，必须说出话术；NPC 将根据性格与请求决定是否同意。只有同意才移动到该乘客前面，拒绝保留当前位次。", {
+    npcId: { type: "string", description: "当前观察 facilities.people 中的乘客 id" },
+    message: { type: "string", minLength: 1, maxLength: 200, description: "你直接对这位乘客说的话，最多 200 字" },
+  }),
   tool(
     "attempt_creative",
     "尝试常规流程之外的行动，用自然语言描述你想做什么。环境会判断是否可行并按规则结算，可能失败，也可能有后果。",
@@ -58,6 +63,13 @@ export function parseToolUse(name: string, input: unknown): { action: AgentActio
       return { error: `join_queue 的 facility 无效：${String(i.facility)}` };
     case "leave_queue":
       return { action: { type: "leave_queue", reason: why } };
+    case "descend_stairs":
+      return { action: { type: "descend_stairs", reason: why } };
+    case "request_cut_in":
+      if (typeof i.npcId === "string" && /^p\d+$/.test(i.npcId) && typeof i.message === "string" && i.message.trim() && [...i.message].length <= 200) {
+        return { action: { type: "request_cut_in", npcId: i.npcId, message: i.message, reason: why } };
+      }
+      return { error: "request_cut_in 需要可见乘客的 npcId 和 1–200 字话术" };
     case "wait": {
       const s = Number(i.seconds);
       if (!Number.isFinite(s)) return { error: "wait 的 seconds 无效" };

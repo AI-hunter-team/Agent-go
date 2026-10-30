@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, Classifier } from "../agent/agent";
 import { HeuristicAgent } from "../agent/heuristicAgent";
-import { Api, RemoteAgent, offlineClassifier, remoteClassifier } from "../agent/remoteAgent";
+import { Api, RemoteAgent, offlineClassifier, remoteClassifier, remoteNpcNegotiator } from "../agent/remoteAgent";
 import { GameRunner } from "../agent/runner";
 import type { NormalizedGuidance } from "../shared/types";
 import { Engine } from "../sim/engine";
@@ -9,8 +9,12 @@ import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS, RULES } from "../sim/scenario";
 import { Controls, GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
 import { DecisionLog } from "./DecisionLog";
+import { DecisionTrace } from "./DecisionTrace";
+import { NpcDialogue } from "./NpcDialogue";
 import { MapCanvas } from "./MapCanvas";
 import { EventTimeline, ReportSummary } from "./ReportView";
+import { TrajectoryReplay } from "./TrajectoryReplay";
+import { JourneyProgress } from "./JourneyProgress";
 import type { RenderOptions } from "./render";
 
 type Stage = "setup" | "confirm" | "playing" | "ended";
@@ -28,7 +32,7 @@ export function App() {
   const [speed, setSpeed] = useState(1);
   const [showVision, setShowVision] = useState(true);
   const [showTrail, setShowTrail] = useState(true);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
 
   const engineRef = useRef<Engine | null>(null);
   if (!engineRef.current) engineRef.current = new Engine(1);
@@ -54,6 +58,7 @@ export function App() {
       engineRef.current = new Engine(seed);
       optionsRef.current.thinking = false;
       optionsRef.current.trail = [];
+      delete optionsRef.current.replay;
     }
   }, [seed, stage]);
 
@@ -140,17 +145,22 @@ export function App() {
     const runner = new GameRunner(engine, agent, classify, {
       guidance: agentKind === "llm" ? guidance : "",
       normalizedGuidance: agentKind === "llm" ? normalized : null,
+      negotiate: agentKind === "llm" ? remoteNpcNegotiator : undefined,
       onChange: () => setTick((t) => t + 1),
     });
     runnerRef.current = runner;
     setPaused(false);
     setBusy(null);
     optionsRef.current.trail = [];
+    delete optionsRef.current.replay;
     setStage("playing");
     runner.start();
   }, [agentKind, guidance, normalized, seed]);
 
   const runner = runnerRef.current;
+  const pendingAttempt = runner?.attempts?.at(-1);
+  const pendingDialogue = runner?.dialogues.at(-1);
+  const report = useMemo(() => stage === "ended" && runner ? runner.report() : null, [stage, runner, tick]);
   const engine = engineRef.current!;
   const p = engine.player;
 
@@ -173,16 +183,19 @@ export function App() {
             </span>
             <span className={p.hasTicket ? "chip on" : "chip"}>车票</span>
             <span className={p.screened ? "chip on" : "chip"}>已安检</span>
-            <span className={p.onPlatform ? "chip on" : "chip"}>过闸</span>
+            <span className={p.passedGate ? "chip on" : "chip"}>过闸</span>
           </div>
         )}
       </header>
+
+      <JourneyProgress player={p} status={engine.status} />
 
       <main>
         <div className="stage">
           <MapCanvas engineRef={engineRef} optionsRef={optionsRef} />
           <Legend />
-          {stage === "ended" && runner && <EventTimeline report={runner.report()} />}
+          {report && <TrajectoryReplay report={report} optionsRef={optionsRef} />}
+          {report && <EventTimeline report={report} />}
         </div>
 
         <aside>
@@ -242,9 +255,13 @@ export function App() {
                   </p>
                 </section>
               )}
-              {stage === "ended" && <ReportSummary report={runner.report()} onRetry={start} onEdit={() => setStage("setup")} />}
+              {report && <ReportSummary report={report} onRetry={start} onEdit={() => setStage("setup")} />}
               <section className="card log">
                 <h3>决策记录</h3>
+                {stage === "playing" && pendingAttempt?.status === "pending" && (
+                  <details><summary>当前调用（请求中）</summary><DecisionTrace attempts={[pendingAttempt]} /></details>
+                )}
+                {stage === "playing" && pendingDialogue?.status === "pending" && <NpcDialogue record={pendingDialogue} />}
                 <DecisionLog decisions={runner.decisions} />
               </section>
             </>
@@ -271,7 +288,7 @@ function Legend() {
         <i className="dot luggage" /> 带行李
       </span>
       <span>
-        <i className="tri" /> 保安（扇形为视野）
+        <i className="tri" /> 保安（直线往返巡逻，扇形为视野）
       </span>
       <span>
         <i className="sq broken" /> 故障/停用

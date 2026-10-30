@@ -69,7 +69,7 @@ export class ClaudeDecider {
       response = await this.client.beta.messages.create({
         ...baseParams(this.cfg),
         max_tokens: this.cfg.maxTokens,
-        thinking: { type: "adaptive", display: "summarized" },
+        thinking: { type: "adaptive" },
         output_config: { effort: "low" },
         cache_control: { type: "ephemeral" },
         system: [
@@ -98,6 +98,7 @@ export class ClaudeDecider {
     const u = response.usage;
     const result: Partial<DecisionResult> = {
       thinking,
+      output: { id: response.id ?? null, stopReason: response.stop_reason ?? null, content: structuredClone(response.content) },
       model: response.model,
       usage: {
         inputTokens: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),

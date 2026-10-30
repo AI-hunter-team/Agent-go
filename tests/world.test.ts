@@ -69,12 +69,14 @@ describe("queues and services", () => {
     expect(p.onPlatform).toBe(false);
   });
 
-  test("gate lets a ticket holder onto the platform", () => {
+  test("gate lets a ticket holder onto the upper landing", () => {
     const w = new World(1);
     const p = playerAt(w, 40, 20, { screened: true, hasTicket: true });
     w.joinQueue(p, "G4");
-    run(w, 20, () => p.onPlatform);
-    expect(p.onPlatform).toBe(true);
+    run(w, 20, () => p.passedGate);
+    expect(p.passedGate).toBe(true);
+    expect(p.onPlatform).toBe(false);
+    expect(p.activity.kind).toBe("idle");
     expect(p.pos.x).toBeGreaterThan(44);
   });
 

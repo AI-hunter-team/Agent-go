@@ -17,6 +17,8 @@ export type AgentAction =
   | { type: "join_queue"; facility: string; reason: string }
   | { type: "leave_queue"; reason: string }
   | { type: "wait"; seconds: number; reason: string }
+  | { type: "descend_stairs"; reason: string }
+  | { type: "request_cut_in"; npcId: string; message: string; reason: string }
   | { type: "attempt_creative"; intent: string; reason: string };
 
 export type ActionType = AgentAction["type"];
@@ -67,6 +69,7 @@ export interface SelfObservation {
   activity: string;
   hasTicket: boolean;
   screened: boolean;
+  passedGate?: boolean;
   queue: { facility: string; position: number; length: number } | null;
   elapsed: number;
   timeLeft: number;
@@ -85,6 +88,8 @@ export interface FacilityObservation {
   queue: string[];
   serving: string | null;
   note: string | null;
+  /** Individually identifiable passengers visible in this queue, in queue order. */
+  people?: { id: string; trait: string; distance?: number }[];
 }
 
 export interface GuardObservation {
@@ -124,6 +129,47 @@ export interface DecisionResult {
   model: string | null;
   latencyMs: number;
   error: string | null;
+  /** Content exactly as returned by the model API; never reconstructed reasoning. */
+  output?: { id: string | null; stopReason: string | null; content: unknown[] };
+}
+
+export interface DecisionAttempt {
+  decisionIndex: number;
+  attempt: number;
+  input: AgentTurn;
+  startedAt: string;
+  finishedAt: string | null;
+  status: "pending" | "completed" | "error";
+  response: DecisionResult | null;
+  /** Null when the proposal was never executed (failure, retry or cancellation). */
+  execution: ActionResult | null;
+}
+
+export interface CutInDialogueRequest {
+  npc: { id: string; trait: string; temperament: string; facility: string; queuePosition: number; queueLength: number };
+  message: string;
+  history: { message: string; reply: string; accepted: boolean }[];
+}
+
+export interface NpcReply {
+  accepted: boolean;
+  reply: string;
+  reason: string;
+  source: "llm" | "offline" | "error";
+  model: string | null;
+  usage: DecisionUsage | null;
+  output?: DecisionResult["output"];
+}
+
+export interface NpcDialogueRecord {
+  t: number;
+  decisionIndex: number;
+  request: CutInDialogueRequest;
+  startedAt: string;
+  finishedAt: string | null;
+  status: "pending" | "completed" | "error";
+  response: NpcReply | null;
+  execution: ActionResult | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +214,8 @@ export interface DecisionRecord {
   latencyMs: number;
   error: string | null;
   fallback: boolean;
+  attempts?: DecisionAttempt[];
+  dialogue?: NpcDialogueRecord;
 }
 
 export interface TimeBreakdown {
@@ -177,6 +225,12 @@ export interface TimeBreakdown {
   waiting: number;
   creative: number;
   idle: number;
+  stairs?: number;
+}
+
+export interface TrailPoint extends Vec {
+  /** World time; absent only in recordings made before trajectory replay. */
+  t?: number;
 }
 
 export interface GameReport {
@@ -185,15 +239,19 @@ export interface GameReport {
   guidance: string;
   normalizedGuidance: NormalizedGuidance | null;
   status: GameStatus;
-  /** Gate-crossing time in world seconds; null when the run failed. */
+  /** Arrival time at the lower platform in world seconds; null when the run failed. */
   score: number | null;
   failReason: string | null;
   elapsed: number;
   timeBreakdown: TimeBreakdown;
   violations: { t: number; mechanic: CreativeMechanic; detected: boolean }[];
   decisions: DecisionRecord[];
+  /** Includes pending calls and responses that arrived after the run ended. */
+  attempts?: DecisionAttempt[];
+  dialogues?: NpcDialogueRecord[];
+  npcTotals?: { calls: number; inputTokens: number; outputTokens: number; realSeconds: number };
   events: GameEvent[];
-  trail: Vec[];
+  trail: TrailPoint[];
   thinkingRealSeconds: number;
   totals: { decisions: number; inputTokens: number; outputTokens: number; thinkingTokens: number };
 }

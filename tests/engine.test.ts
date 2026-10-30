@@ -35,19 +35,21 @@ describe("engine", () => {
     expect(act(e, { type: "join_queue", facility: "X9" }).text).toContain("TVM-1");
   });
 
-  test("a scripted orderly run passes the gate and is scored by gate time", () => {
+  test("a scripted orderly run descends after the gate and is scored on platform arrival", () => {
     const e = new Engine(1);
     e.takeTriggers();
     const plan: AgentAction[] = [
       { type: "join_queue", facility: "TVM-3", reason: "" },
       { type: "join_queue", facility: "S3", reason: "" },
       { type: "join_queue", facility: "G5", reason: "" },
+      { type: "move_to", target: "STAIRS_TOP", reason: "" },
+      { type: "descend_stairs", reason: "" },
     ];
     let stage = 0;
     act(e, plan[0]);
     while (e.status === "running") {
       const triggers = runUntilTrigger(e);
-      if (triggers.some((t) => t.kind === "service_done") && stage < 2) act(e, plan[++stage]);
+      if ((triggers.some((t) => t.kind === "service_done") && stage < 3) || (stage === 3 && triggers.some((t) => t.kind === "arrived"))) act(e, plan[++stage]);
       if (triggers.length === 0) break;
     }
     expect(e.status).toBe("success");
@@ -55,8 +57,9 @@ describe("engine", () => {
     expect(e.score).toBeGreaterThan(20);
     expect(e.score).toBeLessThan(180);
     const tb = e.timeBreakdown;
-    const total = tb.walking + tb.queueing + tb.service + tb.waiting + tb.creative + tb.idle;
+    const total = tb.walking + tb.queueing + tb.service + tb.waiting + tb.creative + tb.idle + (tb.stairs ?? 0);
     expect(total).toBeCloseTo(e.t, 5);
+    expect(tb.stairs).toBeCloseTo(6);
   });
 
   test("standing still runs out the clock", () => {

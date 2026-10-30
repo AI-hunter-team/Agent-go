@@ -144,6 +144,8 @@ test("stop ends a pending run immediately and ignores its late response", async 
   const agent = new ScriptedAgent(() => new Promise((resolve) => { release = resolve; }));
   const runner = new GameRunner(new Engine(1), agent, keywords);
   runner.start();
+  expect(runner.attempts).toHaveLength(1);
+  expect(runner.attempts[0].status).toBe("pending");
   runner.stop();
   expect(runner.phase).toBe("ended");
   expect(agent.disposed).toBe(true);
@@ -151,6 +153,30 @@ test("stop ends a pending run immediately and ignores its late response", async 
   await runner.pending;
   expect(runner.decisions).toHaveLength(0);
   expect(runner.engine.player.activity.kind).toBe("idle");
+  const report = runner.report();
+  expect(report.attempts?.[0].response?.action).toMatchObject({ target: "HALL_C" });
+  expect(report.attempts?.[0].execution).toBeNull();
+  expect(report.attempts?.[0].finishedAt).toBeTruthy();
+});
+
+test("keeps the failed attempt and successful retry with their individual inputs and outputs", async () => {
+  const agent = new ScriptedAgent((_, n) => ({
+    ...ok(n === 1 ? null : { type: "wait", seconds: 2, reason: "下一步" }),
+    thinking: n === 1 ? "首次返回的思考" : "重试返回的思考",
+    usage: { inputTokens: 100, outputTokens: 50, thinkingTokens: 20, cacheReadTokens: 0 },
+  }));
+  const runner = new GameRunner(new Engine(1), agent, keywords);
+  runner.start();
+  await runner.pending;
+  const attempts = runner.decisions[0].attempts!;
+  expect(attempts).toHaveLength(2);
+  expect(attempts.map((a) => a.response?.thinking)).toEqual(["首次返回的思考", "重试返回的思考"]);
+  expect(attempts[0].input.retry).toBeUndefined();
+  expect(attempts[1].input.retry).toBe(true);
+  expect(attempts[0].execution).toBeNull();
+  expect(attempts[1].execution?.ok).toBe(true);
+  expect(runner.report().totals.outputTokens).toBe(100);
+  expect(JSON.parse(JSON.stringify(runner.report())).attempts).toHaveLength(2);
 });
 
 test("retry usage includes both paid attempts", async () => {

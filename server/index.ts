@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createApp, type LlmService } from "./app";
 import { ClaudeDecider, configFromEnv } from "./claude";
 import { SessionStore } from "./sessions";
-import { classifyIntent, normalizeGuidance } from "./structured";
+import { classifyIntent, negotiateNpc, normalizeGuidance } from "./structured";
 
 function createLlm(): LlmService | null {
   const hasCredentials = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.AGENT_FORCE_LLM);
@@ -16,6 +16,7 @@ function createLlm(): LlmService | null {
     decide: (session, turn) => decider.decide(session, turn),
     normalize: (text) => normalizeGuidance(client, cfg, text),
     classify: (intent, observation) => classifyIntent(client, cfg, intent, observation),
+    negotiate: (request) => negotiateNpc(client, cfg, request),
   };
 }
 

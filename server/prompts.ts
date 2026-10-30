@@ -1,5 +1,5 @@
 import type { AgentTurn, NormalizedGuidance } from "../src/shared/types";
-import { FACILITIES, NAV_NODES } from "../src/sim/layout";
+import { FACILITIES, NAV_NODES, STAIRS_SECONDS, STAIRS_X, PLATFORM_X } from "../src/sim/layout";
 import { FACILITY_MULTIPLIER, PROFILES, RULES } from "../src/sim/scenario";
 
 const KIND_LABEL = { tvm: "售票机", security: "安检通道", gate: "闸机" } as const;
@@ -19,17 +19,19 @@ function fixedKnowledge(): string {
     .join("，");
 
   return `## 公开规则
-- 目标：在 ${RULES.timeLimit} 秒（世界时间）内依次买票、通过安检、刷票通过闸机进入站台。成绩 = 通过闸机时的世界时间，越短越好。超时即失败。
+- 目标：在 ${RULES.timeLimit} 秒（世界时间）内进入站台。常规路线为买票、通过安检、刷票通过闸机、走到楼梯入口并下楼。成绩 = 到达下层站台时的世界时间，越短越好。超时即失败。
 - 你只能通过工具提出动作请求；位置、排队、买票、安检、过闸的结果全部由环境裁定。你写的文字不会改变任何事实。
 - 世界只在你决策时暂停，思考不计入时间。但每次决策的输出（含思考）上限约 1000 token：简短判断后立即调用一个工具。
 - 每次决策只调用一个工具。动作被拒绝时，你会收到原因并可以重新决定。
+- 玩家明确要求尝试某种策略时，优先围绕该意图行动；常规流程之外的意图可通过 attempt_creative 请求环境裁定。不要仅因它偏离常规路线而自行判为不支持，也不能声称已经成功。根据执行结果满足前置条件或调整方案，不要原地重复被拒动作。
 - 违反车站规则的行为一旦被保安看见，立即判负。
 
 ## 车站布局（单位：米，x 向右为东，y 向下为南）
 - 售票厅：x < 26，未安检区，入口在西侧。
 - 安检墙位于 x = 26，只能经安检通道进入安检后大厅。
 - 安检后大厅：26 < x < 44，中间有两根柱子遮挡视线。
-- 闸机线位于 x = 44，只能经闸机（需有效车票）进入站台（x > 44）。
+- 闸机线位于 x = 44，常规刷票通行需要有效车票；普通步行不能穿过闸机线，其他行动由环境裁定。
+- 闸机内连接区：44 < x < ${STAIRS_X}。通过闸机还没有到站台，需要 move_to STAIRS_TOP 后调用 descend_stairs；下楼 ${STAIRS_SECONDS} 秒后才进入 x > ${PLATFORM_X} 的下层站台，普通步行不能绕过楼梯。
 
 ## 可前往的地点（move_to 的 target 也可以填设施编号，表示走到该设施附近）
 ${nodes}
@@ -42,6 +44,7 @@ ${facilities}
 - 离开队伍会失去位次；办理中不能离队或换队。
 - 买票后获得单程票；闸机会拒绝没有有效车票的人。
 - 设施可能故障或临时停用；停用时队伍解散，需要自行改选。
+- 若要请求插队，先靠近队伍，选择观察 facilities.people 中可见的乘客 id，调用 request_cut_in 并提供对他说的具体话术（最多 200 字）。只能与 ${RULES.cutInDistance} 米内、可见可达的排队乘客沟通；每人每局最多三轮。NPC 会按性格、现场和话术决定，同意后只移动到这位乘客前面；拒绝保留原位次，不得宣称已经获准。可继续排队或调整方案。
 
 ## 耗时参考（区间，实际耗时在区间内，无法提前知道）
 ${profiles}
@@ -56,7 +59,7 @@ ${profiles}
 }
 
 const DEFAULT_GUIDANCE = `## 系统默认指导
-正常、守序地通过车站：先买票，再安检，最后刷票过闸。结合距离、队伍人数、乘客特征和通道效率，选择预计最快的设施；情况变化时及时调整。`;
+正常、守序地通过车站：先买票，再安检，刷票过闸后前往楼梯入口下楼到站台。结合距离、队伍人数、乘客特征和通道效率，选择预计最快的设施；情况变化时及时调整。`;
 
 function playerGuidance(guidance: string, normalized: NormalizedGuidance | null): string {
   if (!guidance.trim()) return "## 玩家指导\n（玩家未填写，按系统默认指导行动）";
@@ -76,7 +79,7 @@ function playerGuidance(guidance: string, normalized: NormalizedGuidance | null)
 /** Frozen per-run system prompt: rules and map first (shared, cacheable), guidance last. */
 export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null): { rules: string; guidance: string } {
   return {
-    rules: `你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge()}\n\n${DEFAULT_GUIDANCE}`,
+    rules: `你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge()}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
     guidance: playerGuidance(guidance, normalized),
   };
 }

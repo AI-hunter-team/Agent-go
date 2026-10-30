@@ -23,7 +23,7 @@ export function SetupPanel(p: SetupProps) {
     <section className="card">
       <h2>赛前指导</h2>
       <p className="muted">
-        目标：限时 180 秒内买票、安检、刷票过闸。成绩看过闸用时。角色进场后自主行动，你只能观看。
+        目标：限时 180 秒内进入站台。常规流程是买票、安检、刷票过闸、下楼到站台。成绩看进入站台的用时，角色进场后自主行动。
       </p>
 
       <label className="field">

@@ -44,6 +44,7 @@ function observeFacility(world: World, f: Facility, from: Vec): FacilityObservat
     serviceRange: [round1(base[0] * m), round1(base[1] * m)],
     queueLength: visibleQueue.length,
     queue: visibleQueue.map(traitOf),
+    people: visibleQueue.filter((p) => !p.isPlayer).map((p) => ({ id: p.id, trait: traitOf(p), distance: round1(dist(from, p.pos)) })),
     serving: f.serving && serving && playerCanSee(from, serving.pos) ? traitOf(serving) + (f.serving.recheck ? "（复检中）" : "") : null,
     note: f.note,
   };
@@ -68,6 +69,8 @@ export function describeActivity(world: World, p: Person): string {
       return `原地等待（剩余 ${round1(a.remaining)} 秒）`;
     case "creative":
       return a.mechanic === "jump_gate" ? "正在翻越闸机" : `正在插队到 ${a.facility}`;
+    case "stairs":
+      return `正在下楼梯（剩余 ${round1(a.remaining)} 秒）`;
     case "done":
       return "已进入站台";
   }
@@ -86,6 +89,7 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       activity: describeActivity(world, p),
       hasTicket: p.hasTicket,
       screened: p.screened,
+      passedGate: p.passedGate,
       queue: q ? { facility: q.facility.def.id, position: q.index + 1, length: q.facility.queue.length } : null,
       elapsed: round1(world.t),
       timeLeft: round1(Math.max(0, RULES.timeLimit - world.t)),

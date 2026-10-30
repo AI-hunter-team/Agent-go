@@ -3,16 +3,20 @@ import type {
   AgentAction,
   AgentTurn,
   CreativeClassification,
+  DecisionAttempt,
   DecisionRecord,
   DecisionResult,
   GameReport,
   NormalizedGuidance,
+  NpcDialogueRecord,
+  NpcReply,
 } from "../shared/types";
 import type { Engine } from "../sim/engine";
 import { classifyByKeywords } from "../sim/intent";
 import { summarizeObservation } from "../sim/observation";
 import { DECISION_LIMITS } from "../sim/scenario";
-import type { Agent, Classifier } from "./agent";
+import { prepareCutIn } from "../sim/negotiation";
+import type { Agent, Classifier, NpcNegotiator } from "./agent";
 
 export type RunnerPhase = "ready" | "running" | "thinking" | "ended";
 
@@ -23,6 +27,7 @@ export interface RunnerOptions {
   /** Called whenever phase or records change, so a UI can re-render. */
   onChange?: () => void;
   now?: () => number;
+  negotiate?: NpcNegotiator;
 }
 
 /**
@@ -32,6 +37,9 @@ export interface RunnerOptions {
 export class GameRunner {
   phase: RunnerPhase = "ready";
   readonly decisions: DecisionRecord[] = [];
+  readonly attempts: DecisionAttempt[] = [];
+  readonly dialogues: NpcDialogueRecord[] = [];
+  private npcRealMs = 0;
   thinkingRealMs = 0;
   budgetExhausted = false;
   /** Latest decision while it is still being made, for the "thinking" indicator. */
@@ -105,10 +113,11 @@ export class GameRunner {
     const observation = engine.observe();
     const turn: AgentTurn = { triggers, lastResult: this.lastResult, observation };
     const t = engine.t;
+    const attempts: DecisionAttempt[] = [];
 
-    let result = await this.timed(turn);
+    let result = await this.timed(turn, attempts);
     if (!result.action && engine.status === "running") {
-      const retry = await this.timed({ ...turn, retry: true });
+      const retry = await this.timed({ ...turn, retry: true }, attempts);
       const firstUsage = result.usage;
       const nextUsage = retry.usage;
       result = {
@@ -129,6 +138,7 @@ export class GameRunner {
     let classification: CreativeClassification | null = null;
     let fallback = false;
     let outcome: ActionResult;
+    let dialogue: NpcDialogueRecord | undefined;
 
     if (action) {
       this.consecutiveFailures = 0;
@@ -140,6 +150,11 @@ export class GameRunner {
         }
         if (engine.status !== "running") return;
         outcome = engine.applyAction(action, classification.mechanic);
+      } else if (action.type === "request_cut_in") {
+        const negotiation = await this.negotiate(action);
+        if (engine.status !== "running") return;
+        outcome = negotiation.outcome;
+        dialogue = negotiation.dialogue;
       } else {
         outcome = engine.applyAction(action);
       }
@@ -168,6 +183,7 @@ export class GameRunner {
       this.rejectStreak = 0;
     }
     this.lastResult = outcome;
+    if (!fallback && attempts.length) attempts[attempts.length - 1].execution = structuredClone(outcome);
 
     this.decisions.push({
       index: this.decisions.length + 1,
@@ -183,6 +199,8 @@ export class GameRunner {
       latencyMs: result.latencyMs,
       error: result.error,
       fallback,
+      attempts,
+      dialogue,
     });
 
     if (this.decisions.length >= this.maxDecisions && !this.budgetExhausted) {
@@ -191,15 +209,72 @@ export class GameRunner {
     }
   }
 
-  private async timed(turn: AgentTurn): Promise<DecisionResult> {
+  private async negotiate(action: Extract<AgentAction, { type: "request_cut_in" }>): Promise<{ outcome: ActionResult; dialogue?: NpcDialogueRecord }> {
+    const e = this.engine;
+    const history = this.dialogues.filter((d) => d.request.npc.id === action.npcId && d.response)
+      .map((d) => ({ message: d.request.message, reply: d.response!.reply, accepted: d.response!.accepted }));
+    const prepared = prepareCutIn(e.world, action.npcId, action.message, history);
+    if (!prepared.ok) return { outcome: prepared };
+    const dialogue: NpcDialogueRecord = {
+      t: e.t, decisionIndex: this.decisions.length + 1, request: prepared.request,
+      startedAt: new Date().toISOString(), finishedAt: null, status: "pending", response: null, execution: null,
+    };
+    this.dialogues.push(dialogue);
+    this.opts.onChange?.();
     const start = this.now();
+    let response: NpcReply;
     try {
-      return await this.agent.decide(turn);
+      response = this.opts.negotiate ? await this.opts.negotiate(prepared.request) : {
+        accepted: false, reply: "NPC 模型未连接，本次无法沟通，请继续排队。", reason: "离线模式不生成模型答复",
+        source: "offline", model: null, usage: null,
+      };
+      // Consent only comes from an explicit model boolean, never a truthy value or an error fallback.
+      if (response.source !== "llm" || response.accepted !== true) response = { ...response, accepted: false };
     } catch (err) {
-      return { action: null, thinking: null, usage: null, model: null, latencyMs: 0, error: String(err) };
+      response = { accepted: false, reply: "沟通失败，请继续排队或稍后重试。", reason: String(err), source: "error", model: null, usage: null };
+    } finally {
+      this.npcRealMs += this.now() - start;
+    }
+    dialogue.response = structuredClone(response);
+    dialogue.finishedAt = new Date().toISOString();
+    dialogue.status = response.source === "llm" ? "completed" : "error";
+    this.opts.onChange?.();
+    if (e.status !== "running") return { outcome: { ok: false, text: "本局已结束，NPC 答复仅记录，未执行" }, dialogue };
+    const outcome = response.accepted ? e.creative.startConsentedCutIn(e.player, action.npcId)
+      : { ok: false, text: `${prepared.request.npc.id}：${response.reply}${response.source === "llm" ? "（未同意让位，保留原位次）" : `（${response.reason}）`}` };
+    dialogue.execution = structuredClone(outcome);
+    e.world.log("npc_dialogue", `你对 ${action.npcId} 说：“${action.message}”；NPC：“${response.reply}”。${outcome.text}`, true);
+    return { outcome, dialogue };
+  }
+
+  private async timed(turn: AgentTurn, attempts: DecisionAttempt[]): Promise<DecisionResult> {
+    const start = this.now();
+    const record: DecisionAttempt = {
+      decisionIndex: this.decisions.length + 1,
+      attempt: attempts.length + 1,
+      input: structuredClone(turn),
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      status: "pending",
+      response: null,
+      execution: null,
+    };
+    attempts.push(record);
+    this.attempts.push(record);
+    this.opts.onChange?.();
+    let result: DecisionResult;
+    try {
+      result = await this.agent.decide(turn);
+    } catch (err) {
+      result = { action: null, thinking: null, usage: null, model: null, latencyMs: 0, error: String(err) };
     } finally {
       this.thinkingRealMs += this.now() - start;
     }
+    record.response = structuredClone(result);
+    record.status = result.error ? "error" : "completed";
+    record.finishedAt = new Date().toISOString();
+    this.opts.onChange?.();
+    return result;
   }
 
   private finish() {
@@ -212,10 +287,10 @@ export class GameRunner {
   report(): GameReport {
     const e = this.engine;
     const totals = { decisions: this.decisions.length, inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
-    for (const d of this.decisions) {
-      totals.inputTokens += d.usage?.inputTokens ?? 0;
-      totals.outputTokens += d.usage?.outputTokens ?? 0;
-      totals.thinkingTokens += d.usage?.thinkingTokens ?? 0;
+    for (const a of this.attempts) {
+      totals.inputTokens += a.response?.usage?.inputTokens ?? 0;
+      totals.outputTokens += a.response?.usage?.outputTokens ?? 0;
+      totals.thinkingTokens += a.response?.usage?.thinkingTokens ?? 0;
     }
     const round = (n: number) => Math.round(n * 10) / 10;
     const tb = e.timeBreakdown;
@@ -235,9 +310,18 @@ export class GameRunner {
         waiting: round(tb.waiting),
         creative: round(tb.creative),
         idle: round(tb.idle),
+        stairs: round(tb.stairs ?? 0),
       },
       violations: e.creative.violations.map((v) => ({ ...v })),
       decisions: this.decisions,
+      attempts: this.attempts,
+      dialogues: this.dialogues,
+      npcTotals: {
+        calls: this.dialogues.length,
+        inputTokens: this.dialogues.reduce((sum, d) => sum + (d.response?.usage?.inputTokens ?? 0), 0),
+        outputTokens: this.dialogues.reduce((sum, d) => sum + (d.response?.usage?.outputTokens ?? 0), 0),
+        realSeconds: round(this.npcRealMs / 1000),
+      },
       events: [...e.world.events],
       trail: e.trail,
       thinkingRealSeconds: round(this.thinkingRealMs / 1000),

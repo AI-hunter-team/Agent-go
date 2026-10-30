@@ -3,13 +3,19 @@ import type { Rect } from "./geometry";
 
 // Station layout, in metres. See docs/MVP技术方案.md §5.2.
 //
-//  x=0        14           26        36        44    60
-//   入口 ── 售票厅(TVM) ── 安检墙(S1-3) ── 大厅(柱) ── 闸机线(G1-5) ── 站台
+//  x=0        14           26        36        44       49       56       70
+//   入口 ── 售票厅(TVM) ── 安检墙(S1-3) ── 大厅(柱) ── 闸机 ── 上层平台 ── 下楼梯 ── 站台
 
-export const WIDTH = 60;
+export const WIDTH = 70;
 export const HEIGHT = 30;
 export const SECURITY_X = 26;
 export const GATE_X = 44;
+export const STAIRS_X = 49;
+export const PLATFORM_X = 56;
+export const STAIRS_TOP: Vec = { x: 48, y: 15 };
+export const STAIRS_BOTTOM: Vec = { x: 57, y: 15 };
+export const STAIRS_SECONDS = 6;
+export const STAIRS_REACH = 0.8;
 export const QUEUE_SPACING = 0.8;
 
 export const ENTRANCE: Vec = { x: 2, y: 15 };
@@ -88,12 +94,13 @@ export const SIGHT_OCCLUDERS: Rect[] = [...SECURITY_WALL, ...PILLARS];
 const inflate = (r: Rect, m: number): Rect => ({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
 
 /**
- * Movement blockers. The security line and the gate line are solid for walking:
- * crossing them only happens through service (or a creative action).
+ * Crossing the security/gate lines requires service (or a creative action).
+ * The lower platform is on another level: only the timed stairs action connects it.
  */
 export const MOVE_BLOCKERS: Rect[] = [
   { x: SECURITY_X - 0.2, y: -1, w: 0.4, h: HEIGHT + 2 },
   { x: GATE_X - 0.2, y: -1, w: 0.4, h: HEIGHT + 2 },
+  { x: STAIRS_X, y: -1, w: PLATFORM_X - STAIRS_X, h: HEIGHT + 2 },
   ...PILLARS.map((p) => inflate(p, 0.3)),
 ];
 
@@ -115,18 +122,24 @@ export const NAV_NODES: NavNode[] = [
   { id: "GATE_N", label: "闸机前北侧", pos: { x: 40, y: 8 } },
   { id: "GATE_C", label: "闸机前中部", pos: { x: 40, y: 15 } },
   { id: "GATE_S", label: "闸机前南侧", pos: { x: 40, y: 22 } },
+  { id: "STAIRS_TOP", label: "下楼梯入口（上层平台）", pos: STAIRS_TOP },
+  { id: "PLATFORM", label: "下层站台", pos: STAIRS_BOTTOM },
 ];
 
-export type Zone = "hall" | "concourse" | "platform";
+export type Zone = "hall" | "concourse" | "landing" | "stairs" | "platform";
 
 export function zoneOf(p: Vec): Zone {
   if (p.x < SECURITY_X) return "hall";
   if (p.x < GATE_X) return "concourse";
+  if (p.x < STAIRS_X) return "landing";
+  if (p.x < PLATFORM_X) return "stairs";
   return "platform";
 }
 
 export const ZONE_LABEL: Record<Zone, string> = {
   hall: "售票厅（未安检区）",
   concourse: "安检后大厅（闸机外）",
-  platform: "站台（闸机内）",
+  landing: "闸机后上层平台（需下楼梯）",
+  stairs: "下行楼梯（前往下层站台）",
+  platform: "下层站台",
 };

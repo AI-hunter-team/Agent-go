@@ -54,7 +54,7 @@ export const multiplierOf = (facilityId: string) => FACILITY_MULTIPLIER[facility
 export interface GuardDef {
   id: string;
   label: string;
-  /** One point = stationary; two or more = patrol back and forth. */
+  /** One point = stationary; two = straight back-and-forth; longer routes loop. */
   route: Vec[];
   facing: number;
   speed: number;
@@ -62,17 +62,18 @@ export interface GuardDef {
 }
 
 export const GUARDS: GuardDef[] = [
-  { id: "guard-A", label: "安检出口保安", route: [{ x: 30, y: 15 }], facing: 0, speed: 0, pauseSeconds: 0 },
+  {
+    id: "guard-A", label: "闸机北侧保安",
+    route: [{ x: 41, y: 3 }, { x: 41, y: 13 }],
+    facing: Math.PI / 2, speed: 0.9, pauseSeconds: 2,
+  },
   {
     id: "guard-B",
-    label: "闸机巡逻保安",
-    route: [
-      { x: 41, y: 4 },
-      { x: 41, y: 26 },
-    ],
-    facing: Math.PI / 2,
-    speed: 1.0,
-    pauseSeconds: 3,
+    label: "闸机南侧保安",
+    route: [{ x: 41, y: 27 }, { x: 41, y: 17 }],
+    facing: -Math.PI / 2,
+    speed: 0.9,
+    pauseSeconds: 2,
   },
 ];
 

@@ -14,7 +14,9 @@ test("a completed run renders a score, breakdown and export action", async () =>
   await runner.runToEnd();
   const report = runner.report();
   const html = renderToStaticMarkup(createElement(ReportSummary, { ...props, report }));
-  expect(html).toContain("通过闸机");
+  expect(html).toContain("已下楼到达站台");
+  expect(html).toContain("下楼梯");
+  expect(report.timeBreakdown.stairs).toBeCloseTo(6);
   expect(html).toContain(report.score!.toFixed(1));
   expect(html).toContain("导出报告 JSON");
   expect(JSON.parse(JSON.stringify(report)).totals.decisions).toBe(report.decisions.length);

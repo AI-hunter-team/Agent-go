@@ -11,25 +11,33 @@ export interface Guard {
   target: number;
   pauseLeft: number;
   /** Temporary attention (e.g. after hearing a complaint) overrides patrol facing. */
-  lookAt: { point: Vec; remaining: number } | null;
+  lookAt: { point: Vec; remaining: number; resumeFacing: number } | null;
 }
 
 export class GuardSystem {
-  readonly guards: Guard[] = GUARDS.map((def) => ({
-    def,
-    pos: { ...def.route[0] },
-    facing: def.facing,
-    target: def.route.length > 1 ? 1 : 0,
-    pauseLeft: 0,
-    lookAt: null,
-  }));
+  readonly guards: Guard[];
+
+  constructor(definitions: readonly GuardDef[] = GUARDS) {
+    this.guards = definitions.map((def) => ({
+      def,
+      pos: { ...def.route[0] },
+      facing: def.facing,
+      target: def.route.length > 1 ? 1 : 0,
+      pauseLeft: 0,
+      lookAt: null,
+    }));
+  }
 
   step() {
     for (const g of this.guards) {
       if (g.lookAt) {
         g.facing = angleTo(g.pos, g.lookAt.point);
         g.lookAt.remaining -= DT;
-        if (g.lookAt.remaining <= 0) g.lookAt = null;
+        if (g.lookAt.remaining <= 1e-9) {
+          // Restore the patrol heading even if an endpoint pause is still pending.
+          g.facing = g.lookAt.resumeFacing;
+          g.lookAt = null;
+        }
         continue;
       }
       if (g.def.route.length < 2) {
@@ -37,7 +45,7 @@ export class GuardSystem {
         continue;
       }
       if (g.pauseLeft > 0) {
-        g.pauseLeft -= DT;
+        g.pauseLeft = Math.max(0, g.pauseLeft - DT);
         continue;
       }
       const dest = g.def.route[g.target];
@@ -62,7 +70,12 @@ export class GuardSystem {
   /** Guards within earshot turn to look at a noise for a few seconds. Returns who reacted. */
   attract(point: Vec): Guard[] {
     const reacted = this.guards.filter((g) => dist(g.pos, point) <= RULES.complaintRadius);
-    for (const g of reacted) g.lookAt = { point: { ...point }, remaining: RULES.attentionSeconds };
+    for (const g of reacted) {
+      g.lookAt = {
+        point: { ...point }, remaining: RULES.attentionSeconds,
+        resumeFacing: g.lookAt?.resumeFacing ?? g.facing,
+      };
+    }
     return reacted;
   }
 }

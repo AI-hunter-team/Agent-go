@@ -4,9 +4,11 @@ import type {
   DecisionResult,
   NormalizedGuidance,
   Observation,
+  NpcReply,
+  CutInDialogueRequest,
 } from "../shared/types";
 import { classifyByKeywords } from "../sim/intent";
-import type { Agent, Classifier } from "./agent";
+import type { Agent, Classifier, NpcNegotiator } from "./agent";
 
 async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const res = await fetch(path, {
@@ -17,7 +19,10 @@ async function api<T>(path: string, init: { method?: string; body?: unknown } = 
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+  // NPC failures also carry their raw model response and paid usage for the run log.
+  if (!res.ok && !(path === "/api/npc/negotiate" && data?.source === "error" && data?.accepted === false)) {
+    throw new Error(data?.error ?? `HTTP ${res.status}`);
+  }
   return data as T;
 }
 
@@ -30,6 +35,7 @@ export const Api = {
   classify: (intent: string, observation: Observation) =>
     api<CreativeClassification>("/api/creative/classify", { body: { intent, observation } }),
   deleteSession: (sessionId: string) => api<null>(`/api/session/${sessionId}`, { method: "DELETE" }),
+  negotiate: (request: CutInDialogueRequest) => api<NpcReply>("/api/npc/negotiate", { body: request }),
 };
 
 /** Model-driven agent: each decision is a call to the API server, which holds in-run memory. */
@@ -56,3 +62,5 @@ export const remoteClassifier: Classifier = (intent, observation) =>
   Api.classify(intent, observation).catch(() => classifyByKeywords(intent));
 
 export const offlineClassifier: Classifier = async (intent) => classifyByKeywords(intent);
+
+export const remoteNpcNegotiator: NpcNegotiator = (request) => Api.negotiate(request);
