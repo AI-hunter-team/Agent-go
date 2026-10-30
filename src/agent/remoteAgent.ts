@@ -10,6 +10,7 @@ import type { Agent, Classifier } from "./agent";
 
 async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const res = await fetch(path, {
+    signal: AbortSignal.timeout(30_000),
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
     headers: { "content-type": "application/json" },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),

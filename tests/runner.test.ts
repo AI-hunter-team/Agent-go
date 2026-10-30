@@ -138,3 +138,39 @@ describe("GameRunner", () => {
     expect(runner.decisions.filter((d) => d.result?.text.includes("连续被拒")).length).toBeGreaterThan(0);
   });
 });
+
+test("stop ends a pending run immediately and ignores its late response", async () => {
+  let release!: (r: DecisionResult) => void;
+  const agent = new ScriptedAgent(() => new Promise((resolve) => { release = resolve; }));
+  const runner = new GameRunner(new Engine(1), agent, keywords);
+  runner.start();
+  runner.stop();
+  expect(runner.phase).toBe("ended");
+  expect(agent.disposed).toBe(true);
+  release(ok({ type: "move_to", target: "HALL_C", reason: "late" }));
+  await runner.pending;
+  expect(runner.decisions).toHaveLength(0);
+  expect(runner.engine.player.activity.kind).toBe("idle");
+});
+
+test("retry usage includes both paid attempts", async () => {
+  const agent = new ScriptedAgent((_, n) => ({
+    ...ok(n === 1 ? null : { type: "wait", seconds: 2, reason: "" }),
+    usage: { inputTokens: 100, outputTokens: 50, thinkingTokens: 20, cacheReadTokens: 10 },
+    latencyMs: 10,
+  }));
+  const runner = new GameRunner(new Engine(1), agent, keywords);
+  runner.start();
+  await runner.pending;
+  expect(runner.report().totals.outputTokens).toBe(100);
+  expect(runner.decisions[0].latencyMs).toBe(20);
+});
+
+test("classifier failure falls back without rejecting the runner promise", async () => {
+  const agent = new ScriptedAgent(() => ok({ type: "attempt_creative", intent: "飞过去", reason: "" }));
+  const runner = new GameRunner(new Engine(1), agent, async () => { throw new Error("offline"); });
+  runner.start();
+  await runner.pending;
+  expect(runner.phase).toBe("running");
+  expect(runner.decisions[0].classification?.source).toBe("keywords");
+});

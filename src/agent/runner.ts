@@ -9,6 +9,7 @@ import type {
   NormalizedGuidance,
 } from "../shared/types";
 import type { Engine } from "../sim/engine";
+import { classifyByKeywords } from "../sim/intent";
 import { summarizeObservation } from "../sim/observation";
 import { DECISION_LIMITS } from "../sim/scenario";
 import type { Agent, Classifier } from "./agent";
@@ -58,6 +59,12 @@ export class GameRunner {
     this.advance(0);
   }
 
+  /** End immediately, even when paused or waiting for an in-flight model request. */
+  stop(reason = "玩家结束了本局") {
+    this.engine.abort(reason);
+    this.finish();
+  }
+
   /** Step the world up to `steps` times, stopping early when a decision is needed. */
   advance(steps: number) {
     if (this.phase !== "running") return;
@@ -100,7 +107,23 @@ export class GameRunner {
     const t = engine.t;
 
     let result = await this.timed(turn);
-    if (!result.action && engine.status === "running") result = await this.timed({ ...turn, retry: true });
+    if (!result.action && engine.status === "running") {
+      const retry = await this.timed({ ...turn, retry: true });
+      const firstUsage = result.usage;
+      const nextUsage = retry.usage;
+      result = {
+        ...retry,
+        latencyMs: result.latencyMs + retry.latencyMs,
+        usage: firstUsage || nextUsage ? {
+          inputTokens: (firstUsage?.inputTokens ?? 0) + (nextUsage?.inputTokens ?? 0),
+          outputTokens: (firstUsage?.outputTokens ?? 0) + (nextUsage?.outputTokens ?? 0),
+          cacheReadTokens: (firstUsage?.cacheReadTokens ?? 0) + (nextUsage?.cacheReadTokens ?? 0),
+          thinkingTokens: firstUsage?.thinkingTokens == null || nextUsage?.thinkingTokens == null
+            ? null : firstUsage.thinkingTokens + nextUsage.thinkingTokens,
+        } : null,
+      };
+    }
+    if (engine.status !== "running") return;
 
     let action: AgentAction | null = result.action;
     let classification: CreativeClassification | null = null;
@@ -110,7 +133,12 @@ export class GameRunner {
     if (action) {
       this.consecutiveFailures = 0;
       if (action.type === "attempt_creative") {
-        classification = await this.classify(action.intent, observation);
+        try {
+          classification = await this.classify(action.intent, observation);
+        } catch {
+          classification = classifyByKeywords(action.intent);
+        }
+        if (engine.status !== "running") return;
         outcome = engine.applyAction(action, classification.mechanic);
       } else {
         outcome = engine.applyAction(action);
@@ -177,7 +205,7 @@ export class GameRunner {
   private finish() {
     if (this.phase === "ended") return;
     this.phase = "ended";
-    void this.agent.dispose();
+    void this.agent.dispose().catch(() => undefined);
     this.opts.onChange?.();
   }
 

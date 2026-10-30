@@ -114,6 +114,7 @@ export class ClaudeDecider {
       return fail(why, result);
     }
     session.pendingToolUseId = toolUse.id;
+    if (response.stop_reason === "max_tokens") return fail("工具调用被截断，未执行", result);
     const parsed = parseToolUse(toolUse.name, toolUse.input);
     if ("error" in parsed) return fail(parsed.error, result);
     return { ...fail("", result), action: parsed.action, error: null, latencyMs: Date.now() - started };

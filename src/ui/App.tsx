@@ -30,7 +30,8 @@ export function App() {
   const [showTrail, setShowTrail] = useState(true);
   const [, setTick] = useState(0);
 
-  const engineRef = useRef<Engine | null>(new Engine(1));
+  const engineRef = useRef<Engine | null>(null);
+  if (!engineRef.current) engineRef.current = new Engine(1);
   const runnerRef = useRef<GameRunner | null>(null);
   const optionsRef = useRef<RenderOptions>({ showVision: true, showTrail: true, thinking: false });
   const pausedRef = useRef(paused);
@@ -49,7 +50,11 @@ export function App() {
 
   // Preview the chosen seed's starting state while setting up.
   useEffect(() => {
-    if (stage === "setup" || stage === "confirm") engineRef.current = new Engine(seed);
+    if (stage === "setup" || stage === "confirm") {
+      engineRef.current = new Engine(seed);
+      optionsRef.current.thinking = false;
+      optionsRef.current.trail = [];
+    }
   }, [seed, stage]);
 
   // Main loop: advance the world in real time unless paused or the agent is thinking.
@@ -140,6 +145,7 @@ export function App() {
     runnerRef.current = runner;
     setPaused(false);
     setBusy(null);
+    optionsRef.current.trail = [];
     setStage("playing");
     runner.start();
   }, [agentKind, guidance, normalized, seed]);
@@ -228,7 +234,7 @@ export function App() {
                     onShowVision={() => setShowVision((x) => !x)}
                     showTrail={showTrail}
                     onShowTrail={() => setShowTrail((x) => !x)}
-                    onAbort={() => engine.abort("玩家结束了本局")}
+                    onAbort={() => { runner.stop(); setPaused(false); setStage("ended"); optionsRef.current.thinking = false; }}
                   />
                   <p className="now">
                     当前：{describeActivity(engine.world, p)}
