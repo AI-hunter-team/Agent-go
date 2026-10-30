@@ -107,6 +107,17 @@ export class Engine {
     }
   }
 
+  /** Raise a decision trigger from outside the world step (e.g. an action was rejected). */
+  notify(kind: Trigger["kind"], text: string) {
+    this.world.notifyPlayer(kind, text);
+    this.collect();
+  }
+
+  /** End the run from outside the world (e.g. the model is unavailable). */
+  abort(reason: string) {
+    if (this.status === "running") this.end("failed", reason);
+  }
+
   private end(status: GameStatus, reason: string | null) {
     this.status = status;
     this.failReason = reason;

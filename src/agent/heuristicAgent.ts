@@ -34,6 +34,10 @@ export class HeuristicAgent implements Agent {
     const stage: FacilityKind = !self.hasTicket ? "tvm" : !self.screened ? "security" : "gate";
     const candidates = facilities.filter((f) => f.kind === stage && f.status === "open");
 
+    if (self.activity.startsWith("正在") && self.activity.includes("办理")) {
+      return { type: "wait", seconds: 5, reason: "正在办理，等办理完成" };
+    }
+
     if (self.queue) {
       const mine = candidates.find((f) => f.id === self.queue!.facility);
       if (mine) return { type: "join_queue", facility: mine.id, reason: "当前队伍仍然合适，继续排队" };
