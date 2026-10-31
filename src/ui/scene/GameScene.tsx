@@ -107,6 +107,9 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
   const performanceState = getScenePerformance(session);
   const cinematic = performanceState.cinematic;
   const victory = useMemo(() => new VictoryCamera(), [session.generation]);
+  const activeVictory = useRef<VictoryCamera | null>(null);
+  const manualTarget = useMemo(() => new Vector3(), []);
+  const manualReady = useRef(false);
   const direction = useMemo(() => new Vector3(), []);
   const previousSettings = useRef(settings);
   // 模式按钮或回正明确表示手动接管，尺寸变化和画质重建不打断运镜。
@@ -115,33 +118,45 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
     previousSettings.current = settings;
   }, [settings, performanceState]);
   useEffect(() => {
-    if (cinematic) { const current = get().camera; victory.capture(current.position, current.getWorldDirection(direction)); }
     const active = cameras[cinematic ? "follow" : settings.mode];
-    if (active instanceof PerspectiveCamera) { active.aspect = size.width / Math.max(1, size.height); active.fov = cinematic ? 45 : 58; }
+    const current = get().camera;
+    if (cinematic && active !== current) { active.position.copy(current.position); active.quaternion.copy(current.quaternion); }
+    if (active instanceof PerspectiveCamera) {
+      active.aspect = size.width / Math.max(1, size.height);
+      // 手动观看保留当前电影焦距，避免开始拖动的一帧突然缩放。
+      if (performanceState.victoryAt === null) active.fov = 58;
+    }
     else {
       const aspect = size.width / Math.max(1, size.height);
       const halfHeight = Math.max(28, (WIDTH / 2 + HEIGHT * 0.4) / aspect); const halfWidth = halfHeight * aspect;
       active.left = -halfWidth; active.right = halfWidth; active.top = halfHeight; active.bottom = -halfHeight;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
-  }, [cameras, set, get, settings.mode, size.width, size.height, cinematic, victory, direction]);
-  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; invalidate(); }, [settings.reset, settings.shot, session.generation, follow, invalidate]);
+  }, [cameras, set, get, settings.mode, size.width, size.height, cinematic, performanceState, session.generation]);
+  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; manualReady.current = false; invalidate(); }, [settings.reset, settings.shot, session.generation, follow, invalidate]);
   useEffect(() => {
     const canvas = gl.domElement;
     /** 手动拖动从电影镜头当前位置接续，不突然跳回角色背后。 */
-    const takeControl = () => {
-      if (!performanceState.cinematic) return;
-      const camera = get().camera;
-      sampleActor(session.presentation, "player", session.alpha, pose.current);
-      const dx = camera.position.x - pose.current.x, dz = camera.position.z - pose.current.z;
-      const distance = Math.max(2.2, Math.min(9, Math.hypot(dx, dz)));
-      orbit.current = { yaw: Math.atan2(-dx, -dz) - pose.current.yaw, distance,
-        pitch: Math.asin(Math.max(-1, Math.min(1, (camera.position.y - pose.current.y - 1.9) / distance))) };
-      follow.reset(); initial.current = true; performanceState.dismissCamera();
+    const takeControl = (held: boolean) => {
+      if (performanceState.victoryAt === null) return;
+      if (performanceState.cinematic || !manualReady.current) {
+        const camera = get().camera;
+        sampleActor(session.presentation, "player", session.alpha, pose.current);
+        if (activeVictory.current === victory) manualTarget.copy(victory.target);
+        else manualTarget.set(pose.current.x, pose.current.y + 0.95, pose.current.z);
+        const dx = camera.position.x - manualTarget.x, dy = camera.position.y - manualTarget.y, dz = camera.position.z - manualTarget.z;
+        const distance = Math.max(2.2, Math.min(14, Math.hypot(dx, dy, dz)));
+        orbit.current = { yaw: Math.atan2(-dx, -dz) - pose.current.yaw, distance,
+          pitch: Math.asin(Math.max(-1, Math.min(1, dy / distance))) };
+        manualReady.current = true;
+      }
+      performanceState.interactCamera(held);
     };
     /** 记录跟随相机的拖动起点。 */
     const down = (event: PointerEvent) => {
-      if (event.button !== 0 || (settings.shot && settings.shot !== "launch") || (!performanceState.cinematic && settings.mode !== "follow")) return;
+      if (event.button !== 0 || (performanceState.victoryAt === null && settings.shot && settings.shot !== "launch") || (!performanceState.cinematic && settings.mode !== "follow")) return;
+      // 重新按住已经进入自由观看的胜利镜头时，暂停待恢复倒计时。
+      if (performanceState.victoryAt !== null && !performanceState.cinematic) performanceState.interactCamera(true);
       drag.current = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, pointer: event.pointerId };
       canvas.setPointerCapture(event.pointerId);
     };
@@ -149,32 +164,42 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
     const move = (event: PointerEvent) => {
       if (!drag.current || drag.current.pointer !== event.pointerId) return;
       if (!drag.current.moved && Math.hypot(event.clientX - drag.current.startX, event.clientY - drag.current.startY) <= 6) return;
-      drag.current.moved = true; takeControl();
+      drag.current.moved = true; takeControl(true);
       orbit.current.yaw -= (event.clientX - drag.current.x) * 0.006;
-      orbit.current.pitch = Math.max(-0.04, Math.min(0.65, orbit.current.pitch + (event.clientY - drag.current.y) * 0.004));
+      const victoryView = performanceState.victoryAt !== null;
+      orbit.current.pitch = Math.max(victoryView ? -0.15 : -0.04, Math.min(victoryView ? 1.15 : 0.65, orbit.current.pitch + (event.clientY - drag.current.y) * 0.004));
       drag.current.x = event.clientX; drag.current.y = event.clientY;
       invalidate();
     };
-    /** 结束相机拖动。 */
-    const up = () => { drag.current = null; };
+    /** 结束或取消拖动，松开后才启动四秒静置恢复。 */
+    const up = () => { drag.current = null; performanceState.releaseCamera(); invalidate(); };
     /** 缩放跟随镜头，并唤醒静止画面。 */
     const wheel = (event: WheelEvent) => {
-      if (settings.shot || (!performanceState.cinematic && settings.mode !== "follow")) return;
-      takeControl();
-      event.preventDefault(); orbit.current.distance = Math.max(2.2, Math.min(9, orbit.current.distance + event.deltaY * 0.006));
+      if ((performanceState.victoryAt === null && settings.shot) || (!performanceState.cinematic && settings.mode !== "follow")) return;
+      takeControl(!!drag.current);
+      event.preventDefault(); orbit.current.distance = Math.max(2.2, Math.min(performanceState.victoryAt === null ? 9 : 14, orbit.current.distance + event.deltaY * 0.006));
       invalidate();
     };
     canvas.addEventListener("pointerdown", down); canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("lostpointercapture", up); window.addEventListener("blur", up);
     canvas.addEventListener("wheel", wheel, { passive: false });
-    return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("wheel", wheel); drag.current = null; };
-  }, [gl, get, settings.mode, settings.shot, invalidate, performanceState, session, follow]);
+    return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("lostpointercapture", up); window.removeEventListener("blur", up); canvas.removeEventListener("wheel", wheel); drag.current = null; performanceState.releaseCamera(); };
+  }, [gl, get, settings.mode, settings.shot, invalidate, performanceState, session, victory, manualTarget]);
   useFrame((state, delta) => {
     if (performanceState.cinematic) {
       sampleActor(session.presentation, "player", session.alpha, pose.current);
+      if (activeVictory.current !== victory) {
+        const focusDistance = manualReady.current ? state.camera.position.distanceTo(manualTarget) : 4.2;
+        victory.capture(state.camera.position, state.camera.getWorldDirection(direction), performanceState.victoryTime, (state.camera as PerspectiveCamera).fov ?? 45, focusDistance);
+        activeVictory.current = victory;
+      }
       victory.update(pose.current, performanceState.victoryTime, size.width / Math.max(1, size.height), reducedMotion, assetRotation);
-      state.camera.position.copy(victory.position); state.camera.lookAt(victory.target); return;
+      const camera = state.camera as PerspectiveCamera;
+      if (Math.abs(camera.fov - victory.fov) > 0.001) { camera.fov = victory.fov; camera.updateProjectionMatrix(); }
+      camera.position.copy(victory.position); camera.lookAt(victory.target); return;
     }
+    activeVictory.current = null;
     const { target, desired, eye, anchor } = vectors;
     if (settings.mode === "overview") {
       state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
@@ -192,6 +217,18 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
       return;
     }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
+    if (performanceState.victoryAt !== null && manualReady.current) {
+      // 胜利自由观看使用球面环绕，可完整转身、抬高/降低及缩放；保留碰撞和地面约束。
+      const yaw = pose.current.yaw + orbit.current.yaw, horizontal = orbit.current.distance * Math.cos(orbit.current.pitch);
+      desired.set(manualTarget.x - Math.sin(yaw) * horizontal,
+        Math.max(pose.current.y + 0.25, manualTarget.y + Math.sin(orbit.current.pitch) * orbit.current.distance),
+        manualTarget.z - Math.cos(yaw) * horizontal);
+      desired.y = Math.max(desired.y, platformElevation(desired.x) + 0.25);
+      // 新站台边缘外是列车与轨道，自由缩放也不把镜头推进车体内。
+      const edgeFraction = desired.x > WIDTH - 0.3 ? (WIDTH - 0.3 - manualTarget.x) / (desired.x - manualTarget.x) : 1;
+      const fraction = Math.min(cameraFraction(manualTarget, desired), Math.max(0.05, edgeFraction));
+      state.camera.position.lerpVectors(manualTarget, desired, fraction); state.camera.lookAt(manualTarget); return;
+    }
     target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
     anchor.copy(target);
     if (settings.shot && settings.shot !== "launch") {
@@ -335,7 +372,7 @@ function Contents(props: SceneProps) {
       const rect = gl.domElement.getBoundingClientRect();
       return { generation: session.generation, t: session.engine.t, status: session.engine.status, displayTime: performance.time,
         visible: performance.visible, dance: performance.dance, danceTime: performance.danceTime, previousDance: performance.previousDance, victoryTime: performance.victoryTime, greetingTime: performance.greetingTime,
-        cinematic: performance.cinematic, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
+        cinematic: performance.cinematic, cameraResumeIn: performance.cameraResumeIn, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
         position: root?.position.toArray(), bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
     };
     const target = window as typeof window & { victoryInspect?: typeof inspect }; target.victoryInspect = inspect;
