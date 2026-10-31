@@ -44,10 +44,11 @@ export class Engine {
   /** Time of arrival at the lower platform in world seconds. */
   score: number | null = null;
   readonly trail: TrailPoint[] = [];
-  readonly timeBreakdown: TimeBreakdown = { walking: 0, queueing: 0, service: 0, waiting: 0, creative: 0, idle: 0, stairs: 0 };
+  readonly timeBreakdown: TimeBreakdown = { walking: 0, queueing: 0, service: 0, waiting: 0, creative: 0, idle: 0, stairs: 0, escalator: 0, distraction: 0 };
 
   private triggers: Trigger[] = [];
   private knownStatus = new Map<string, FacilityStatus>();
+  private seenAttractions = new Set<string>();
   private quietSeconds = 0;
   /** A wait requested while still walking or queueing: fires wait_done without interrupting. */
   private wakeAt: number | null = null;
@@ -58,6 +59,7 @@ export class Engine {
     this.npcs = new NpcDirector(this.world, buildScenario(seed, this.settings));
     this.creative = new CreativeSystem(this.world, this.guards);
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
+    this.world.transit.startCrowd();
     this.recordTrail();
     this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内进入站台。");
     this.perceive();
@@ -95,7 +97,7 @@ export class Engine {
       return;
     }
     if (w.t >= this.settings.timeLimitSeconds - 1e-9) {
-      this.end("failed", `超时：${this.settings.timeLimitSeconds} 秒内未下楼梯到达站台`);
+      this.end("failed", `超时：${this.settings.timeLimitSeconds} 秒内未下行到达站台`);
       return;
     }
 
@@ -105,7 +107,7 @@ export class Engine {
     }
     this.perceive();
     this.collect();
-    if (this.triggers.length === 0 && this.player.activity.kind === "queued") {
+    if (this.triggers.length === 0 && ["queued", "escalator_queue"].includes(this.player.activity.kind)) {
       this.quietSeconds += DT;
       if (this.quietSeconds >= RULES.periodicCheckSeconds - 1e-9) {
         w.notifyPlayer("periodic", `已在队伍中 ${RULES.periodicCheckSeconds} 秒没有新情况，可重新评估`);
@@ -128,19 +130,22 @@ export class Engine {
   private end(status: GameStatus, reason: string | null) {
     this.status = status;
     this.failReason = reason;
+    this.world.finishAttention(this.player, "本局结束");
     this.recordTrail();
-    this.world.log(status === "success" ? "success" : "failed", reason ?? `已下楼梯进入站台，用时 ${this.world.t} 秒`, true);
+    this.world.log(status === "success" ? "success" : "failed", reason ?? `已下行进入站台，用时 ${this.world.t} 秒`, true);
   }
 
   /** Attribute this step's time to what the player was doing when it began. */
   private account(kind: Person["activity"]["kind"]) {
     const tb = this.timeBreakdown;
-    if (kind === "walking" || kind === "to_queue") tb.walking += DT;
-    else if (kind === "queued") tb.queueing += DT;
+    if (kind === "walking" || kind === "to_queue" || kind === "to_escalator") tb.walking += DT;
+    else if (kind === "queued" || kind === "escalator_queue") tb.queueing += DT;
     else if (kind === "service") tb.service += DT;
     else if (kind === "waiting") tb.waiting += DT;
     else if (kind === "creative") tb.creative += DT;
     else if (kind === "stairs") tb.stairs = (tb.stairs ?? 0) + DT;
+    else if (kind === "escalator") tb.escalator = (tb.escalator ?? 0) + DT;
+    else if (kind === "distracted") tb.distraction = (tb.distraction ?? 0) + DT;
     else if (kind === "idle") tb.idle += DT;
     if (Math.round(this.world.t * 10) % 5 === 0) this.recordTrail();
   }
@@ -153,6 +158,11 @@ export class Engine {
 
   /** Notice status changes of facilities that are currently in view. */
   private perceive() {
+    for (const a of this.observe().attractions ?? []) {
+      if (this.seenAttractions.has(a.id)) continue;
+      this.seenAttractions.add(a.id);
+      this.world.notifyPlayer("attraction_seen", `注意到${a.label}：${a.cue} 可以忽略，也可自主决定关注。`);
+    }
     for (const f of visibleFacilities(this.world, this.player.pos)) {
       const known = this.knownStatus.get(f.def.id);
       this.knownStatus.set(f.def.id, f.status);
@@ -198,6 +208,7 @@ export class Engine {
       if (p.activity.kind === "service") return { ok: false, text: "正在办理中，请等办理完成" };
       if (p.activity.kind === "creative") return { ok: false, text: "上一个行动尚未完成" };
       if (p.activity.kind === "stairs") return { ok: false, text: "正在下楼梯，请等到达站台" };
+      if (p.activity.kind === "escalator") return { ok: false, text: "正在乘扶梯，请等到达站台" };
     }
     this.wakeAt = null;
 
@@ -241,6 +252,14 @@ export class Engine {
         const err = w.descendStairs(p);
         return err ? { ok: false, text: err } : { ok: true, text: "开始下楼梯，约 6 秒后到达下层站台" };
       }
+      case "take_escalator": {
+        const err = w.transit.join(p);
+        return err ? { ok: false, text: err } : { ok: true, text: "前往扶梯队尾候梯；可离队换走楼梯" };
+      }
+      case "inspect_attraction": {
+        const err = w.inspectAttraction(p, action.attraction, action.mode);
+        return err ? { ok: false, text: err } : { ok: true, text: action.mode === "glance" ? "减速查看 3 秒，可主动恢复赶路" : "停留查看 6 秒，可主动离开" };
+      }
       case "request_cut_in":
         return { ok: false, text: "请通过 NPC 协商流程请求让位" };
       case "attempt_creative": {
@@ -251,6 +270,10 @@ export class Engine {
   }
 
   private leaveIfQueued(): string {
+    if (this.player.activity.kind === "escalator_queue" || this.player.activity.kind === "to_escalator") {
+      this.world.leaveQueue(this.player);
+      return "已离开扶梯队伍（失去位次）；";
+    }
     const q = this.world.queuePosition(this.player);
     if (!q) return "";
     this.world.removeFromQueue(this.player);

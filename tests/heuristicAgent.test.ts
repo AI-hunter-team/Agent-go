@@ -3,6 +3,7 @@ import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { Engine } from "../src/sim/engine";
 import { classifyByKeywords } from "../src/sim/intent";
 import { LEGACY_GAME_SETTINGS, type GameSettings } from "../src/shared/gameSettings";
+import { STAIRS_TOP } from "../src/sim/layout";
 
 async function play(seed: number, settings?: Readonly<GameSettings>) {
   const engine = new Engine(seed, settings);
@@ -36,16 +37,16 @@ describe("offline heuristic agent", () => {
     expect(engine.status).toBe("success");
   });
 
-  test("new fixed crowd can time out orderly play while retaining a legal route on other seeds", async () => {
+  test("the dense default can time out while a supported longer deadline allows orderly play", async () => {
     const difficult = await play(1);
     expect(difficult.engine.status).toBe("failed");
     expect(difficult.engine.t).toBe(120);
     expect(difficult.engine.failReason).toContain("超时");
     expect(difficult.engine.creative.violations).toHaveLength(0);
-    // Seed 27 completes with fixture-aware queue detours; seed 28's changed crowd now times out.
-    const possible = await play(27);
+    // The integrated map includes physical crowd avoidance; this checks the supported 3-minute deadline.
+    const possible = await play(1, { timeLimitSeconds: 180, extraQueuePeople: 3 });
     expect(possible.engine.status).toBe("success");
-    expect(possible.engine.t).toBeLessThan(120);
+    expect(possible.engine.t).toBeLessThan(180);
     expect(possible.engine.creative.violations).toHaveLength(0);
   });
 
@@ -54,8 +55,8 @@ describe("offline heuristic agent", () => {
     const observation = engine.observe();
     Object.assign(observation.self, { passedGate: true, position: { x: 45.4, y: 25 } });
     const { action } = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
-    expect(action).toMatchObject({ type: "move_to", target: "STAIRS_TOP" });
-    observation.self.position = { x: 48, y: 15 };
+    expect(action).toMatchObject({ type: "move_to", target: "LANDING_C" });
+    observation.self.position = { ...STAIRS_TOP };
     const atEntrance = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
     expect(atEntrance.action).toMatchObject({ type: "descend_stairs" });
     observation.self.activity = "正在下楼梯（剩余 3 秒）";

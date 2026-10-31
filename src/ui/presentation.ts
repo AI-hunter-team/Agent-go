@@ -56,7 +56,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
       const limit = Math.max(0, engine.t - previous!.t) * 4;
       yaw = old.yaw + Math.max(-limit, Math.min(limit, turn));
     }
-    const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving ? "walk" : "idle";
+    const motion: Motion = a.kind === "escalator" ? "idle" : a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" || (a.kind === "distracted" && !a.resume) ? "interact" : moving ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
       elevation: platformElevation(person.pos.x),

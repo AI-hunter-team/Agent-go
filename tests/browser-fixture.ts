@@ -9,6 +9,7 @@ import { ModelConfigStore } from "../server/modelConfig";
 import { randomUUID } from "node:crypto";
 
 const agents = new WeakMap<Session, HeuristicAgent>();
+const attentionDone = new WeakSet<Session>();
 const llm: LlmService = {
   model: "浏览器验收伪模型（无费用）",
   /** 生成固定的赛前指导，支持故障验收开关。 */
@@ -43,6 +44,22 @@ const llm: LlmService = {
     let agent = agents.get(session);
     if (!agent) { agent = new HeuristicAgent(); agents.set(session, agent); }
     const result = await agent.decide(turn);
+    const self = turn.observation.self;
+    // Explicit opt-in acceptance modes; never used by the production model service.
+    if (session.guidance.includes("ATTENTION") && self.screened && !self.passedGate && !self.queue && !self.activity.includes("办理") && !attentionDone.has(session)) {
+      const toy = turn.observation.attractions?.find(a => a.id === "TOYS");
+      if (toy) {
+        if (toy.canLinger) {
+          result.action = { type: "inspect_attraction", attraction: toy.id, mode: "linger", reason: "伪模型验收：自主停留查看玩具" };
+          attentionDone.add(session);
+        } else result.action = { type: "move_to", target: toy.id, reason: "伪模型验收：主动靠近玩具机" };
+      }
+    }
+    if (session.guidance.includes("ESCALATOR") && self.passedGate) {
+      if (/正在乘扶梯|正在候梯|正在走向扶梯队尾/.test(self.activity) || turn.lastResult?.text.includes("候梯区已满")) result.action = { type: "wait", seconds: 2, reason: "伪模型验收：保持候梯或乘坐" };
+      else if (Math.hypot(self.position.x - 61, self.position.y - 22) <= .8) result.action = { type: "take_escalator", reason: "伪模型验收：选择扶梯" };
+      else result.action = { type: "move_to", target: "ESCALATOR_TOP", reason: "伪模型验收：前往扶梯" };
+    }
     if (session.guidance.includes("JUMP") && turn.observation.self.screened) {
       const self = turn.observation.self;
       if (self.position.x >= 42.3) result.action = { type: "attempt_creative", intent: "翻越闸机", reason: "伪模型动作演示" };
