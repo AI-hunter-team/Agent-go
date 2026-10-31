@@ -1,6 +1,6 @@
 # Docker Compose 部署与配置
 
-适用版本：当前检出的开发版本。既有 main 已包含 Docker/Compose 与 3D 界面；Responses 和思考设置来自 [RESPONSES-001](tasks/RESPONSES-001.md)，其合入状态与验证以任务记录为准，不能假定远端 main 已包含本地改动。
+适用版本：当前 `main`，已包含 Docker/Compose、3D 界面及 [RESPONSES-001](tasks/RESPONSES-001.md) 的 Responses 与思考设置（经 PR #22 合入）。
 
 ## 1. 准备环境
 
@@ -72,6 +72,8 @@ Compose 会读取 `.env` 并把明确列出的模型变量传给容器；文件�
 ```bash
 docker compose up -d --force-recreate --wait
 ```
+
+Compose 默认开启脱敏调试日志（`DEBUG_LOG_ENABLED=1`），写入容器内 `/app/logs` 并挂载为命名卷 `debug-logs`；在 `.env` 设置 `DEBUG_LOG_ENABLED=0` 后重建容器可关闭。
 
 `APP_PORT=8081` 会把访问地址改为 `http://localhost:8081`。容器内部端口固定为 8787，本地开发配置中的 `PORT` 不会改变网页映射端口。
 

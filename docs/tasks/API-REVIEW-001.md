@@ -7,7 +7,7 @@
 - 基线：2026-10-31（Asia/Shanghai），当前工作区 `main`，`633f941783478b242fbd7f9cd530cf1a887fd5b1`；未 fetch，远端最新状态未核实。
 - 路径边界：只新增本简报、`docs/validation/API-REVIEW-001.md`，追加 `PROGRESS.md`、`TODO.md`。排除业务代码、配置、依赖、中央记录、构建产物；保留已有未提交记录。
 - 依赖及授权：用户要求接口调查与建议；不需要凭据，不调用真实模型，不提交或推送。只读探索已结束后串行更新记录。
-- 依据：现行[开发流程](../DEVELOPMENT.md)、[模型客户端](../../server/openai.ts)、[供应商选择](../../server/llm.ts)、[会话](../../server/sessions.ts)和 [OpenAI 官方迁移指南](https://developers.openai.com/api/docs/guides/migrate-to-responses)。
+- 依据：现行[开发流程](../DEVELOPMENT.md)、[模型客户端](https://github.com/AI-hunter-team/Agent-go/blob/44e2230322c7fdddf33cbd451ca5a6a5436dff70/server/openai.ts)（`server/openai.ts` 已在 `3e8080d` 统一 Responses 时删除，此处为删除前版本）、[供应商选择](../../server/llm.ts)、[会话](../../server/sessions.ts)和 [OpenAI 官方迁移指南](https://developers.openai.com/api/docs/guides/migrate-to-responses)。
 
 ## 结论与交接
 
