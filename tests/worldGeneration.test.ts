@@ -23,6 +23,8 @@ describe("generated station contracts",()=>{
    expect(new Vector3(entry.inward.x,0,entry.inward.y).transformDirection(dock.matrix).distanceTo(new Vector3(0,0,-1))).toBeLessThan(1e-10);
    expect(d.generation.fallback).toBe(false);expect(d.generation.emptyRouteSeconds).toBeLessThanOrEqual(90);
    expect(d.floors.map(f=>f.elevation)).toEqual([0,-6]);expect(d.entrances).toHaveLength(2);for(const en of d.entrances!){expect(d.layout.zoneOf(en.bottom)).toBe("hall");expect(en.top.elevation).toBe(4);expect(en.bottom.elevation).toBe(0);}expect(d.details).toHaveLength(8);
+   expect(new Set(d.props?.map(p=>p.id)).size).toBe(d.props?.length);
+   for(const p of d.props??[]){if(p.body)expect(d.layout.solids).toContainEqual(p.body);expect(Number.isFinite(p.elevation)).toBe(true);}
    for(const [kind,min,max] of [["tvm",3,5],["security",3,4],["gate",4,8]] as const){const n=d.layout.FACILITIES.filter(f=>f.kind===kind).length;expect(n).toBeGreaterThanOrEqual(min);expect(n).toBeLessThanOrEqual(max);}
    for(const n of d.layout.RAILING_APPROACHES){expect(d.layout.zoneOf(n.pos)).toBe("hall");expect(d.layout.atRailing(n.pos)).toBe(true);}
    expect(d.layout.platformAxis?.center).toBeDefined();

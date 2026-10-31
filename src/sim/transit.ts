@@ -18,7 +18,7 @@ export class TransitSystem {
 
   slot(index: number) {
     const spacing = Math.max(1, QUEUE_SPACING);
-    if(this.world.definition.generatorVersion==="metro-v1") {
+    if(this.world.definition.generatorVersion!=="legacy-v0") {
       const {ESCALATOR_TOP:top,ESCALATOR_BOTTOM:bottom}=this.world.layout,length=Math.hypot(bottom.x-top.x,bottom.y-top.y);
       const dx=(bottom.x-top.x)/length,dy=(bottom.y-top.y)/length,straight=Math.min(index,4)*spacing,turn=Math.max(0,index-4)*spacing;
       return {...top,x:top.x-dx*straight-dy*turn,y:top.y-dy*straight+dx*turn};
@@ -96,7 +96,7 @@ export class TransitSystem {
   routeNpc(p: Person) {
     if (!p.transitRoute) p.transitRoute = this.rng.chance(p.kind === "hurried" ? .25 : .7) ? "escalator" : "stairs";
     if (p.transitRoute === "escalator" && this.escalatorIsCrowded(p.id)) p.transitRoute = "stairs";
-    const top = p.transitRoute === "escalator" ? (this.world.definition.generatorVersion === "metro-v1" ? this.world.layout.ESCALATOR_APPROACH : { x: this.world.layout.ESCALATOR_TOP.x, y: this.world.layout.ESCALATOR_TOP.y + 1.2 }) : this.world.layout.STAIRS_TOP;
+    const top = p.transitRoute === "escalator" ? (this.world.definition.generatorVersion !== "legacy-v0" ? this.world.layout.ESCALATOR_APPROACH : { x: this.world.layout.ESCALATOR_TOP.x, y: this.world.layout.ESCALATOR_TOP.y + 1.2 }) : this.world.layout.STAIRS_TOP;
     if (dist(p.pos, top) > (p.transitRoute === "escalator" ? .2 : STAIRS_REACH)) {
       this.world.walkTo(p, top, p.transitRoute === "escalator" ? "扶梯入口" : "楼梯入口");
     } else if (p.transitRoute === "escalator") {
@@ -122,7 +122,7 @@ export class TransitSystem {
       this.nextCrowdAt = w.t + this.crowdInterval * this.rng.range(.8, 1.2);
       if (this.approachingCount() < ESCALATOR_CAPACITY - 1) {
         const top=w.layout.ESCALATOR_TOP,bottom=w.layout.ESCALATOR_BOTTOM,len=Math.hypot(bottom.x-top.x,bottom.y-top.y),dx=(bottom.x-top.x)/len,dy=(bottom.y-top.y)/len;
-        const pos = w.definition.generatorVersion==="metro-v1"?{...top,x:top.x-dx*3-dy*3,y:top.y-dy*3+dx*3}:{ x: this.slot(this.queue.length).x, y: 25 };
+        const pos = w.definition.generatorVersion!=="legacy-v0"?{...top,x:top.x-dx*3-dy*3,y:top.y-dy*3+dx*3}:{ x: this.slot(this.queue.length).x, y: 25 };
         const kind = this.rng.pick(["normal", "elderly", "luggage"] as const);
         const bodies = w.collisionBodies("").map(body => ({ ...body, from: undefined }));
         if (this.world.spatial.clearOfScenery(pos, pos, personRadius(kind)) && this.world.spatial.clearOfPeople(pos, pos, personRadius(kind), bodies)) {
@@ -168,9 +168,9 @@ export class TransitSystem {
       const duration = a.duration ?? ESCALATOR_SECONDS;
       const progress = (duration - remaining) / duration;
       const next = { x: this.world.layout.ESCALATOR_TOP.x + (this.world.layout.ESCALATOR_BOTTOM.x - this.world.layout.ESCALATOR_TOP.x) * progress, y: this.world.layout.ESCALATOR_TOP.y + (this.world.layout.ESCALATOR_BOTTOM.y-this.world.layout.ESCALATOR_TOP.y)*progress };
-      if (this.world.definition.generatorVersion!=="metro-v1" && !this.world.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.world.collisionBodies(p.id))) return true;
+      if (this.world.definition.generatorVersion==="legacy-v0" && !this.world.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.world.collisionBodies(p.id))) return true;
       a.remaining = remaining;
-      p.pos = {...next, ...(this.world.definition.generatorVersion==="metro-v1"?{floorId:"transit:escalator",elevation:-6*progress}:{})};
+      p.pos = {...next, ...(this.world.definition.generatorVersion!=="legacy-v0"?{floorId:"transit:escalator",elevation:-6*progress}:{})};
       if (a.remaining <= 1e-9) {
         p.pos = { ...this.world.layout.ESCALATOR_BOTTOM };
         p.onPlatform = true;

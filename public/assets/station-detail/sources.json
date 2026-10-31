@@ -1,0 +1,9 @@
+{
+  "source": "Original procedural metro fixtures, leaf geometry, graphic layouts and PBR recipes. No third-party art.",
+  "generatedFrom": [
+    "src/assets/station-detail/",
+    "src/assets/world-surfaces/",
+    "scripts/station-detail/"
+  ],
+  "thirdPartyAssets": []
+}

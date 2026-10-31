@@ -1,9 +1,12 @@
+import { createDetailAsset, detailMaterials } from "../../assets/station-detail/models";
 import { Group } from "three";
 import type { DetailPlacement } from "../../shared/world";
 import type { GeneratedPalette } from "./generatedSurfaces";
 import { SurfaceBuilder } from "./surfaceGeometry";
 
 export function createGeneratedProp(d: Pick<DetailPlacement, "family" | "variant">, p: GeneratedPalette): Group {
+  const replacements:Partial<Record<DetailPlacement['family'],string>>={platform:'bench-sage',commercial:'vending',security:'security-table'};
+  const replacement=replacements[d.family];if(replacement){const extra=detailMaterials(p),root=createDetailAsset(replacement,d.variant,p,extra);root.userData.detailOwnedMaterials=Object.values(extra);return root;}
   const b = new SurfaceBuilder(), variant = d.variant === 1;
   if (d.family === "platform") {
     // Slatted metal seat, back, legs and armrests; no solid block under passengers.

@@ -15,6 +15,7 @@ const params=new URLSearchParams(location.search),viewport=el("viewport"),stage=
 let mode:ViewMode=(["room","asset","material"] as const).find(v=>v===params.get("mode"))??"room";
 let view:RoomView=ROOM_VIEWS.find(v=>v.id===params.get("view"))?.id??"overview";
 let selected=EXHIBITS.find(e=>e.id===params.get("asset"))??EXHIBITS[0],surface:SurfaceName=SURFACES.find(s=>s.id===params.get("surface"))?.id??"stone";
+let propDebugVisible=false;
 let variant=0,channel:MaterialChannel="lit",picked:Exhibit|undefined,highlight:BoxHelper|undefined;
 let kit:StationKit|undefined,palette:GeneratedPalette|undefined,localKit:ReturnType<typeof localStationKit>|undefined;
 let room:ReturnType<typeof assembledRoom>|undefined,model:ModelHandle|undefined,formal=false,loading=false,disposed=false;
@@ -65,7 +66,7 @@ function catalog(){
 function inspector(){
   const entry=mode==="asset"?selected:picked;
   el("room-options").hidden=mode!=="room";el("roof").parentElement!.hidden=mode==="room"&&view==="platform";
-  el("variant-options").hidden=mode!=="asset"||selected.kind!=="detail";
+  el("variant-options").hidden=mode!=="asset"||!["detail","prop","cluster"].includes(selected.kind);
   el("facility-options").hidden=!entry||!(["ticket-machine","security-arch","fare-gate"].includes(entry.id));
   el("motion-options").hidden=!entry||!(entry.id==="fare-gate"||entry.id==="control-door"||(mode==="asset"&&entry.kind==="train"));
   el("motion-title").textContent=entry?.kind==="train"?"车门开合":entry?.id==="control-door"?"出口门开合":"闸门开合";
@@ -112,7 +113,7 @@ function display(reset=true){
   if(palette&&kit){
     if(mode==="room"&&room){room.setView(view,el<HTMLInputElement>("roof").checked,el<HTMLInputElement>("labels").checked);studio.scale.set(140,1,100);studio.position.set(36,-7.66,18);if(reset){if(view==="overview"){room.root.updateMatrixWorld(true);move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));}else move(room.views[view]);}}
     else{
-      model=mode==="asset"?exhibitModel(selected,palette,kit,variant):materialStudy(palette,surface,channel);content.add(model.root);
+      model=mode==="asset"?exhibitModel(selected,palette,kit,variant):materialStudy(palette,surface,channel);content.add(model.root);const debug=model.root.getObjectByName("prop-debug");if(debug)debug.visible=propDebugVisible;
       const box=new Box3().setFromObject(model.root),size=box.getSize(new Vector3());studio.scale.set(Math.max(9,size.x+7),1,Math.max(8,size.z+6));studio.position.set(0,-.17,0);
       if(reset)fit(model.root);
     }
@@ -186,4 +187,5 @@ viewport.addEventListener("keydown",e=>{if(e.key==="Home"){e.preventDefault();el
 window.addEventListener("pagehide",event=>{if(event.persisted){if(frame!==undefined)cancelAnimationFrame(frame);frame=undefined;return;}disposed=true;if(frame!==undefined)cancelAnimationFrame(frame);controls?.dispose();cleanupAssets();environment?.dispose();studio.geometry.dispose();studioMaterial.dispose();grid.geometry.dispose();grid.material.dispose();Object.values(stateMaterials).forEach(m=>m.dispose());renderer?.dispose();});
 window.addEventListener("pageshow",event=>{if(event.persisted){lastFrame=performance.now();resize();invalidate();}});
 Object.assign(window,{showroomInspect:()=>({mode,view,asset:selected.id,surface,variant,channel,formal,ready:!!palette&&!!room,worldHash:room?.definition.layoutHash,camera:camera.position.toArray(),target:controls?.target.toArray(),catalogue:EXHIBITS.length,materials:SURFACES.length,upperVisible:room?.root.getObjectByName("concourse-exhibit")?.visible,geometry:renderer?.info.memory.geometries,textures:renderer?.info.memory.textures,drawCalls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles,bounds:model?{min:new Box3().setFromObject(model.root).min.toArray(),max:new Box3().setFromObject(model.root).max.toArray()}:null})});
+const debugLabel=document.createElement('label'),debugCheckbox=document.createElement('input');debugCheckbox.type='checkbox';debugLabel.append(debugCheckbox,' 显示占地 / 使用空间 / 锚点');el('variant-options').append(debugLabel);debugCheckbox.onchange=()=>{propDebugVisible=debugCheckbox.checked;const debug=model?.root.getObjectByName('prop-debug');if(debug)debug.visible=propDebugVisible;invalidate();};
 heading();catalog();inspector();setup();

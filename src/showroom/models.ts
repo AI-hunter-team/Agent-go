@@ -1,3 +1,8 @@
+import { propDebug } from "./propDebug";
+import { STATION_PROPS } from "../shared/stationProps";
+import { createDetailAsset, detailMaterials } from "../assets/station-detail/models";
+import { propGraphic } from "../assets/station-detail/graphics";
+import { stationDetailScene } from "../ui/scene/stationDetailScene";
 import { Box3, CanvasTexture, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, SphereGeometry, SRGBColorSpace, Vector3, type Object3D } from "three";
 import { createControlRoomAsset, createControlRoomSuite, disposeControlAsset, type ControlAsset } from "../ui/scene/controlRoomModels";
 import { ASSETS, createAsset, makeMaterials } from "../assets/station-kit";
@@ -45,7 +50,21 @@ export function localStationKit(p: GeneratedPalette): StationKit & { dispose():v
 
 export function exhibitModel(entry: Exhibit, p: GeneratedPalette, kit: StationKit, variant=0): ModelHandle {
   let root:Group,dispose:()=>void;
-  if(entry.kind==="control"){
+  if(entry.kind==='prop'){
+    const extra=detailMaterials(p);root=kit.models.get('detail-'+entry.ref+'-'+variant)?.clone(true)??createDetailAsset(entry.ref,variant,p,extra);
+    const graphic=propGraphic(entry.ref,variant);if(graphic){const a=STATION_PROPS.find(a=>a.id===entry.ref)!;graphic.mesh.scale.setScalar(Math.min(1.4,a.size[0]*.85));graphic.mesh.position.set(0,a.size[1]*.75,a.size[2]/2+.02);root.add(graphic.mesh);}
+    const debug=propDebug(entry.ref);root.add(debug.root);const borrowed=!!kit.models.get('detail-'+entry.ref+'-'+variant);dispose=()=>{debug.root.removeFromParent();debug.dispose();if(!borrowed)disposeSurfaceGeometry(root);graphic?.dispose();Object.values(extra).forEach(m=>m.dispose());};
+  }else if(entry.kind==='cluster'){
+    const d=generateWorld(1),sets:Record<string,[string,number,number,number][]>={
+ entrance:[['station-map',-1.8,0,1],[variant?'fare-map':'notice-board',0,0,1],[variant?'bin-double':'bin-slim',1.8,.5,0],[variant?'plant-square':'plant-round',-2,.9,0]],
+ convenience:[['vending',-1.7,0,0],['charging',-.7,0,0],[variant?'flower-cabinet':'locker',.6,0,0],['bin-double',2,.2,0]],
+ rest:[[variant?'bench-sage':'bench-metal',0,0,0],[variant?'plant-square':'plant-round',-1.9,0,0],['plant-box',1.9,0,0],['lightbox',0,-.7,1.2]],
+ security:[['security-table',0,0,0],['staff-chair',-1.2,0,0],[variant?'barrier-store':'storage-cabinet',1.5,0,0]],
+ platform:[['screen-door',-1.6,-1.2,0],['screen-door',0,-1.2,0],['screen-door',1.6,-1.2,0],['queue-mark',0,-.2,.01],['platform-display',0,-1.2,2.8],[variant?'bench-sage':'bench-metal',0,1,0]],
+ maintenance:[['equipment-door',0,-.5,0],[variant?'aed':'fire-cabinet',-1.3,-.5,.7],[variant?'barrier-store':'cleaning-cart',1.5,.4,0],['mop-bucket',2.2,.4,0],['wet-sign',2.5,-.3,0]]};
+    const props=sets[entry.ref].map(([assetId,x,y,elevation],i)=>({id:'sample-'+i,assetId,variant,pos:{x,y,floorId:'concourse' as const},yaw:0,elevation,cluster:'rest' as const,body:null,useSpace:null}));
+    const scene=stationDetailScene({...d,generatorVersion:'metro-v1',props},p,kit);root=scene.root;const b=new SurfaceBuilder();b.box(p.stone,[6,.1,4],[0,-.05,.5]);b.box(p.wall,[6,3.5,.15],[0,1.75,-.9]);const architecture=b.finish('sample-architecture');root.add(architecture);dispose=()=>{scene.dispose();disposeSurfaceGeometry(architecture);};
+  }else if(entry.kind==="control"){
     root=entry.ref==="suite"?createControlRoomSuite(p):createControlRoomAsset(entry.ref as ControlAsset,p,true);dispose=()=>disposeControlAsset(root);
   }else if(entry.kind==="kit"){
     const source=kit.models.get(entry.ref);if(!source)throw new Error(`未找到素材：${entry.label}`);
@@ -119,6 +138,7 @@ export function assembledRoom(kit:StationKit,p:GeneratedPalette,d:WorldDefinitio
   }
   const room=d.details.find(v=>v.family==="maintenance")!.body!,roomBuilder=new SurfaceBuilder();
   roomBuilder.box(p.wall,[room.w,6,room.h],[room.x+room.w/2,3,room.y+room.h/2]);upper.add(roomBuilder.finish("equipment-room"));cleanup.push(()=>disposeSurfaceGeometry(upper.getObjectByName("equipment-room")!));
+  const details=stationDetailScene(d,p,kit);upper.add(details.upper);lower.add(details.lower);cleanup.push(details.dispose);
   const platform=createGeneratedPlatform(d,p,true);tag(platform.root.getObjectByName("generated-metro-trains")!,"metro-head");lower.add(platform.root);cleanup.push(platform.dispose);
   for(const escalator of [false,true]){
     const top=escalator?l.ESCALATOR_TOP:l.STAIRS_TOP,bottom=escalator?l.ESCALATOR_BOTTOM:l.STAIRS_BOTTOM;

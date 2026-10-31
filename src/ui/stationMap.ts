@@ -43,6 +43,7 @@ export function stationAtlas(world:WorldDefinition):StationAtlas {
     for(const [i,bounds] of l.PILLARS.entries())addShape(upper.id,{id:`pillar:${i}`,kind:"pillar",bounds});
   }
   for(const d of world.details)if(d.body)addShape(d.pos.floorId??upper.id,{id:d.id,kind:"detail",bounds:d.body});
+  for(const p of world.props??[])if(p.body)addShape(p.pos.floorId??upper.id,{id:p.id,kind:"detail",bounds:p.body});
   for(const f of l.FACILITIES)addMarker({...point(f.pos,upper.id),id:f.id,label:f.label,kind:f.kind});
   for(const a of l.ATTRACTIONS)addMarker({...point(a.pos,upper.id),id:a.id,label:a.label,kind:"service"});
   if(!legacy){

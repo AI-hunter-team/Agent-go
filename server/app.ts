@@ -1,4 +1,4 @@
-import { generateWorld, publicMap } from "../src/sim/worldDefinition";
+import { publicMap, restoreWorld } from "../src/sim/worldDefinition";
 import type { WorldDescriptor } from "../src/shared/world";
 import { resolveLoadout } from "../src/shared/interaction";
 import type { ActionPlan, BossContext, NpcDialogueRequest, NpcResponse } from "../src/shared/types";
@@ -393,6 +393,6 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
 
 function requestedMap(seed:number, world?:WorldDescriptor) {
   if(world===undefined)return undefined;
-  if(!world||Object.keys(world).some(k=>!["generatorVersion","layoutHash"].includes(k))||world.generatorVersion!=="metro-v1")throw new Error("未知世界版本");
-  const d=generateWorld(seed);if(d.layoutHash!==world.layoutHash)throw new Error("地图摘要不一致");return publicMap(d);
+  if(!world||Object.keys(world).some(k=>!["generatorVersion","layoutHash"].includes(k))||!["metro-v1","metro-v2"].includes(world.generatorVersion))throw new Error("未知世界版本");
+  const d=restoreWorld(seed,world);if(!d)throw new Error("地图摘要不一致");return publicMap(d);
 }

@@ -1,4 +1,4 @@
-import { generateWorld, publicMap } from "../src/sim/worldDefinition";
+import { publicMap, restoreWorld } from "../src/sim/worldDefinition";
 import { interpret, type Structured } from "./boss";
 import { respond } from "./npcDialogue";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
@@ -201,6 +201,8 @@ export class ResponsesLlmService implements LlmService {
   }
 
   async prepareJourney(input: JourneyInput): Promise<JourneyPlan> {
+    const world = input.world ? restoreWorld(input.seed, input.world) : undefined;
+    if (input.world && !world) throw new Error("地图摘要不一致");
     const schema = { type: "object", additionalProperties: false, properties: {
       understanding: { type: "string" }, actions: { type: "array", items: { type: "string" } }, adjustment: { type: "string" },
     }, required: ["understanding", "actions", "adjustment"] };
@@ -209,7 +211,7 @@ export class ResponsesLlmService implements LlmService {
       guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
       timeLimitSeconds: input.settings.timeLimitSeconds, goal: "登上地铁并进入车厢", extraQueuePeople: input.settings.extraQueuePeople,
       backpack: input.loadout?.backpack ?? true,
-      ...(input.world?{publicMap:publicMap(generateWorld(input.seed))}:{}),
+      ...(world ? { publicMap: publicMap(world) } : {}),
     }), schema, "journey_plan");
     if (!validPlan(data)) throw new Error("初始方案格式无效，请重试");
     assertSafeText(JSON.stringify(data));

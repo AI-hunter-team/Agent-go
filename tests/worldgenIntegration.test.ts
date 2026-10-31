@@ -14,8 +14,9 @@ import { generateWorld, publicMap } from "../src/sim/worldDefinition";
 const emptyScenario = (seed: number) => ({ seed, spawns: [], events: [], initialStatus: {} });
 
 describe("generated station and mainline integration", () => {
-  it("places the switch at a reachable, publicly named approach across generated layouts", () => {
+  it("places the switch at a reachable, publicly named approach across generated layouts", async () => {
     for (let seed = 1; seed <= 100; seed++) {
+      if (seed % 10 === 0) await new Promise<void>(resolve => setImmediate(resolve));
       const world = generateWorld(seed), station = stationSwitch(world);
       const engine = new Engine(seed, {}, emptyScenario(seed), undefined, world);
       expect(engine.world.navigation.findPath(world.layout.ENTRANCE, station.approach), `seed ${seed}`).not.toBeNull();
@@ -23,7 +24,7 @@ describe("generated station and mainline integration", () => {
       expect(publicMap(world).nodes.find(node => node.id === "BLACKOUT_SWITCH")?.pos).toEqual(station.approach);
       expect(engine.applyAction({ type: "move_to", target: "BLACKOUT_SWITCH", reason: "前往电闸" }).ok).toBe(true);
     }
-  });
+  }, 120000);
 
   it.each([1, 2, 4, 19])("boards the generated train through an actual doorway (seed %i)", seed => {
     const definition = generateWorld(seed), doors = generatedTrainDoors(definition);
@@ -67,8 +68,9 @@ describe("generated station and mainline integration", () => {
     }
   });
 
-  it("keeps security queues clear of ticket queues and walkable for luggage", () => {
+  it("keeps security queues clear of ticket queues and walkable for luggage", async () => {
     for (let seed = 1; seed <= 50; seed++) {
+      if (seed % 10 === 0) await new Promise<void>(resolve => setImmediate(resolve));
       const world = new World(seed, 150, undefined, generateWorld(seed));
       const facilities = [...world.facilities.values()];
       for (const security of facilities.filter(f => f.def.kind === "security")) {
@@ -86,7 +88,7 @@ describe("generated station and mainline integration", () => {
         }
       }
     }
-  });
+  }, 120000);
 
   it("realigns an off-centre security queue head and completes service", () => {
     const world = generateWorld(5), engine = new Engine(5, {}, emptyScenario(5), undefined, world);

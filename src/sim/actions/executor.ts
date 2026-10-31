@@ -198,7 +198,7 @@ export class ActionExecutor {
         } else a.remaining += DT;
         return;
       }
-      p.pos = world.definition.generatorVersion==="metro-v1"&&a.step.op==="slide_handrail"?{...next,floorId:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
+      p.pos = world.definition.generatorVersion!=="legacy-v0"&&a.step.op==="slide_handrail"?{...next,floorId:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
     }
     if (a.step.op === "force_cut_in") {
       const npc = world.persons.get(a.step.npcId)!,
@@ -432,8 +432,8 @@ export class ActionExecutor {
     }
     if (step.op === "vault") {
       if (!settling) {
-        if (step.obstacle === "gate" && (this.context.world.layout.zoneOf(p.pos) !== "concourse" || (w.definition.generatorVersion==="metro-v1"?Math.min(...[...w.facilities.values()].filter(f=>f.def.kind==="gate").map(f=>dist(p.pos,f.def.pos))):w.layout.GATE_X-p.pos.x) > RULES.jumpGateDistance)) return "只能在安检后大厅、靠近闸机线翻越闸机";
-        if (step.obstacle === "railing" && !this.context.world.layout.atRailing(p.pos)) return w.definition.generatorVersion==="metro-v1"?"请靠近公开地图标出的安检低栏杆段":"请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
+        if (step.obstacle === "gate" && (this.context.world.layout.zoneOf(p.pos) !== "concourse" || (w.definition.generatorVersion!=="legacy-v0"?Math.min(...[...w.facilities.values()].filter(f=>f.def.kind==="gate").map(f=>dist(p.pos,f.def.pos))):w.layout.GATE_X-p.pos.x) > RULES.jumpGateDistance)) return "只能在安检后大厅、靠近闸机线翻越闸机";
+        if (step.obstacle === "railing" && !this.context.world.layout.atRailing(p.pos)) return w.definition.generatorVersion!=="legacy-v0"?"请靠近公开地图标出的安检低栏杆段":"请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
         if (step.obstacle === "escalator_side" && !(p.activity.kind === "escalator")) return "只能在下行扶梯上翻出侧边";
       }
       const dest = this.current?.dest;
@@ -482,15 +482,15 @@ export class ActionExecutor {
       x: this.context.world.layout.GATE_X + 1.4,
       y: Math.min(this.context.world.layout.HEIGHT - 1, Math.max(1, p.pos.y))
     };
-    if(w.definition.generatorVersion==="metro-v1"&&a.step.op==="vault"&&a.step.obstacle==="gate") {
+    if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="gate") {
       const nearest=[...w.facilities.values()].filter(f=>f.def.kind==="gate").sort((a,b)=>dist(p.pos,a.def.pos)-dist(p.pos,b.def.pos))[0];a.dest={...nearest.def.exit!};
     }
     if (a.step.op === "vault" && a.step.obstacle === "railing") a.dest = { x: this.context.world.layout.RAILING_X + 1.4, y: p.pos.y };
-if(w.definition.generatorVersion==="metro-v1"&&a.step.op==="vault"&&a.step.obstacle==="railing") {
+if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="railing") {
       const point=w.layout.RAILING_APPROACHES[0].pos, f=w.layout.FACILITIES.find(f=>f.kind==="security")!,q=f.queueDirection??{x:-1,y:0};a.dest={...point,x:point.x-q.x*2.1,y:point.y-q.y*2.1};
     }
     if (a.step.op === "vault" && a.step.obstacle === "escalator_side") a.dest = { x: p.pos.x, y: this.context.world.layout.STAIRS_TOP.y };
-    if(w.definition.generatorVersion==="metro-v1"&&a.step.op==="vault"&&a.step.obstacle==="escalator_side"){
+    if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="escalator_side"){
       const progress=this.traversal?1-this.traversal.remaining/(this.traversal.duration??10):0,from=w.layout.STAIRS_TOP,to=w.layout.STAIRS_BOTTOM;
       a.dest={x:from.x+(to.x-from.x)*progress,y:from.y+(to.y-from.y)*progress,floorId:"transit:stairs",elevation:-6*progress};
     }

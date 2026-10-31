@@ -17,7 +17,7 @@ export function SimpleCrowd({ session, capacity }: { session: GameSession; capac
     const { object, color, pose } = scratch;
     let index = 0;
     for (const actor of session.presentation.current.actors.values()) {
-      if(session.engine.world.definition.generatorVersion==="metro-v1"&&displayFloor(actor.floorId)!==displayFloor(session.engine.player.pos.floorId))continue;
+      if(session.engine.world.definition.generatorVersion!=="legacy-v0"&&displayFloor(actor.floorId)!==displayFloor(session.engine.player.pos.floorId))continue;
       if (actor.kind === "player" || actor.kind === "guard") continue;
       if (index >= capacity) break;
       sampleActor(session.presentation, actor.id, session.alpha, pose);

@@ -358,14 +358,14 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   useFrame(() => {
     if (!geometry.current || !trail) return;
     const count = Math.min(points.length, 2048);
-    for (let i = 0; i < count; i++) { linePoints[i * 3] = points[i].x; linePoints[i * 3 + 1] = ((points[i] as import("../../shared/types").TrailPoint).elevation ?? (session.engine.world.definition.generatorVersion==="metro-v1"?(points[i].floorId==="platform"?-6:0):platformElevation(points[i].x))) + 0.025; linePoints[i * 3 + 2] = points[i].y; }
+    for (let i = 0; i < count; i++) { linePoints[i * 3] = points[i].x; linePoints[i * 3 + 1] = ((points[i] as import("../../shared/types").TrailPoint).elevation ?? (session.engine.world.definition.generatorVersion!=="legacy-v0"?(points[i].floorId==="platform"?-6:0):platformElevation(points[i].x))) + 0.025; linePoints[i * 3 + 2] = points[i].y; }
     geometry.current.setDrawRange(0, count); geometry.current.attributes.position.needsUpdate = true;
     if (pathGeometry.current) {
       const path = session.presentation.current.path;
       const player = session.presentation.current.actors.get("player");
       pathPoints[0] = player?.x ?? 0; pathPoints[1] = (player?.elevation ?? 0) + 0.03; pathPoints[2] = player?.z ?? 0;
       const pathCount = Math.min(path.length, 2047);
-      for (let i = 0; i < pathCount; i++) { pathPoints[(i + 1) * 3] = path[i].x; pathPoints[(i + 1) * 3 + 1] = (session.engine.world.definition.generatorVersion==="metro-v1"?0:platformElevation(path[i].x)) + 0.03; pathPoints[(i + 1) * 3 + 2] = path[i].z; }
+      for (let i = 0; i < pathCount; i++) { pathPoints[(i + 1) * 3] = path[i].x; pathPoints[(i + 1) * 3 + 1] = (session.engine.world.definition.generatorVersion!=="legacy-v0"?0:platformElevation(path[i].x)) + 0.03; pathPoints[(i + 1) * 3 + 2] = path[i].z; }
       pathGeometry.current.setDrawRange(0, path.length ? pathCount + 1 : 0); pathGeometry.current.attributes.position.needsUpdate = true;
     }
   });
@@ -386,7 +386,7 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
 function StationLighting({ standard,session }: { standard: boolean;session:GameSession }) {
   const l=session.engine.world.layout;
   const side=session.engine.world.definition.archetype==="side";
-  const points=session.engine.world.definition.generatorVersion==="metro-v1"?Array.from({length:Math.floor((side?l.HEIGHT:l.WIDTH)/12)},(_,i)=>side?[l.WIDTH/2,6+i*12]:[6+i*12,l.HEIGHT/2]):[8,24,39,56,76,WIDTH-3].map(x=>[x,15]);
+  const points=session.engine.world.definition.generatorVersion!=="legacy-v0"?Array.from({length:Math.floor((side?l.HEIGHT:l.WIDTH)/12)},(_,i)=>side?[l.WIDTH/2,6+i*12]:[6+i*12,l.HEIGHT/2]):[8,24,39,56,76,WIDTH-3].map(x=>[x,15]);
   const { gl, scene } = useThree();
   const hemisphere=useRef<HemisphereLight>(null),ambient=useRef<AmbientLight>(null),sun=useRef<DirectionalLight>(null),lamps=useRef<(PointLight|null)[]>([]);
   useFrame(()=>{

@@ -39,7 +39,7 @@ describe("standalone asset showroom",()=>{
     }
   });
   test("assembled room keeps floors and borrowed assets intact through view changes and teardown",()=>{
-    vi.stubGlobal("document",{createElement:()=>({width:0,height:0,getContext:()=>({fillStyle:"",font:"",textAlign:"",textBaseline:"",fillRect(){},fillText(){},measureText:()=>({width:700})})})});
+    vi.stubGlobal("document",{createElement:()=>({width:0,height:0,getContext:()=>({fillStyle:"",font:"",textAlign:"",textBaseline:"",fillRect(){},fillText(){},beginPath(){},arc(){},fill(){},moveTo(){},lineTo(){},stroke(){},strokeRect(){},measureText:()=>({width:700})})})});
     const p=createGeneratedPalette(),kit=localStationKit(p),source=kit.models.get("ticket-machine")!,mesh=source.getObjectByProperty("isMesh",true) as Mesh,disposed=vi.fn();mesh.geometry.addEventListener("dispose",disposed);
     const room=assembledRoom(kit,p),before=JSON.stringify(room.definition);room.setView("platform",false,true);
     expect(room.root.getObjectByName("concourse-exhibit")!.visible).toBe(false);expect(room.root.getObjectByName("platform-exhibit")!.visible).toBe(true);

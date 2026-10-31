@@ -1,10 +1,11 @@
+import { STATION_PROPS } from "../shared/stationProps";
 import { ASSETS } from "../assets/station-kit";
 import { METRO_RAILING_ASSETS } from "../assets/metro-railings";
 import type { DetailPlacement } from "../shared/world";
 import type { SurfaceName } from "../ui/scene/generatedSurfaces";
 
 export type ViewMode = "room" | "asset" | "material";
-export interface Exhibit { id: string; label: string; category: string; description: string; kind: "kit" | "train" | "stairs" | "escalator" | "entrance" | "detail" | "control"; ref: string; family?: DetailPlacement["family"]; }
+export interface Exhibit { id: string; label: string; category: string; description: string; kind: "prop" | "cluster" | "kit" | "train" | "stairs" | "escalator" | "entrance" | "detail" | "control"; ref: string; family?: DetailPlacement["family"]; }
 const details: [DetailPlacement["family"], string, string][] = [
   ["entrance","入口公告与线路图","公告面板、线路示意与金属边框，布置在入站后的停留区。"],
   ["tickets","票务服务窗口","石材台面、玻璃窗口与咨询设备，配合自动售票机使用。"],
@@ -17,6 +18,8 @@ const details: [DetailPlacement["family"], string, string][] = [
 ];
 const categories: Record<string,string> = { architecture:"建筑模块",facility:"进站设施",wayfinding:"导向标识",barrier:"栏杆与围护" };
 export const EXHIBITS: Exhibit[] = [
+  ...STATION_PROPS.map(a=>({id:"prop-"+a.id,label:a.label,category:a.category,description:"米制原创模型，独立构件、PBR表面与预留使用锚点。",kind:"prop" as const,ref:a.id})),
+  ...(["entrance","convenience","rest","security","platform","maintenance"] as const).map((ref,i)=>({id:"cluster-"+ref,label:["入口公告角","站厅便民角","等候休息角","安检工作角","站台候车段","设备保洁角"][i],category:"空间组合",description:"与生成车站同源的区域组合，含占地与使用空间。",kind:"cluster" as const,ref})),
   ...([ ["suite","出发休息室样板","墙面立体品牌、座椅、边几、入口门与侧向通道组成的简洁准备空间。"], ["room","休息室建筑","暖白墙、灰绿护墙及大块地面，展厅采用开顶剖视。"], ["seat","休息室双人座椅","圆角坐垫、独立靠背及落地支脚。"], ["table","边几与杯子","低边几与带杯把的中空陶瓷杯。"], ["brand","03轻快立体字标","与界面SVG同源的字形，约2厘米挤出并保留孔洞。"], ["console","世界创建控制台","旧版控制台资产，保留独立查看；当前休息室已撤下。"], ["wardrobe","角色储物柜","旧版储物柜资产，保留独立查看；选角已改为界面入口。"], ["door","控制室滑动门","两扇独立滑动门板，启程时打开。"], ["passage","控制室连接通道","从准备室侧向接入公共入口上端平台。"] ] as const).map(([ref,label,description])=>({id:`control-${ref}`,label,description,category:"控制室",kind:"control" as const,ref})),
   {id:"metro-head",label:"青绿线 · 头车",category:"列车",kind:"train",ref:"head",description:"保持原始米制比例，包含驾驶室、独立车门、转向架、座椅与吊环。"},
   {id:"metro-trailer",label:"青绿线 · 中间车",category:"列车",kind:"train",ref:"trailer",description:"与头车连接的中间车厢，带车间贯通、空调及受电弓细节。"},

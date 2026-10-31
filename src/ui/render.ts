@@ -57,7 +57,7 @@ export type { ViewOptions as RenderOptions } from "./presentation";
 import type { ViewOptions as RenderOptions } from "./presentation";
 
 export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts: RenderOptions) {
-  if(engine.world.definition.generatorVersion==="metro-v1"){drawGeneratedStation(ctx,engine,opts);return;}
+  if(engine.world.definition.generatorVersion!=="legacy-v0"){drawGeneratedStation(ctx,engine,opts);return;}
   const { world, guards, player } = engine;
   const replay = opts.replay;
   const playerPos = replay ? replay.position : player.pos;
@@ -394,6 +394,7 @@ function drawGeneratedStation(ctx:CanvasRenderingContext2D,engine:Engine,opts:Re
   const rectangles=index?(l.MOVE_BLOCKERS.filter(r=>r.floorId==="platform")):[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS,...l.PILLARS,...(l.openings??[])];
   ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
   for(const f of l.FACILITIES.filter(f=>(f.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=f.kind==="tvm"?COLORS.ochre:f.kind==="security"?COLORS.securityEdge:COLORS.green;ctx.fillRect(px(f.pos.x)-5,px(f.pos.y)-8,10,16);ctx.fillStyle=COLORS.ink;ctx.font="11px sans-serif";ctx.fillText(f.id,px(f.pos.x)+7,px(f.pos.y));}
+  for(const p of d.props??[]){if(p.pos.floorId!==floor.id||!p.body)continue;ctx.fillStyle=p.assetId.startsWith('plant')?'#537e58':'#88978a';ctx.fillRect(px(p.body.x),px(p.body.y),px(p.body.w),px(p.body.h));}
   for(const detail of d.details.filter(v=>v.pos.floorId===floor.id)){ctx.fillStyle=COLORS.ochre;const r=detail.body;if(r)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));}
   for(const item of captureScene(engine).items)if(displayFloor(item.floorId)===floor.id){ctx.fillStyle=COLORS.ochre;ctx.fillRect(px(item.x)-3,px(item.z)-3,6,6);}
   for(const node of l.NAV_NODES.filter(n=>(n.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=COLORS.inkSoft;ctx.font="9px sans-serif";ctx.fillText(node.label,px(node.pos.x),px(node.pos.y)-8);}

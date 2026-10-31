@@ -39,4 +39,4 @@ export class SurfaceBuilder {
   }
 }
 /** Geometry is owned here; palettes/loader textures are disposed by their own owners. */
-export function disposeSurfaceGeometry(root: Object3D) { root.traverse(node => { if (node instanceof Mesh) node.geometry.dispose(); }); }
+export function disposeSurfaceGeometry(root: Object3D) { root.traverse(node => { if (node instanceof Mesh) node.geometry.dispose(); if(node.userData.detailOwnedMaterials){for(const m of node.userData.detailOwnedMaterials as MeshStandardMaterial[])m.dispose();} }); }

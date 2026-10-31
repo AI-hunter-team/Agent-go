@@ -7,7 +7,7 @@ import type { WorldDefinition } from "../../shared/world";
 
 /** The existing car's aisle, below its interior ceiling and inside both end walls. */
 export function constrainCabinCamera(position: Point3, pose: ActorPose, definition?: WorldDefinition) {
-  if (definition?.generatorVersion === "metro-v1" && definition.layout.platformAxis) {
+  if (definition && definition.generatorVersion !== "legacy-v0" && definition.layout.platformAxis) {
     const axis = definition.layout.platformAxis, horizontal = axis.direction === "x";
     const length = horizontal ? definition.layout.WIDTH : definition.layout.HEIGHT;
     const along = horizontal ? pose.x : pose.z, across = horizontal ? pose.z - axis.center : axis.center - pose.x;

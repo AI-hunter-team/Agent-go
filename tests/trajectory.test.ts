@@ -91,5 +91,5 @@ test("an old report keeps its legacy map when opened beside a generated journey"
   const current=new Engine(4,{},undefined,undefined,generateWorld(4));
   const html=renderToStaticMarkup(createElement(TrajectoryReplayView,{report:old,engine:current}));
   expect(html).toContain("上层平台");expect(html).not.toContain("双层车站地图");
-  expect(current.world.definition.generatorVersion).toBe("metro-v1");
+  expect(current.world.definition.generatorVersion).toBe("metro-v2");
 });

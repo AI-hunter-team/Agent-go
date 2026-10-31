@@ -296,6 +296,21 @@ test("generated layouts are validated and bound to prepared sessions",async()=>{
  const created=await call("/api/session",body);expect(created.status).toBe(200);expect(sessions.get(created.body.sessionId)?.publicMap?.layoutHash).toBe(world.layoutHash);
 });
 
+test("historical v1 worlds remain consistent from planning to session creation",async()=>{
+ const {call,sessions}=await start();
+ const worlds=[{generatorVersion:"metro-v1" as const,layoutHash:"50e78bc1"},descriptor(generateWorld(1,{version:"metro-v1"}))];
+ for(const world of worlds){
+  const body={...input,seed:1,world};
+  const prepared=await call("/api/journey/prepare",body);expect(prepared.status).toBe(200);
+  const created=await call("/api/session",{...body,preparationId:prepared.body.id});expect(created.status).toBe(200);
+  expect(sessions.get(created.body.sessionId)?.publicMap).toMatchObject(world);
+ }
+ const {service,requests}=fake([jsonResponse(plan)]);
+ await service.prepareJourney({...input,seed:1,world:worlds[0]});
+ const payload=JSON.stringify(requests[0].body);
+ expect(payload).toContain("50e78bc1");expect(payload).toContain("metro-v1");expect(payload).not.toContain("metro-v2");
+});
+
 test("expired preparation requires replanning", async () => {
   const { call } = await start();
   const result = await call("/api/journey/prepare", input);

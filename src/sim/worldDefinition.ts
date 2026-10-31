@@ -1,3 +1,4 @@
+import { populateStationProps } from "./stationPropPlacement";
 import { buildEntrances, entranceLength } from "./entranceGeometry";
 import { createMovement } from "./movement";
 import { stationSwitch } from "./stationSwitch";
@@ -10,6 +11,8 @@ import { GUARDS, SECURITY_STAFF_BALANCED, SECURITY_STAFF_VISION } from "./scenar
 import { Rng } from "./rng";
 import type { Rect } from "./geometry";
 
+// Module namespace enumeration differs in test transforms; preserve native ESM key order.
+const legacyDefaults=Object.fromEntries(Object.keys(legacy).sort().map(key=>[key,legacy[key as keyof typeof legacy]])) as typeof legacy;
 const contains = (r: Rect, p: Vec) => p.x >= r.x && p.x <= r.x+r.w && p.y >= r.y && p.y <= r.y+r.h;
 export function deepFreeze<T>(value: T): T { if (value && typeof value === "object" && !Object.isFrozen(value)) { Object.freeze(value); for (const v of Object.values(value)) deepFreeze(v); } return value; }
 export function layoutHash(value: unknown): string { const text=JSON.stringify(value); let h=2166136261; for(let i=0;i<text.length;i++) h=Math.imul(h^text.charCodeAt(i),16777619); return (h>>>0).toString(16).padStart(8,"0"); }
@@ -81,7 +84,7 @@ function candidate(seed:number, attempt:number, appearanceSeed=seed):WorldDefini
   }
   const room=details.find(d=>d.family==="maintenance")!;room.body={x:width-12,y:height-6,w:12,h:6,floorId:"concourse"};room.yaw=Math.PI;
   const railY=(facilities.filter(f=>f.kind==="security"&&f.pos.x===sx)[0].pos.y+facilities.filter(f=>f.kind==="security"&&f.pos.x===sx)[1].pos.y)/2;
-  const layout:StationLayout={...legacy,WIDTH:width,HEIGHT:height,SECURITY_X:sx,GATE_X:gx,STAIRS_X:36,PLATFORM_X:48,STAIRS_TOP:top,STAIRS_BOTTOM:bottom,ESCALATOR_TOP:escalator,ESCALATOR_APPROACH:p(escalator.x,escalator.y-1.2),ESCALATOR_BOTTOM:escalatorBottom,ENTRANCE:nodes[0].pos,FACILITIES:facilities,PILLARS:pillars,ATTRACTIONS:attractions,SECURITY_BARRIERS:securityBarriers,GATE_BARRIERS:gateBarriers,SIGHT_OCCLUDERS:[...pillars,...attractions.flatMap(a=>a.blocksSight&&a.body?[a.body]:[])],MOVE_BLOCKERS:move,NAV_NODES:nodes,ITEM_SPOTS:spots,RAILING_X:sx,RAILING_SEGMENTS:[{minY:railY-1,maxY:railY+1}],RAILING_APPROACHES:[{id:"RAIL_N",label:"安检低栏杆前",pos:p(sx-.7,railY)}],openings,openingBlocks:openings.map(r=>({...r,x:r.x+.9,w:r.w-.9}))};
+  const layout:StationLayout={...legacyDefaults,WIDTH:width,HEIGHT:height,SECURITY_X:sx,GATE_X:gx,STAIRS_X:36,PLATFORM_X:48,STAIRS_TOP:top,STAIRS_BOTTOM:bottom,ESCALATOR_TOP:escalator,ESCALATOR_APPROACH:p(escalator.x,escalator.y-1.2),ESCALATOR_BOTTOM:escalatorBottom,ENTRANCE:nodes[0].pos,FACILITIES:facilities,PILLARS:pillars,ATTRACTIONS:attractions,SECURITY_BARRIERS:securityBarriers,GATE_BARRIERS:gateBarriers,SIGHT_OCCLUDERS:[...pillars,...attractions.flatMap(a=>a.blocksSight&&a.body?[a.body]:[])],MOVE_BLOCKERS:move,NAV_NODES:nodes,ITEM_SPOTS:spots,RAILING_X:sx,RAILING_SEGMENTS:[{minY:railY-1,maxY:railY+1}],RAILING_APPROACHES:[{id:"RAIL_N",label:"安检低栏杆前",pos:p(sx-.7,railY)}],openings,openingBlocks:openings.map(r=>({...r,x:r.x+.9,w:r.w-.9}))};
   layout.zoneOf=(v)=>v.floorId==="platform"?"platform":v.floorId?.startsWith("transit")?"stairs":v.x>paidEnd?(archetype==="dual"&&v.x<width-7?"concourse":"hall"):v.x<sx?"hall":v.x<gx?"concourse":"landing";
   layout.NAV_NODES.push(...layout.RAILING_APPROACHES);
   layout.atRailing=v=>layout.zoneOf(v)==="hall"&&Math.abs(v.x-sx)<=1.8&&Math.abs(v.y-railY)<=1;
@@ -162,11 +165,33 @@ export function validateWorld(def:WorldDefinition):string[] {
   if(!Object.isFrozen(def.generation))def.generation.emptyRouteSeconds=cost;if(cost>90)errors.push("empty route exceeds 90s");
   return errors;
 }
-export function generateWorld(seed:number, options:{appearanceSeed?:number}={}):WorldDefinition {
+export function generateWorldV1(seed:number, options:{appearanceSeed?:number}={}):WorldDefinition {
   if(!Number.isInteger(seed)||seed<1||seed>4294967295)throw new RangeError("世界种子须为1–4294967295的整数");
   const reasons:string[]=[];
   for(let i=0;i<20;i++){const d=candidate(seed,i,options.appearanceSeed);const errors=validateWorld(d);if(!errors.length){d.generation.reasons=reasons;return deepFreeze(d);}reasons.push(...errors);}
   const d=candidate(1,0,options.appearanceSeed);d.seed=seed;d.generation={...d.generation,attempts:20,fallback:true,reasons};if(validateWorld(d).length)throw new Error("世界样板无效");return deepFreeze(d);
+}
+export function generateWorld(seed:number, options:{appearanceSeed?:number;version?:WorldDescriptor['generatorVersion']}={}):WorldDefinition {
+ if(options.version==='legacy-v0')return legacyWorld(seed);
+ if(options.version==='metro-v1')return generateWorldV1(seed,options);
+ const d=serializableWorld(generateWorldV1(seed,options));bindLayout(d.layout,d.regions);
+ d.generatorVersion='metro-v2';d.props=populateStationProps(d);
+ d.layout.solids=[...(d.layout.solids??[]),...d.props.flatMap(p=>p.body?[p.body]:[])];
+ d.layout.SIGHT_OCCLUDERS.push(...d.props.filter(p=>p.body&&['vending','locker','photo-booth','flower-cabinet','toy-cabinet'].includes(p.assetId)).map(p=>p.body!));
+ d.layoutHash=layoutHash({base:d.layoutHash,props:d.props,version:'metro-v2'});
+ const errors=validateWorld(d);if(errors.length)throw new Error('物件布置无效: '+errors.join(', '));
+ return deepFreeze(d);
+}
+// An earlier v1 snapshot hashed the same layout before these unrelated legacy
+// train/switch constants were exported. Keep its saved worlds reconstructible.
+const historicV1Excluded = new Set(["BLACKOUT_SWITCH", "BLACKOUT_SWITCH_REACH", "PLAYER_TRAIN_DOORS", "TRAIN_AISLE_X", "TRAIN_BOARDING_X", "TRAIN_CENTRE_X", "TRAIN_DOOR_Z"]);
+export function restoreWorld(seed:number, expected:WorldDescriptor):WorldDefinition|null {
+ const d=generateWorld(seed,{version:expected.generatorVersion});
+ if(d.layoutHash===expected.layoutHash)return d;
+ if(expected.generatorVersion!=="metro-v1")return null;
+ const layout=Object.fromEntries(Object.entries(d.layout).filter(([key])=>!historicV1Excluded.has(key)));
+ const historic=layoutHash({archetype:d.archetype,layout,details:d.details,entrances:d.entrances,theme:seed});
+ return historic===expected.layoutHash?deepFreeze({...d,layoutHash:historic}):null;
 }
 function bindLayout(layout:StationLayout,regions:WorldDefinition["regions"]) {
   layout.zoneOf=p=>p.floorId==="platform"?"platform":p.floorId?.startsWith("transit")?"stairs":regions.find(r=>contains(r.bounds,p))?.kind??"hall";
@@ -180,6 +205,6 @@ export function hydrateWorld(d:WorldDefinition):WorldDefinition {
 }
 
 export function descriptor(d:WorldDefinition):WorldDescriptor{return {generatorVersion:d.generatorVersion,layoutHash:d.layoutHash};}
-export function publicMap(d:WorldDefinition):PublicStationMap{return {...descriptor(d),name:d.name,...(d.entrances?{entrances:d.entrances}:{}),floors:d.floors,regions:d.regions,itemSpots:d.layout.ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})),attractions:d.layout.ATTRACTIONS.map(({id,label,pos})=>({id,label,pos})),nodes:d.generatorVersion === "metro-v1" ? [...d.layout.NAV_NODES, { id: "BLACKOUT_SWITCH", label: "墙边电闸接近点", pos: stationSwitch(d).approach }, ...generatedTrainDoors(d).map(({ id, label, pos }) => ({ id, label, pos }))] : d.layout.NAV_NODES,facilities:d.layout.FACILITIES.map(({id,kind,label,pos})=>({id,kind,label,pos})),routes:[{id:"stairs",node:"STAIRS_TOP",position:d.layout.STAIRS_TOP,travelSeconds:6},{id:"escalator",node:"ESCALATOR_TOP",position:d.layout.ESCALATOR_APPROACH,travelSeconds:10}]};}
+export function publicMap(d:WorldDefinition):PublicStationMap{return {...descriptor(d),name:d.name,...(d.entrances?{entrances:d.entrances}:{}),floors:d.floors,regions:d.regions,itemSpots:d.layout.ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})),attractions:d.layout.ATTRACTIONS.map(({id,label,pos})=>({id,label,pos})),nodes:d.generatorVersion !== "legacy-v0" ? [...d.layout.NAV_NODES, { id: "BLACKOUT_SWITCH", label: "墙边电闸接近点", pos: stationSwitch(d).approach }, ...generatedTrainDoors(d).map(({ id, label, pos }) => ({ id, label, pos }))] : d.layout.NAV_NODES,facilities:d.layout.FACILITIES.map(({id,kind,label,pos})=>({id,kind,label,pos})),routes:[{id:"stairs",node:"STAIRS_TOP",position:d.layout.STAIRS_TOP,travelSeconds:6},{id:"escalator",node:"ESCALATOR_TOP",position:d.layout.ESCALATOR_APPROACH,travelSeconds:10}]};}
 
 export const serializableWorld=(d:WorldDefinition):WorldDefinition=>JSON.parse(JSON.stringify(d)) as WorldDefinition;

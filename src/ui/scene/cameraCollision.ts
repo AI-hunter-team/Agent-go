@@ -1,3 +1,4 @@
+import { propDefinition } from "../../shared/stationProps";
 import type { WorldDefinition } from "../../shared/world";
 import { ATTRACTIONS, FACILITIES, GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, WIDTH } from "../../sim/layout";
 import { facilitySolids } from "../../sim/facilityGeometry";
@@ -49,16 +50,17 @@ export function cameraFraction(target: Point3, desired: Point3, definition?:impo
   const delta = { x: desired.x - target.x, y: desired.y - target.y, z: desired.z - target.z };
   let nearest = 1;
   const l=definition?.layout;
-  let boxes=definition?.generatorVersion==="metro-v1" ? generatedBoxes.get(definition):undefined;
-  if(!boxes){boxes=definition?.generatorVersion==="metro-v1"&&l ? [
+  let boxes=definition&&definition.generatorVersion!=="legacy-v0" ? generatedBoxes.get(definition):undefined;
+  if(!boxes){boxes=definition&&definition.generatorVersion!=="legacy-v0"&&l ? [
     ...l.PILLARS.map(r=>bounds(r.x,0,r.y,r.w,6,r.h)),
     ...[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS].map(r=>bounds(r.x,0,r.y,r.w,1.1,r.h)),
     ...l.FACILITIES.flatMap(f=>facilitySolids(f.kind,f.pos,f.queueDirection).map(r=>bounds(r.x,0,r.y,r.w,f.kind==="tvm"?1.8:f.kind==="security"?2.5:1.1,r.h))),
+    ...(definition.props??[]).flatMap(p=>p.body?[bounds(p.body.x,p.pos.floorId==='platform'?-6:0,p.body.y,p.body.w,propDefinition(p.assetId).size[1],p.body.h)]:[]),
     ...definition.details.flatMap(d=>d.body?[bounds(d.body.x,d.pos.floorId==="platform"?-6:0,d.body.y,d.body.w,2.5,d.body.h)]:[]),
     ...generatedEnvelope(definition),
     bounds(0,6,0,l.WIDTH,.2,l.HEIGHT),
   ]:CAMERA_BOXES;
-  if(definition?.generatorVersion==="metro-v1")generatedBoxes.set(definition,boxes);}
+  if(definition&&definition.generatorVersion!=="legacy-v0")generatedBoxes.set(definition,boxes);}
   for (const box of boxes) {
     const low = { x: box.low.x - 0.12, y: box.low.y - 0.08, z: box.low.z - 0.12 };
     const high = { x: box.high.x + 0.12, y: box.high.y + 0.08, z: box.high.z + 0.12 };

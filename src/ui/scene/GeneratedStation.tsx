@@ -1,4 +1,5 @@
 import { stationSwitch } from "../../sim/stationSwitch";
+import { StationDetails } from "./StationDetails";
 import { EntrancePassages } from "./EntrancePassages";
 import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
@@ -91,6 +92,7 @@ export function GeneratedStation({session,kit,overview}:{session:GameSession;kit
   const side=l.platformAxis?.direction==="y", length=side?l.HEIGHT:l.WIDTH,center=l.platformAxis?.center??l.HEIGHT/2;
   return <PaletteContext.Provider value={palette}><group ref={modelRoot} name="generated-station" userData={{hash:d.layoutHash}}>
     <GeneratedOutages session={session}/>
+    <StationDetails definition={d} palette={palette} kit={kit} session={session} overview={overview}/>
     <group ref={concourse}>
       <group name="blackout-switch" position={[stationSwitch(d).position.x, 1.1, stationSwitch(d).position.y]}>
         <Block at={[0, 0, 0]} size={[.45, 1.2, .3]} color="ink"/>

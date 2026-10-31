@@ -6,7 +6,7 @@ import type { Rect } from "../sim/geometry";
 export type FloorId = "concourse" | "platform";
 type LayoutKeys = Pick<typeof Legacy, "WIDTH" | "HEIGHT" | "SECURITY_X" | "GATE_X" | "STAIRS_X" | "PLATFORM_X" | "STAIRS_TOP" | "STAIRS_BOTTOM" | "ESCALATOR_TOP" | "ESCALATOR_APPROACH" | "ESCALATOR_BOTTOM" | "ENTRANCE" | "FACILITIES" | "PILLARS" | "ATTRACTIONS" | "SECURITY_BARRIERS" | "GATE_BARRIERS" | "SIGHT_OCCLUDERS" | "MOVE_BLOCKERS" | "NAV_NODES" | "ITEM_SPOTS" | "RAILING_X" | "RAILING_SEGMENTS" | "RAILING_APPROACHES" | "zoneOf" | "atRailing">;
 export type StationLayout = { -readonly [K in keyof LayoutKeys]: LayoutKeys[K] extends number ? number : LayoutKeys[K] } & { solids?: Rect[]; openings?: Rect[]; openingBlocks?: Rect[]; platformAxis?: { direction: "x" | "y"; center: number; halfWidth: number } };
-export interface WorldDescriptor { generatorVersion: "legacy-v0" | "metro-v1"; layoutHash: string }
+export interface WorldDescriptor { generatorVersion: "legacy-v0" | "metro-v1" | "metro-v2"; layoutHash: string }
 export interface DetailPlacement { id: string; family: "entrance" | "tickets" | "security" | "gates" | "connections" | "platform" | "commercial" | "maintenance"; variant: number; yaw?:number; pos: Vec; label: string; body: Rect | null; blocksSight: boolean }
 export interface EntranceDefinition {
   id: string;
@@ -20,6 +20,7 @@ export interface EntranceDefinition {
   bounds: Rect;
 }
 export interface WorldDefinition extends WorldDescriptor {
+  props?: import("./stationProps").PropPlacement[];
   entrances?: EntranceDefinition[];
   seed: number;
   archetype: "legacy" | "central" | "side" | "dual";

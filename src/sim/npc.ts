@@ -84,7 +84,7 @@ export class NpcDirector {
       this.spawns.shift(); this.pendingEntrance = null;
       const p=w.addPerson(s.kind, pos, { hasTicket: s.hasCard, irritable: s.irritable });
       if (entrance) w.entry.begin(p, entrance, lane, true);
-      if(w.definition.generatorVersion==="metro-v1"&&this.ambientRng.chance(.2)) {
+      if(w.definition.generatorVersion!=="legacy-v0"&&this.ambientRng.chance(.2)) {
         const detail=w.definition.details.find(d=>d.family==="entrance")!;
         const node={pos:{...detail.pos,x:detail.pos.x+2,y:detail.pos.y-1}};
         p.ambient={label:this.ambientRng.pick(["查看入口信息","短暂停留休息","等候同行者"]),point:node.pos,remaining:this.ambientRng.range(8,20),started:false};
@@ -116,7 +116,7 @@ export class NpcDirector {
     w.setStatus(e.facility, e.status, e.note);
     if (e.broadcast) {
       const player = w.player;
-      if (player && !player.onPlatform && (w.definition.generatorVersion==="metro-v1"?dist(player.pos,w.facility(e.facility)!.def.pos):Math.abs(player.pos.x-this.world.layout.SECURITY_X)) <= RULES.broadcastRadius) {
+      if (player && !player.onPlatform && (w.definition.generatorVersion!=="legacy-v0"?dist(player.pos,w.facility(e.facility)!.def.pos):Math.abs(player.pos.x-this.world.layout.SECURITY_X)) <= RULES.broadcastRadius) {
         w.notifyPlayer("broadcast", e.broadcast);
       } else {
         w.log("broadcast", e.broadcast, false);
@@ -127,7 +127,7 @@ export class NpcDirector {
   private decide(p: Person) {
     const w = this.world;
     if (p.passedGate && !p.onPlatform) return; // World owns the landing/stairs connection.
-    if (p.onPlatform && w.definition.generatorVersion === "metro-v1") {
+    if (p.onPlatform && w.definition.generatorVersion !== "legacy-v0") {
       const doors = generatedTrainDoors(w.definition);
       if (p.boardingDoor === undefined) {
         const nearest = doors.map((door, index) => ({ index, distance: dist(p.pos, door.pos) })).sort((a, b) => a.distance - b.distance).slice(0, 3);
