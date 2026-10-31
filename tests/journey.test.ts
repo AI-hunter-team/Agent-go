@@ -74,6 +74,18 @@ test("autonomous preparation calls model with public inputs and session inherits
   expect(sessions.get(session.body.sessionId)?.loadout.backpack).toBe(true);
   expect((await call("/api/session", startInput)).status).toBe(409);
 });
+
+test("preparation keeps the player's refusal condition in session rules even if the plan weakens it", async () => {
+  const { call, sessions, prepareJourney } = await start();
+  prepareJourney.mockResolvedValueOnce({ ...plan, adjustment: "被拒则改排队" });
+  const guided = { ...input, autonomous: false, guidance: "插队，如果对方不同意，改变话术再次尝试" };
+  const prepared = await call("/api/journey/prepare", guided);
+  expect(prepared.status).toBe(200);
+  expect(prepared.body.normalized.rules).toEqual(["插队，如果对方不同意，改变话术再次尝试"]);
+  const session = await call("/api/session", { ...guided, preparationId: prepared.body.id });
+  expect(session.status).toBe(200);
+  expect(sessions.get(session.body.sessionId)?.normalized?.rules).toEqual(["插队，如果对方不同意，改变话术再次尝试"]);
+});
 test("prepared conditions cannot be silently changed and forged plans cannot override server output", async () => {
   const { call } = await start();
   const result = await call("/api/journey/prepare", input);

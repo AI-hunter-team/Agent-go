@@ -48,6 +48,28 @@ export interface CreativeClassification {
 export interface ActionResult {
   ok: boolean;
   text: string;
+  /** Public outcome; ok describes execution, not consent or successful settlement. */
+  dialogue?: {
+    npcId: string;
+    goal: import("./interaction").TalkGoal;
+    message: string;
+    reply: string;
+    decision: import("./interaction").NpcDecision;
+    goalAchieved: boolean;
+    /** Consent was received, but the physical effect has not settled yet. */
+    effectPending?: boolean;
+  };
+}
+
+export interface DialogueRetryProgress {
+  instruction: string;
+  status: "pending" | "in_progress" | "completed" | "blocked";
+  npcId: string;
+  goal: import("./interaction").TalkGoal;
+  sameNpc: boolean;
+  remaining: number;
+  history: NonNullable<ActionResult["dialogue"]>[];
+  reason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +187,9 @@ export interface AgentTurn {
   observation: Observation;
   /** Set on the single retry after a failed decision. */
   retry?: boolean;
+  /** A prior candidate skipped a pending requirement and was not executed. */
+  correction?: string;
+  dialogueFollowThrough?: DialogueRetryProgress;
 }
 
 export interface DecisionUsage {

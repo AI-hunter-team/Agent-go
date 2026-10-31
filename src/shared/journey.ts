@@ -33,10 +33,10 @@ export interface JourneyMetadata {
   autonomous: boolean;
   preparationMs: number;
 }
-export function planToNormalized(plan: JourneyPlan): NormalizedGuidance {
-  return { summary: plan.understanding, priorities: [], risk: "", rules: [], creativeIdeas: [], notExecutable: [], initialPlan: [...plan.actions, plan.adjustment] };
+export function planToNormalized(plan: JourneyPlan, guidance = ""): NormalizedGuidance {
+  return { summary: plan.understanding, priorities: [], risk: "", rules: guidance.trim() ? [guidance] : [], creativeIdeas: [], notExecutable: [], initialPlan: [...plan.actions, plan.adjustment] };
 }
-export function validPlan(value: unknown): value is JourneyPlan {
+export function validPlan(value: unknown, guidance = ""): value is JourneyPlan {
   const p = value as JourneyPlan | null;
   return (
     !!p &&
@@ -52,6 +52,6 @@ export function validPlan(value: unknown): value is JourneyPlan {
     p.actions.every(
       (a) => typeof a === "string" && a.trim().length > 0 && a.length <= NORMALIZED_MAX_TEXT_LENGTH,
     ) &&
-    JSON.stringify(planToNormalized(p)).length <= NORMALIZED_MAX_JSON_LENGTH
+    JSON.stringify(planToNormalized(p, guidance)).length <= NORMALIZED_MAX_JSON_LENGTH
   );
 }

@@ -36,6 +36,8 @@ export interface ExecutorContext {
 }
 export class ActionExecutor {
   outcomes: StepOutcome[] = [];
+  /** Reports the actual settlement of a consented move, including interruptions. */
+  onConsentComplete: ((npcId: string, result: ActionResult) => void) | null = null;
   private queue: PlanStep[] = [];
   private current: Current | null = null;
   private rng;
@@ -242,6 +244,7 @@ export class ActionExecutor {
     this.fail(reason);
   }
   private fail(text: string) {
+    const consent = this.consent;
     const interrupted = this.current?.step;
     this.outcomes.push({
       ok: false,
@@ -266,6 +269,7 @@ export class ActionExecutor {
       p.activity={kind:"stairs",remaining:duration,duration,start:{...p.pos},end:STAIRS_BOTTOM};
     }
     this.context.world.notifyPlayer("action_interrupted", text);
+    if (consent) this.onConsentComplete?.(consent.npcId, { ok: false, text });
   }
   private resetActivity() {
     const p = this.context.world.player!;
@@ -834,6 +838,8 @@ export class ActionExecutor {
       facility: c.facility
     };
     this.consent = null;
-    w.notifyPlayer("creative_done", `经乘客同意，已移动到 ${c.facility} 第 ${index + 1} 位`);
+    const text = `经乘客同意，已移动到 ${c.facility} 第 ${index + 1} 位`;
+    w.notifyPlayer("creative_done", text);
+    this.onConsentComplete?.(c.npcId, { ok: true, text });
   }
 }

@@ -43,7 +43,12 @@ describe("simulator dialogue settlement", () => {
     expect(e.applyAction({ type: "talk", npcId: n.id, message: "可以让我先走吗", goal: "yield", reason: "" }).ok).toBe(true);
     expect(e.executor.pendingDialogue).not.toBeNull();
     expect(f.queue).toEqual(before);
-    expect(e.dialogue.apply(reply({ decision: "refuse", give: null })).ok).toBe(true);
+    const refused = e.dialogue.apply(reply({ decision: "refuse", give: null, reply: "我也赶时间，请排队", reason: "隐藏的性格判断" }));
+    expect(refused).toMatchObject({
+      ok: true,
+      dialogue: { npcId: n.id, goal: "yield", message: "可以让我先走吗", reply: "我也赶时间，请排队", decision: "refuse", goalAchieved: false },
+    });
+    expect(JSON.stringify(refused)).not.toContain("隐藏的性格判断");
     expect(f.queue).toEqual(before);
     expect(e.player.activity).toEqual({ kind: "queued", facility: f.def.id });
 
@@ -62,7 +67,9 @@ describe("simulator dialogue settlement", () => {
     e.player.activity = { kind: "queued", facility: f.def.id };
     expect(e.applyAction({ type: "talk", npcId: n.id, message: "请让我先走", goal: "yield", reason: "" }).ok).toBe(true);
     expect(f.queue).toEqual([n.id, "player"]);
-    expect(e.dialogue.apply(reply({ decision: "accept", give: null })).ok).toBe(true);
+    expect(e.dialogue.apply(reply({ decision: "accept", give: null }))).toMatchObject({
+      ok: true, dialogue: { decision: "accept", goalAchieved: false, effectPending: true },
+    });
     expect(f.queue).toEqual([n.id]);
     expect(e.player.activity.kind).toBe("creative");
   });
@@ -138,7 +145,7 @@ describe("simulator dialogue settlement", () => {
     });
     expect(e.dialogue.apply(reply({
       give: "umbrella"
-    })).ok).toBe(false);
+    }))).toMatchObject({ ok: false, dialogue: { decision: "accept", goalAchieved: false } });
     expect(e.world.items.holderId(offer)).toBe("player");
     expect(n.hasTicket).toBe(true);
     for (let i = 0; i < 2; i++) e.world.items.spawn("water_bottle", {

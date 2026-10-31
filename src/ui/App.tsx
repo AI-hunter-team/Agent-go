@@ -34,6 +34,7 @@ import { InteractionPanel } from "./InteractionPanel";
 import type { RenderOptions } from "./render";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
+import { DialogueDock } from "./DialogueDock";
 import { JourneyReview } from "./JourneyReview";
 import { JourneyEnd } from "./JourneyEnd";
 import { getSessionHeadMessage, type HeadMessageMode } from "./headMessages";
@@ -860,6 +861,7 @@ export function App() {
               </span>
             </section>
             <div className={styles.runDock} data-scene-obstacle>
+            <DialogueDock key={`dialogue-${session.generation}`} session={session} />
             <div className={styles.controls}>
               <button
                 className="primary"

@@ -63,3 +63,10 @@ test("limited space preserves higher priority messages without stacking old ones
   expect(placed.map(box => box.id)).toEqual(["player", "new"]);
   expect(overlaps(placed[0], placed[1])).toBe(false);
 });
+
+test("a speech bubble avoids the fixed dialogue dock instead of covering its buttons", () => {
+  const dock = { x: 120, y: 230, width: 400, height: 170 };
+  const placed = layoutHeadMessages([{ id: "current", x: 200, y: 270, width: 220, height: 90, priority: 1 }], bounds, [dock]);
+  expect(placed).toHaveLength(1);
+  expect(overlaps(placed[0], { ...dock, id: "dock", priority: Infinity })).toBe(false);
+});

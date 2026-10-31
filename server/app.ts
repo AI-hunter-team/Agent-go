@@ -222,9 +222,9 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
     if (!current.llm!.prepareJourney) return void res.status(503).json({ error: "当前服务不支持初始规划" });
     const { value: plan, debug } = await traceOperation({ operation: "normalize", runId: input.runId, sessionId: null },
       { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.prepareJourney!(input));
-    if (!validPlan(plan)) return void res.status(502).json({ error: "初始方案格式无效，请重试" });
+    if (!validPlan(plan, input.autonomous ? "" : input.guidance)) return void res.status(502).json({ error: "初始方案格式无效，请重试" });
     assertSafeText(JSON.stringify(plan));
-    const normalized = planToNormalized(plan);
+    const normalized = planToNormalized(plan, input.autonomous ? "" : input.guidance);
     validateNormalized(normalized);
     const result: JourneyPreparation = { id: randomUUID(), model: current.llm!.model, normalized, plan, debug };
     for (const [id, item] of preparations) if (Date.now() - item.created > 600_000) preparations.delete(id);

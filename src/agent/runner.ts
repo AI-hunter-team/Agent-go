@@ -23,6 +23,20 @@ import type { Agent, Classifier, NpcNegotiator, Interpreter, NpcResponder } from
 import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
 import { prepareCutIn } from "../sim/negotiation";
 import { ReviewRecorder } from "./reviewRecorder";
+import { DialogueFollowThrough } from "./dialogueFollowThrough";
+
+function combineResults(first: DecisionResult, next: DecisionResult): DecisionResult {
+  return {
+    ...next, latencyMs: first.latencyMs + next.latencyMs,
+    usage: first.usage || next.usage ? {
+      inputTokens: (first.usage?.inputTokens ?? 0) + (next.usage?.inputTokens ?? 0),
+      outputTokens: (first.usage?.outputTokens ?? 0) + (next.usage?.outputTokens ?? 0),
+      cacheReadTokens: (first.usage?.cacheReadTokens ?? 0) + (next.usage?.cacheReadTokens ?? 0),
+      thinkingTokens: first.usage?.thinkingTokens == null || next.usage?.thinkingTokens == null ? null
+        : first.usage.thinkingTokens + next.usage.thinkingTokens,
+    } : null,
+  };
+}
 
 export const BUDGETS = { decisions: 80, boss: 20, npc: 30 } as const;
 
@@ -73,6 +87,8 @@ export class GameRunner {
   private readonly debug: RunDebug;
   private active: { record: DebugAttempt; start: number } | null = null;
   private readonly reviewRecorder = new ReviewRecorder();
+  private readonly followThrough: DialogueFollowThrough;
+  private activeYield: NonNullable<ActionResult["dialogue"]> | null = null;
 
   constructor(
     readonly engine: Engine,
@@ -80,6 +96,13 @@ export class GameRunner {
     private readonly classify: Classifier,
     private readonly opts: RunnerOptions = {},
   ) {
+    this.followThrough = new DialogueFollowThrough(opts.guidance ?? "");
+    engine.executor.onConsentComplete = (npcId, outcome) => {
+      if (engine.status !== "running" || this.activeYield?.npcId !== npcId) return;
+      this.lastResult = { ...outcome, dialogue: { ...this.activeYield, effectPending: false, goalAchieved: outcome.ok } };
+      this.activeYield = null;
+      this.followThrough.record(this.lastResult);
+    };
     this.maxDecisions = Math.min(opts.maxDecisions ?? BUDGETS.decisions, BUDGETS.decisions);
     this.now = opts.now ?? (() => performance.now());
     this.debug = {
@@ -165,6 +188,11 @@ export class GameRunner {
     this.interactionDialogues.push({t:this.engine.t,request,response:structuredClone(response)});
     if (this.engine.status !== "running" || this.engine.executor.pendingDialogue !== pending) return;
     this.lastResult = this.engine.dialogue.apply(response);
+    if (this.lastResult.dialogue?.effectPending) this.activeYield = structuredClone(this.lastResult.dialogue);
+    if (response.source !== "error") this.followThrough.record(this.lastResult);
+    if (this.followThrough.progress(this.engine)?.status === "pending" && this.engine.executor.busy) {
+      this.engine.executor.cancel("对话被拒，暂停复合行动的后续步骤，先落实改变话术的要求");
+    }
     this.engine.notify("spoken_to", `${request.npc.id}：${response.reply}`);
   }
 
@@ -172,28 +200,36 @@ export class GameRunner {
     const engine = this.engine;
     const triggers = engine.takeTriggers();
     const observation = engine.observe();
-    const turn: AgentTurn = { triggers, lastResult: this.lastResult, observation };
+    const dialogueFollowThrough = this.followThrough.progress(engine, this.budgetExhausted ? "模型决策预算已用完，转为离线行动" : this.calls.npc >= BUDGETS.npc ? "NPC 对话预算已用完" : undefined);
+    const turn: AgentTurn = { triggers, lastResult: this.lastResult, observation, ...(dialogueFollowThrough ? { dialogueFollowThrough } : {}) };
     const t = engine.t;
     const attempts: DecisionAttempt[] = [];
 
     let result = await this.timed(turn, attempts);
     if (!result.action && engine.status === "running") {
       const retry = await this.timed({ ...turn, retry: true }, attempts);
-      const firstUsage = result.usage;
-      const nextUsage = retry.usage;
-      result = {
-        ...retry,
-        latencyMs: result.latencyMs + retry.latencyMs,
-        usage: firstUsage || nextUsage ? {
-          inputTokens: (firstUsage?.inputTokens ?? 0) + (nextUsage?.inputTokens ?? 0),
-          outputTokens: (firstUsage?.outputTokens ?? 0) + (nextUsage?.outputTokens ?? 0),
-          cacheReadTokens: (firstUsage?.cacheReadTokens ?? 0) + (nextUsage?.cacheReadTokens ?? 0),
-          thinkingTokens: firstUsage?.thinkingTokens == null || nextUsage?.thinkingTokens == null
-            ? null : firstUsage.thinkingTokens + nextUsage.thinkingTokens,
-        } : null,
-      };
+      result = combineResults(result, retry);
     }
     if (engine.status !== "running") return;
+
+    let guidanceFailure: string | null = null;
+    if (result.action && dialogueFollowThrough?.status === "pending") {
+      let issue = this.followThrough.check(result.action, engine);
+      if (issue) {
+        attempts[attempts.length - 1].execution = { ok: false, text: issue };
+        if (this.calls.decisions < this.maxDecisions) {
+          const corrected = await this.timed({ ...turn, correction: issue }, attempts);
+          result = combineResults(result, corrected);
+          if (engine.status !== "running") return;
+          issue = result.action ? this.followThrough.check(result.action, engine) : null;
+        }
+        if (issue) {
+          guidanceFailure = issue;
+          attempts[attempts.length - 1].execution = { ok: false, text: issue };
+          result = { ...result, action: null, error: issue };
+        }
+      }
+    }
 
     let action: AgentAction | null = result.action;
     let classification: CreativeClassification | null = null;
@@ -217,7 +253,8 @@ export class GameRunner {
         record.usage = plan.usage ?? null;
         this.endAttempt(record);
         if (engine.status !== "running") return;
-        outcome = engine.applyAction(action, undefined, plan);
+        const issue = dialogueFollowThrough?.status === "pending" ? this.followThrough.check(plan, engine) : null;
+        outcome = issue ? { ok: false, text: issue } : engine.applyAction(action, undefined, plan);
         this.bossPlans.push({t:engine.t,instruction:action.instruction,plan:structuredClone(plan),outcomes:outcome.ok ? engine.executor.outcomes : [{...outcome,eventIds:[]}]});
       } else if (action.type === "attempt_creative") {
         const record = this.beginAttempt("classification", turn);
@@ -245,10 +282,10 @@ export class GameRunner {
       }
     } else {
       fallback = true;
-      this.consecutiveFailures++;
-      action = { type: "wait", seconds: DECISION_LIMITS.fallbackWaitSeconds, reason: "决策失败，系统保底等待" };
+      if (!guidanceFailure) this.consecutiveFailures++;
+      action = { type: "wait", seconds: DECISION_LIMITS.fallbackWaitSeconds, reason: guidanceFailure ? "指导要求尚未落实，保底推进后重新评估" : "决策失败，系统保底等待" };
       outcome = engine.applyAction(action);
-      outcome = { ok: outcome.ok, text: `（决策失败，系统保底）${outcome.text}` };
+      outcome = { ok: outcome.ok, text: `${guidanceFailure ?? "（决策失败，系统保底）"}${outcome.text}` };
       if (this.consecutiveFailures >= DECISION_LIMITS.maxConsecutiveFailures) {
         engine.abort(`连续 ${this.consecutiveFailures} 次决策失败，模型不可用`);
       }
@@ -330,13 +367,23 @@ export class GameRunner {
     if (e.status !== "running") return { outcome: { ok: false, text: "本局已结束，NPC 答复仅记录，未执行" }, dialogue };
     const outcome = response.accepted ? e.creative.startConsentedCutIn(e.player, action.npcId)
       : { ok: false, text: `${prepared.request.npc.id}：${response.reply}${response.source === "llm" ? "（未同意让位，保留原位次）" : `（${response.reason}）`}` };
+    if (response.source === "llm") {
+      const publicResult: ActionResult = { ok: response.accepted ? outcome.ok : true, text: outcome.text, dialogue: {
+        npcId: action.npcId, goal: "yield", message: action.message, reply: response.reply,
+        decision: response.accepted ? "accept" : "refuse", goalAchieved: false,
+        ...(response.accepted && outcome.ok ? { effectPending: true } : {}),
+      } };
+      if (publicResult.dialogue?.effectPending) this.activeYield = structuredClone(publicResult.dialogue);
+      this.followThrough.record(publicResult);
+      (outcome as ActionResult).dialogue = publicResult.dialogue;
+    }
     dialogue.execution = structuredClone(outcome);
     e.world.log("npc_dialogue", `你对 ${action.npcId} 说：“${action.message}”；NPC：“${response.reply}”。${outcome.text}`, true);
     return { outcome, dialogue };
   }
 
   private async timed(turn: AgentTurn, attempts: DecisionAttempt[]): Promise<DecisionResult> {
-    const debugRecord = this.beginAttempt(turn.retry ? "retry" : "decision", turn);
+    const debugRecord = this.beginAttempt(turn.retry || turn.correction ? "retry" : "decision", turn);
     const record: DecisionAttempt = {
       decisionIndex: this.decisions.length + 1,
       attempt: attempts.length + 1,

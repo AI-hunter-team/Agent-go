@@ -1,0 +1,39 @@
+.dock { grid-area: dialogue; justify-self: center; z-index: 35; width: min(560px, 100%); margin-bottom: 10px; border: 1px solid #ffffffdf; border-radius: 22px; background: #fffef8f7; color: #26342e; box-shadow: 0 10px 36px #17243a22; overflow: hidden; }
+.heading { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.toggle { flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0; background: transparent; border: 0; text-align: left; box-shadow: none; }
+.toggle:hover { background: transparent; }
+.symbol { width: 38px; height: 38px; flex-shrink: 0; display: grid; place-items: center; border-radius: 12px; color: #725719; background: #f6edcf; }
+.symbol svg { width: 22px; height: 22px; }
+.identity { display: grid; gap: 4px; min-width: 0; }
+.identity strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.identity small { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #66716b; font-size: 11px; }
+.status { color: #725719; }
+.status[data-status=accepted] { color: #246346; }
+.status[data-status=error] { color: #974b36; }
+.chevron { margin-left: auto; padding: 0 3px; color: #6b766f; font-size: 20px; }
+.historyButton { display: flex; gap: 6px; align-items: center; min-height: 44px; padding: 8px 10px; flex-shrink: 0; font-size: 12px; background: #f1f2ed; border: 1px solid #e4e7dd; border-radius: 12px; box-shadow: none; }
+.historyButton span { min-width: 18px; text-align: center; color: #657164; }
+.body { max-height: min(190px, 26dvh); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid #e7e9e1; padding: 8px 16px 12px; scrollbar-gutter: stable; }
+.body[hidden] { display: none; }
+.exchange { display: grid; gap: 8px; }
+.exchange p { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: start; gap: 8px; margin: 0; padding: 7px 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.exchange p[data-reply] { border-top: 1px dashed #e4e5da; }
+.voice { font-size: 11px; font-weight: 700; line-height: 1.9; color: #44658a; white-space: nowrap; }
+.exchange p[data-reply] .voice { color: #8a682e; }
+.history { display: grid; gap: 24px; }
+.history section { border: 1px solid #e6e9e2; border-radius: 18px; padding: 16px; }
+.history h3 { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; margin: 0 0 14px; font-size: 16px; }
+.history h3 small { color: #6b756d; font-size: 12px; font-weight: 500; }
+.history article + article { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e6e9e2; }
+.round { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 12px; }
+.round span { margin-left: auto; color: #6b756d; }
+@media (max-width: 600px) {
+  .dock { width: 100%; border-radius: 18px; }
+  .heading { padding: 6px 10px; gap: 4px; }
+  .toggle { gap: 8px; }
+  .symbol { width: 32px; height: 32px; border-radius: 10px; }
+  .identity strong { font-size: 12px; }
+  .historyButton { padding: 8px; }
+  .body { max-height: min(160px, 23dvh); padding: 8px 12px 10px; }
+  .exchange p { grid-template-columns: 54px minmax(0, 1fr); gap: 6px; font-size: 12px; }
+}

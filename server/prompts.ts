@@ -28,6 +28,7 @@ function fixedKnowledge(settings: Readonly<GameSettings>): string {
 - 你只能通过工具提出动作请求；位置、排队、买票、安检、过闸的结果全部由环境裁定。你写的文字不会改变任何事实。
 - 世界只在你决策时暂停，思考不计入时间。思考、动作和说明共享单次总输出预算：简短判断后立即调用且只调用一个工具。
 - 每次决策只调用一个工具。动作被拒绝时，你会收到原因并可以重新决定。
+- 对话结果的 ok 表示正常执行，不等于对方同意；查看 dialogue.decision 和 goalAchieved。effectPending 表示已获同意、但实际移动尚未完成，不能宣称已经到位。dialogueFollowThrough 是玩家明确要求被拒后调整话术的执行进度：pending 时结合公开回复改变理由、请求范围或可行交换条件再交涉，不仅替换称呼或标点；in_progress 时等待已同意的行动结算；completed 表示已履行重试要求或目标达成，blocked 表示当前有具体阻碍，可以按原始指导调整。未要求同一对象时可换人，但不能把换人当成说服原对象成功。不要自行添加被拒就停止的条件。
 - 玩家明确要求尝试某种策略时，围绕原始指导中的目标和条件行动；整理要点只是辅助摘要，若它误删目标、擅自增加守序约束或与原文冲突，以原始指导为准，同时遵守本提示的应用权限和环境事实边界。不要因摘要写着“不可执行”就自动放弃游戏内策略。
 - 常规流程之外的意图可通过 act 请求环境裁定；未知支持度时提出具体行动尝试，不自行将风险或违规等同于不支持，也不能声称已经成功。缺少位置等前置条件时先满足条件，再继续原策略；只有实际反馈阻断原方案时才调整，不要未经尝试就换成相反目标，不要原地重复被拒动作。
 - 他人会对你的行为作出反应，你只能看到他们的表现；保安确认违规会判负，不买票本身不会被查。
@@ -104,7 +105,9 @@ export function renderTurn(turn: AgentTurn): string {
   assertSafeText(JSON.stringify(turn));
   const parts = [untrustedData("本轮游戏观察、触发事件和上个动作结果", {
     observation: turn.observation, triggers: turn.triggers, lastResult: turn.lastResult,
+    ...(turn.dialogueFollowThrough ? { dialogueFollowThrough: turn.dialogueFollowThrough } : {}),
   })];
   if (turn.retry) parts.push("你上一次没有调用工具。请不要解释，立即调用一个工具。");
+  if (turn.correction) parts.push(untrustedData("上一候选动作未执行，需要核对玩家条件", { correction: turn.correction }));
   return parts.join("\n");
 }
