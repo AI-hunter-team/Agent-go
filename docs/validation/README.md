@@ -6,6 +6,9 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [STATION-PR-002](STATION-PR-002.md) | 显示修复与栏杆整合 PR，同步角色/失败复盘 main 的4处冲突及本轮集成验证 |
+| [METRO-RAILING-001](METRO-RAILING-001.md) | 中国地铁A圆管/B玻璃、7 GLB、独立小样及串行场景接入；445测试、生产整局99.1秒与资源/回退复验 |
+| [STATION-DISPLAY-001](STATION-DISPLAY-001.md) | 安检顶部重叠、导视比例、磨石/反射与6米顶板；追加20级防滑楼梯及平台收口，427测试和生产整局 |
 | [ALL-LOCAL-001](ALL-LOCAL-001.md) | 全部本地源工作、角色资产与既有 Responses/UI/性能交付的最终组合；含提交、冲突及验证边界 |
 | [STATION-INTEGRATION-001](STATION-INTEGRATION-001.md) | 固定栏杆、33 GLB、正式站厅接入与视线/占地回归；开发/生产浏览器整局、回放、失败重试及本机性能 |
 | [PR18-MERGE-001](PR18-MERGE-001.md) | 名称统一 PR 与最新 main 的文档冲突解决及集成验证；最终合入见原 PR |

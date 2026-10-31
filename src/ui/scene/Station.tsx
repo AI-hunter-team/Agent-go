@@ -1,32 +1,45 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { CanvasTexture, DoubleSide, SRGBColorSpace, type Group } from "three";
+import { DoubleSide, Group } from "three";
 import { makeMaterials, setFacilityState, setGateProgress } from "../../assets/station-kit/index";
-import { FACILITIES } from "../../sim/layout";
+import { FACILITIES, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
+import { createSignTexture, SIGN_FACE } from "../../assets/station-kit/signs";
+import { createFloorReflection, disposeFloorReflection } from "../../assets/station-kit/reflection";
+import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 import { CONVEYOR } from "../../sim/facilityGeometry";
 import type { GameSession } from "../gameSession";
 import { batchStation, disposeBatches, loadStationKit, type StationKit } from "./stationAssets";
 import { devicePosition, stationPlacements } from "./stationLayout";
 import { StationFallback } from "./StationFallback";
+import { StationStairs } from "./StationStairs";
 
 function KitSign({ kit, text, position, width = 4 }: { kit: StationKit; text: string; position: [number, number, number]; width?: number }) {
   const model = useMemo(() => kit.models.get("sign-panel")!.clone(true), [kit]);
-  const texture = useMemo(() => {
-    const canvas = document.createElement("canvas"); canvas.width = 1024; canvas.height = 160;
-    const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#353b38"; ctx.fillRect(0, 0, 1024, 160);
-    ctx.fillStyle = "#f8f5eb"; ctx.font = '500 66px "Microsoft YaHei", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(text, 512, 80, 980);
-    const map = new CanvasTexture(canvas); map.colorSpace = SRGBColorSpace; return map;
-  }, [text]);
+  const texture = useMemo(() => createSignTexture(text, width), [text, width]);
   useEffect(() => () => texture.dispose(), [texture]);
   return <group position={position} rotation={[0, -Math.PI / 2, 0]} scale={[width / 2.8, 1, 1]}>
     <primitive object={model} dispose={null} />
-    <mesh position={[0, 0.25, 0.067]}><planeGeometry args={[2.65, 0.42]} /><meshBasicMaterial map={texture} side={DoubleSide} toneMapped={false} /></mesh>
+    <mesh position={[0, 0.25, 0.067]}><planeGeometry args={[SIGN_FACE.width, SIGN_FACE.height]} /><meshBasicMaterial map={texture} side={DoubleSide} toneMapped={false} /></mesh>
   </group>;
 }
 
-function ImportedStation({ kit, session, overview }: { kit: StationKit; session: GameSession; overview: boolean }) {
-  const { gl, camera } = useThree();
+function FloorReflections({ enabled }: { enabled: boolean }) {
+  const scene = useThree((state) => state.scene), invalidate = useThree((state) => state.invalidate);
+  useEffect(() => {
+    if (!enabled) return;
+    const group = new Group(); group.name = "station-floor-reflections";
+    const mirrors = [
+      createFloorReflection(STAIRS_TOP.x, HEIGHT, STAIRS_TOP.x / 2, HEIGHT / 2),
+      createFloorReflection(WIDTH - STAIRS_BOTTOM.x, HEIGHT, (WIDTH + STAIRS_BOTTOM.x) / 2, HEIGHT / 2, -2),
+    ];
+    group.add(...mirrors); scene.add(group); invalidate();
+    return () => { scene.remove(group); mirrors.forEach(disposeFloorReflection); invalidate(); };
+  }, [enabled, scene, invalidate]);
+  return null;
+}
+
+function ImportedStation({ kit, session, overview, standard }: { kit: StationKit; session: GameSession; overview: boolean; standard: boolean }) {
+  const { gl, camera, scene } = useThree();
   const gpu = useMemo(() => {
     const context = gl.getContext(), extension = context.getExtension("WEBGL_debug_renderer_info");
     return String(context.getParameter(extension ? extension.UNMASKED_RENDERER_WEBGL : context.RENDERER));
@@ -44,7 +57,9 @@ function ImportedStation({ kit, session, overview }: { kit: StationKit; session:
   useEffect(() => {
     if (new URLSearchParams(location.search).get("debug") !== "1") return;
     const inspect = () => ({
-      loaded: true, overview, ...staticGroup.userData, gpuGeometries: gl.info.memory.geometries, gpuTextures: gl.info.memory.textures,
+      loaded: true, overview, ceiling: STATION_CEILING, reflectionCount: scene.getObjectByName("station-floor-reflections")?.children.length ?? 0,
+      stairs: scene.getObjectByName("station-stairs")?.userData,
+      ...staticGroup.userData, gpuGeometries: gl.info.memory.geometries, gpuTextures: gl.info.memory.textures,
       drawCalls: gl.info.render.calls, renderedFrames: gl.info.render.frame, triangles: gl.info.render.triangles, camera: camera.position.toArray(),
       shadows: gl.shadowMap.enabled, dpr: gl.getPixelRatio(), gpu,
       t: session.engine.t, phase: session.runner?.phase, player: { position: { ...session.engine.player.pos }, activity: session.engine.player.activity.kind, screened: session.engine.player.screened, passedGate: session.engine.player.passedGate, onPlatform: session.engine.player.onPlatform },
@@ -55,7 +70,7 @@ function ImportedStation({ kit, session, overview }: { kit: StationKit; session:
     });
     const target = window as typeof window & { stationSceneInspect?: typeof inspect }; target.stationSceneInspect = inspect;
     return () => { if (target.stationSceneInspect === inspect) delete target.stationSceneInspect; };
-  }, [camera, devices, gl, gpu, overview, session, staticGroup]);
+  }, [camera, devices, gl, gpu, overview, scene, session, staticGroup]);
   useFrame((_, delta) => {
     for (const root of devices) {
       const frame = session.presentation.current.facilities.find((f) => f.id === root.name);
@@ -71,6 +86,7 @@ function ImportedStation({ kit, session, overview }: { kit: StationKit; session:
   });
   const steel = kit.materials.get("kit.metal.satin")!, ink = kit.materials.get("kit.coating.charcoal")!;
   return <group name="station-kit-game">
+    <FloorReflections enabled={standard && !overview} />
     <primitive object={staticGroup} dispose={null} />
     {devices.map((root: Group) => <primitive key={root.name} object={root} dispose={null} />)}
     {FACILITIES.filter((f) => f.kind === "security").map((def) => <group key={`belt-${def.id}`} position={[def.pos.x + CONVEYOR.x + CONVEYOR.w / 2, 0, def.pos.y + CONVEYOR.y + CONVEYOR.h / 2]}>
@@ -78,10 +94,7 @@ function ImportedStation({ kit, session, overview }: { kit: StationKit; session:
       <mesh material={ink} position={[0, 0.508, 0]} receiveShadow><boxGeometry args={[CONVEYOR.w - 0.1, 0.016, CONVEYOR.h - 0.06]} /></mesh>
       {[-0.45, 0.45].map((x) => <mesh key={x} material={steel} position={[x, 0.2, 0]} castShadow><boxGeometry args={[0.07, 0.4, 0.3]} /></mesh>)}
     </group>)}
-    {Array.from({ length: 12 }, (_, i) => {
-      const x = 48 + (i + 0.5) * 0.75, top = -2 * (i + 1) / 12;
-      return <mesh key={`step-${i}`} position={[x, top - 0.1, 15]} material={kit.materials.get("kit.terrazzo.ivory")} receiveShadow><boxGeometry args={[0.75, 0.2, 4]} /></mesh>;
-    })}
+    <StationStairs material={kit.materials.get("kit.terrazzo.sage")!} />
     <KitSign kit={kit} text="01  购票 / TICKETS →" position={[10.8, 2.8, 15]} width={5.2} />
     <KitSign kit={kit} text="02  安全检查 →" position={[24, 2.8, 15]} width={4.5} />
     <KitSign kit={kit} text="03  检票进站 →" position={[42, 2.8, 15]} width={4.5} />
@@ -91,7 +104,7 @@ function ImportedStation({ kit, session, overview }: { kit: StationKit; session:
   </group>;
 }
 
-export const Station = memo(function Station({ session, overview, onAssetError }: { session: GameSession; overview: boolean; onAssetError: (message: string) => void }) {
+export const Station = memo(function Station({ session, overview, standard, onAssetError }: { session: GameSession; overview: boolean; standard: boolean; onAssetError: (message: string) => void }) {
   const [kit, setKit] = useState<StationKit | null>(null);
   useEffect(() => {
     let active = true;
@@ -100,5 +113,5 @@ export const Station = memo(function Station({ session, overview, onAssetError }
     });
     return () => { active = false; };
   }, [onAssetError]);
-  return kit ? <ImportedStation kit={kit} session={session} overview={overview} /> : <StationFallback session={session} />;
+  return kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} /> : <StationFallback session={session} />;
 });

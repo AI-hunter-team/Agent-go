@@ -18,7 +18,7 @@ for (const entry of manifest.assets) {
   files.push({ file: entry.file, errors: result.issues.numErrors, warnings: result.issues.numWarnings, infos: result.issues.numInfos, messages: result.issues.messages });
 }
 const checks = [
-  ["wall-straight", [3, 3.5, 0.4]], ["pillar", [2, 3.5, 2.02]], ["floor-ivory", [3, 0.122, 3]],
+  ["wall-straight", [3, manifest.wallHeightMetres, 0.4]], ["pillar", [2, manifest.pillarHeightMetres, 2.02]], ["floor-ivory", [3, 0.122, 3]],
   ["railing-straight", [3, 1.1, 0.16]], ["railing-corner", [1.5, 1.1, 1.5]], ["railing-end", [0.16, 1.1, 0.16]],
 ];
 for (const [id, expected] of checks) {

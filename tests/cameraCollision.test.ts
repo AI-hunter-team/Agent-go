@@ -9,7 +9,7 @@ test("camera clips columns and low railings at their actual heights", () => {
 });
 
 test("ceiling and outer walls cover both levels and the updated station width", () => {
-  expect(cameraFraction({ x: 10, y: 1.5, z: 15 }, { x: 10, y: 6, z: 15 })).toBeLessThan(0.65);
+  expect(cameraFraction({ x: 10, y: 1.5, z: 15 }, { x: 10, y: 8, z: 15 })).toBeLessThan(0.7);
   expect(cameraFraction({ x: 65, y: -0.5, z: 29 }, { x: 65, y: -0.5, z: 33 })).toBeLessThan(0.3);
   expect(cameraFraction({ x: 60, y: -0.7, z: 15 }, { x: 64, y: 0, z: 15 })).toBe(1);
 });

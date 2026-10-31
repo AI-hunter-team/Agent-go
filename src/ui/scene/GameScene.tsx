@@ -12,6 +12,7 @@ import { Station } from "./Station";
 import { Character } from "./Character";
 import { SimpleCrowd } from "./SimpleCrowd";
 import { cameraFraction } from "./cameraCollision";
+import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; }
 export interface SceneProps {
@@ -200,7 +201,7 @@ function StationLighting({ standard }: { standard: boolean }) {
     <ambientLight intensity={0.55} />
     <primitive object={target} />
     <directionalLight target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
-    {[8, 24, 39, 63].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, 3.8, 15]} intensity={18} distance={21} decay={2} />)}
+    {[8, 24, 39, 63].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, 15]} intensity={28} distance={23} decay={2} />)}
   </>;
 }
 
@@ -240,7 +241,7 @@ function Contents(props: SceneProps) {
     <color attach="background" args={["#e9e1cf"]} />
     <StationLighting standard={props.quality === "standard"} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
-    <Station session={session} overview={props.camera.mode === "overview"} onAssetError={props.onStationAssetError} />
+    <Station session={session} overview={props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />

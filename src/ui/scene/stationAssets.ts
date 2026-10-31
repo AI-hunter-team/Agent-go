@@ -1,19 +1,24 @@
 import { Group, InstancedMesh, Matrix4, Mesh, Object3D, type Material, type BufferGeometry, type MeshStandardMaterial, type Texture } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { fitRailingSpan } from "../../assets/station-kit/railing";
+import { fitMetroRailingSpan } from "../../assets/metro-railings/index";
 import type { Placement } from "./stationLayout";
+import { STAIR_DETAILS } from "./staircase";
 
 export interface StationKit { models: Map<string, Group>; materials: Map<string, MeshStandardMaterial> }
 let pending: Promise<StationKit> | undefined;
 export function loadStationKit(): Promise<StationKit> {
   if (!pending) pending = (async () => {
-    const base = new URL(`${import.meta.env.BASE_URL}assets/station-kit/`, location.origin);
-    const response = await fetch(new URL("manifest.json", base));
-    if (!response.ok) throw new Error(`站厅清单 HTTP ${response.status}`);
-    const manifest = await response.json() as { assets: { id: string; state: string; file: string }[] };
+    const entries = (await Promise.all(["station-kit", "metro-railings"].map(async (directory) => {
+      const base = new URL(`${import.meta.env.BASE_URL}assets/${directory}/`, location.origin);
+      const response = await fetch(new URL("manifest.json", base));
+      if (!response.ok) throw new Error(`站厅清单 ${directory} HTTP ${response.status}`);
+      const manifest = await response.json() as { assets: { id: string; state?: string; file: string }[] };
+      return manifest.assets.filter((entry) => !entry.state || entry.state === "open").map((entry) => ({ ...entry, url: new URL(entry.file, base).href }));
+    }))).flat();
     const loader = new GLTFLoader(), materials = new Map<string, MeshStandardMaterial>();
-    const attempts = await Promise.allSettled(manifest.assets.filter((a) => a.state === "open").map(async (entry) => {
-      const { scene } = await loader.loadAsync(new URL(entry.file, base).href);
+    const attempts = await Promise.allSettled(entries.map(async (entry) => {
+      const { scene } = await loader.loadAsync(entry.url);
       scene.userData = { ...scene.children[0]?.userData, assetId: entry.id };
       return [entry.id, scene] as const;
     }));
@@ -36,6 +41,7 @@ export function loadStationKit(): Promise<StationKit> {
         if (mat !== shared) discarded.add(mat);
         node.material = shared;
       } else materials.set(mat.name, mat);
+      if (mat.transparent) mat.depthWrite = false;
       node.castShadow = !node.userData.noShadow && !["floor-", "ceiling-"].some((prefix) => root.userData.assetId?.startsWith(prefix)); node.receiveShadow = true;
     });
     const retained = new Set([...materials.values()].flatMap(textureList));
@@ -49,8 +55,13 @@ export function loadStationKit(): Promise<StationKit> {
 export function placedModel(kit: StationKit, placement: Placement): Object3D {
   const source = kit.models.get(placement.id);
   if (!source) throw new Error("Missing station model: " + placement.id);
-  const root = placement.railLength ? fitRailingSpan(source, placement.railLength) : source.clone(true);
-  if (placement.slope && placement.railLength) {
+  const metro = !!source.userData.railingStyle;
+  const run = (placement.railLength ?? 0) - 0.16;
+  const root = placement.railLength ? metro ? fitMetroRailingSpan(source, placement.railLength, {
+    rise: placement.slope ?? 0, startPost: placement.railStartPost,
+    postBase: placement.id === "glass-stairs" ? (x) => (placement.slope ?? 0) * Math.ceil((x / run + 0.5) * STAIR_DETAILS.count - 0.000001) / STAIR_DETAILS.count : undefined,
+  }) : fitRailingSpan(source, placement.railLength) : source.clone(true);
+  if (!metro && placement.slope && placement.railLength) {
     const span = placement.railLength, drop = placement.slope;
     for (const node of root.children) {
       node.position.y += drop * (node.position.x / span + 0.5);
@@ -66,17 +77,23 @@ export function placedModel(kit: StationKit, placement: Placement): Object3D {
 /** A GLB may contain many parts; batch equal geometry/material pairs across every placement. */
 export function batchStation(kit: StationKit, placements: Placement[]): Group {
   const batches = new Map<string, { geometry: BufferGeometry; material: Material; shadow: boolean; matrices: Matrix4[] }>();
+  const group = new Group(); group.name = "station-kit-static";
   for (const placement of placements) {
     const root = placedModel(kit, placement);
     root.traverse((node) => {
       if (!(node instanceof Mesh) || Array.isArray(node.material)) return;
+      // Keep each clear panel's sorting centre; an opaque batch cannot sort glass correctly.
+      if (node.material.transparent) {
+        const pane = new Mesh(node.geometry, node.material); pane.name = node.name;
+        pane.matrix.copy(node.matrixWorld); pane.matrixAutoUpdate = false;
+        pane.castShadow = false; pane.receiveShadow = false; group.add(pane); return;
+      }
       const key = `${node.geometry.uuid}:${node.material.uuid}:${node.castShadow}`;
       let batch = batches.get(key);
       if (!batch) { batch = { geometry: node.geometry, material: node.material, shadow: node.castShadow, matrices: [] }; batches.set(key, batch); }
       batch.matrices.push(node.matrixWorld.clone());
     });
   }
-  const group = new Group(); group.name = "station-kit-static";
   group.userData = { placementCount: placements.length, batchCount: batches.size, modelIds: [...new Set(placements.map((p) => p.id))] };
   for (const batch of batches.values()) {
     const mesh = new InstancedMesh(batch.geometry, batch.material, batch.matrices.length);
@@ -87,5 +104,10 @@ export function batchStation(kit: StationKit, placements: Placement[]): Group {
   return group;
 }
 export function disposeBatches(group: Group) {
-  group.traverse((node) => { if (node instanceof InstancedMesh) node.dispose(); });
+  const temporary = new Set<BufferGeometry>();
+  group.traverse((node) => {
+    if (node instanceof InstancedMesh) node.dispose();
+    if (node instanceof Mesh && node.geometry.userData.metroTransient) temporary.add(node.geometry);
+  });
+  temporary.forEach((geometry) => geometry.dispose());
 }

@@ -11,8 +11,9 @@
     2,
     2
   ],
-  "showroomCeilingMetres": 4.25,
-  "structuralFrameHeightMetres": 4.2,
+  "pillarHeightMetres": 5.95,
+  "showroomCeilingMetres": 6,
+  "structuralFrameHeightMetres": 5.95,
   "railing": {
     "heightMetres": 1.1,
     "straightModuleMetres": 3,
@@ -343,11 +344,11 @@
       "id": "portal",
       "label": "门洞模块",
       "category": "architecture",
-      "description": "3m 模数；2m 净宽，2.75m 净高。",
+      "description": "3m 模数；2m 净宽，5.25m 净高。",
       "state": "open",
       "file": "models/portal.glb",
-      "bytes": 783328,
-      "sha256": "7fff4d7b7c2a5309506db5e40a5ad1b03626ba5676922ac8e88ef625fb1211ce",
+      "bytes": 783352,
+      "sha256": "dbea2ce0766ccf0517ebe5915c93ae7428ca2fa2075f89b7afc2e7a7b80a0b2d",
       "bounds": {
         "min": [
           -1.5,
@@ -356,12 +357,12 @@
         ],
         "max": [
           1.5,
-          3.499999993443489,
+          5.999999993443489,
           0.20000000298023224
         ],
         "size": [
           3,
-          3.499999992847443,
+          5.999999992847442,
           0.4000000059604645
         ]
       },
@@ -386,11 +387,11 @@
       "id": "pillar",
       "label": "方柱",
       "category": "architecture",
-      "description": "2×2m 占地，3.5m 高。",
+      "description": "2×2m 占地，5.95m 高。",
       "state": "open",
       "file": "models/pillar.glb",
-      "bytes": 776780,
-      "sha256": "7a967f0b278e33c7ec20a226a41a990a88c91b8178d4b891f2725f615122ad1a",
+      "bytes": 776772,
+      "sha256": "b90d3ccc79b68fbb0ce503ada920e6049e436b509d63ae28f3d63dcc81212518",
       "bounds": {
         "min": [
           -1,
@@ -399,12 +400,12 @@
         ],
         "max": [
           1,
-          3.499999993443489,
+          5.949999993443489,
           1.0109999996125698
         ],
         "size": [
           2,
-          3.499999992847443,
+          5.9499999928474425,
           2.0109999996125696
         ]
       },
@@ -602,12 +603,12 @@
       "description": "2m 净宽、2.5m 高，匹配既有安检通道；状态灯独立。",
       "state": "open",
       "file": "models/security-arch-open.glb",
-      "bytes": 348780,
-      "sha256": "ad759fe4b99434ba82da66b09ff8dae9aab432327c0019e981b5f9d87bdfd602",
+      "bytes": 348808,
+      "sha256": "67b5cc006004d802fdd6e0ac6514f0b738665e9d5b28ebf7dae612376a4bd176",
       "bounds": {
         "min": [
           -1.2200000286102295,
-          0,
+          3.337860099428269e-8,
           -0.20999999344348907
         ],
         "max": [
@@ -617,7 +618,7 @@
         ],
         "size": [
           2.440000057220459,
-          2.500000003576279,
+          2.4999999701976776,
           0.45399999305605887
         ]
       },
@@ -663,12 +664,12 @@
       "description": "2m 净宽、2.5m 高，匹配既有安检通道；状态灯独立。",
       "state": "closed",
       "file": "models/security-arch-closed.glb",
-      "bytes": 348728,
-      "sha256": "1e64f5404178f706ed61ed3dec153afbb4740cd74fdabcb3de6240d8639a8800",
+      "bytes": 348756,
+      "sha256": "71e400bdfa1934f6c1051b8d48c48663513d4879648c3a64165331fc2c82de89",
       "bounds": {
         "min": [
           -1.2200000286102295,
-          0,
+          3.337860099428269e-8,
           -0.20999999344348907
         ],
         "max": [
@@ -678,7 +679,7 @@
         ],
         "size": [
           2.440000057220459,
-          2.500000003576279,
+          2.4999999701976776,
           0.45399999305605887
         ]
       },
@@ -724,12 +725,12 @@
       "description": "2m 净宽、2.5m 高，匹配既有安检通道；状态灯独立。",
       "state": "broken",
       "file": "models/security-arch-broken.glb",
-      "bytes": 348784,
-      "sha256": "494fdef4077558ac00137a950bff9948c685c55566090bb7c7026c6f492334a5",
+      "bytes": 348812,
+      "sha256": "a363305b02a95f77083f9a86136f6b16c87baedb168131afa89f660eadef96e9",
       "bounds": {
         "min": [
           -1.2200000286102295,
-          0,
+          3.337860099428269e-8,
           -0.20999999344348907
         ],
         "max": [
@@ -739,7 +740,7 @@
         ],
         "size": [
           2.440000057220459,
-          2.500000003576279,
+          2.4999999701976776,
           0.45399999305605887
         ]
       },
@@ -1123,11 +1124,11 @@
       "id": "structural-frame",
       "label": "圆角结构框",
       "category": "architecture",
-      "description": "6m 跨度、4.2m 高；两倍地面模数。",
+      "description": "6m 跨度、5.95m 高；两倍地面模数。",
       "state": "open",
       "file": "models/structural-frame.glb",
       "bytes": 388864,
-      "sha256": "811af97df5b5a4dc46b6f3d8182c28766c952656c4e8e5c9be997b4e39f0fd52",
+      "sha256": "fd89b39a0f48f9d7e3432941bfc69f709463e7c1fc5dc37aef741c3083bfc677",
       "bounds": {
         "min": [
           -3.009999990463257,
@@ -1136,12 +1137,12 @@
         ],
         "max": [
           3.009999990463257,
-          4.210000038146973,
+          5.960000038146973,
           0.17000001668930054
         ],
         "size": [
           6.019999980926514,
-          4.220000037923455,
+          5.970000037923455,
           0.3400000184774399
         ]
       },
@@ -1359,25 +1360,25 @@
       "id": "ceiling-fascia",
       "label": "顶面侧封板",
       "category": "architecture",
-      "description": "3m 长、0.7m 高；衔接基础墙与高顶。",
+      "description": "3m 长、2.5m 高；衔接基础墙与高顶。",
       "state": "open",
       "file": "models/ceiling-fascia.glb",
-      "bytes": 443668,
-      "sha256": "442e5b5c2055b8d56d24c0857cbb50768fe42e234a8b7f435be3135833c4f2eb",
+      "bytes": 443640,
+      "sha256": "6e375d3598cd7acaa70ec320a4a359952380ed285d983007ef90809d35d53c6b",
       "bounds": {
         "min": [
           -1.5,
-          5.960464455334602e-9,
+          0,
           -0.20000000298023224
         ],
         "max": [
           1.5,
-          0.6999999940395355,
+          2.5,
           0.20000000298023224
         ],
         "size": [
           3,
-          0.699999988079071,
+          2.5,
           0.4000000059604645
         ]
       },

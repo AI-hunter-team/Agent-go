@@ -4,6 +4,7 @@ import { CanvasTexture, DoubleSide, SRGBColorSpace, type Mesh, type MeshBasicMat
 import { FACILITIES, QUEUE_SPACING, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_BARRIERS, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
 import type { GameSession } from "../gameSession";
 import { box, materials, plane, type colors } from "./resources";
+import { StationStairs } from "./StationStairs";
 
 type Color = keyof typeof colors;
 function Block({ position, scale, color = "chalk" }: { position: [number, number, number]; scale: [number, number, number]; color?: Color }) {
@@ -63,11 +64,7 @@ export const StationFallback = memo(function StationFallback({ session }: { sess
   return <group>
     <Block position={[STAIRS_TOP.x / 2, -0.09, HEIGHT / 2]} scale={[STAIRS_TOP.x, 0.18, HEIGHT + 2]} color="chalk" />
     <Block position={[(STAIRS_BOTTOM.x + WIDTH) / 2, -2.09, HEIGHT / 2]} scale={[WIDTH - STAIRS_BOTTOM.x + 2, 0.18, HEIGHT + 2]} color="sage" />
-    {Array.from({ length: 12 }, (_, index) => {
-      const width = (STAIRS_BOTTOM.x - STAIRS_TOP.x) / 12;
-      const top = -2 * index / 12;
-      return <Block key={`stairs${index}`} position={[STAIRS_TOP.x + width * (index + 0.5), top - 0.1, STAIRS_TOP.y]} scale={[width, 0.2, 4]} color={index % 2 ? "chalk" : "ochre"} />;
-    })}
+    <StationStairs material={materials.sage} />
     <Sign text="04   下楼梯 / PLATFORM  ↓" position={[47.5, 2.8, 15]} width={5.8} />
     <Block position={[(SECURITY_X + GATE_X) / 2, -0.015, HEIGHT / 2]} scale={[GATE_X - SECURITY_X, 0.025, HEIGHT]} color="white" />
     <Block position={[(GATE_X + STAIRS_TOP.x) / 2, -0.012, HEIGHT / 2]} scale={[STAIRS_TOP.x - GATE_X, 0.025, HEIGHT]} color="sage" />
