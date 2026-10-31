@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "title": "AI猎人 · 站厅空间与模块素材 V2",
+  "title": "agent-go · Station Environment Kit V2",
   "units": "metres",
   "upAxis": "Y",
   "rootConvention": "Footprint centre; floor top is Y=0. Ceiling/light assets use mounting-plane Y=0. Devices face +Z; approach +Z, exit -Z.",
@@ -133,7 +133,7 @@
       "state": "open",
       "file": "models/floor-ivory.glb",
       "bytes": 408204,
-      "sha256": "6656bb10b1e95131821022876f06ccd48ac4b555b2ed9c33f08c126a5fd55f8f",
+      "sha256": "2e775d87478ba1d00ed545a1bb05f7fbc3a690868e42c8f1921a18a67b053f63",
       "bounds": {
         "min": [
           -1.5,
@@ -166,8 +166,8 @@
       "description": "同一地面模型，不同材质皮肤。",
       "state": "open",
       "file": "models/floor-sage.glb",
-      "bytes": 408204,
-      "sha256": "ab3465e2fd13bce5d8ed36a2667ede3520c56b312945d623f5ae486641cdf775",
+      "bytes": 408200,
+      "sha256": "687e8dcb5790fffc2e2de917c0e63975815e44827376e79c79160865d3ca0f6f",
       "bounds": {
         "min": [
           -1.5,
@@ -201,7 +201,7 @@
       "state": "open",
       "file": "models/floor-plain.glb",
       "bytes": 7692,
-      "sha256": "3b4cf0fa80478aec1a97454d3c6397a7c9ee3df17d1c71134b0627657fb86e50",
+      "sha256": "98f2e1614f61c6f9669e494fd116a4007d60e2cef1eead5a5c29fa127490cc50",
       "bounds": {
         "min": [
           -1.5,
@@ -234,8 +234,8 @@
       "description": "3m 长，3.5m 高，0.4m 厚。",
       "state": "open",
       "file": "models/wall-straight.glb",
-      "bytes": 774236,
-      "sha256": "f2033b0612f763dff18f4b30cf83b0b5f0bf90c7b117dbfee8fc768a44504e3e",
+      "bytes": 774232,
+      "sha256": "2f0e589f1eab43018b8f6fd0696412030d9815317824e6231d5593c33cb1b979",
       "bounds": {
         "min": [
           -1.5,
@@ -269,7 +269,7 @@
       "state": "open",
       "file": "models/wall-corner.glb",
       "bytes": 787336,
-      "sha256": "b02dbfe8eb270b66f2e991cf48d09b4afd3dabc717bc8c28f7a839b0eb54e9d7",
+      "sha256": "73764f8163a49e0b78b748f1aa9f15decbb13ba2a2a89dda1af78a20cf80c3bc",
       "bounds": {
         "min": [
           -1.5000000029802323,
@@ -303,7 +303,7 @@
       "state": "open",
       "file": "models/wall-end.glb",
       "bytes": 774316,
-      "sha256": "65dfd73772ee4295f72459d7dbd52b778e530d14da27a511653086f77c4bcb9a",
+      "sha256": "19dd8fa69b679f96723770a82c6b2e485739aa2a973358f34b972d9088cb9af8",
       "bounds": {
         "min": [
           -0.20000000298023224,
@@ -337,7 +337,7 @@
       "state": "open",
       "file": "models/portal.glb",
       "bytes": 783328,
-      "sha256": "7a2af2990c08f48e94a15b81a694874aac7d5d1907db5af14d0a15288d778320",
+      "sha256": "7fff4d7b7c2a5309506db5e40a5ad1b03626ba5676922ac8e88ef625fb1211ce",
       "bounds": {
         "min": [
           -1.5,
@@ -380,7 +380,7 @@
       "state": "open",
       "file": "models/pillar.glb",
       "bytes": 776780,
-      "sha256": "ced1055806594aa4679e00a207b92c33b511905d9e16a500f67d2a2b5ab3d8f4",
+      "sha256": "7a967f0b278e33c7ec20a226a41a990a88c91b8178d4b891f2725f615122ad1a",
       "bounds": {
         "min": [
           -1,
@@ -415,7 +415,7 @@
       "state": "open",
       "file": "models/partition.glb",
       "bytes": 774224,
-      "sha256": "66b3c7e9a7d5bd51601f875a0c33421254a33766ffc58ee85171332cd435c08d",
+      "sha256": "0d6211b5fef85c44fa046302705cd0fa8571a08030ec882ab753eb2af9234b52",
       "bounds": {
         "min": [
           -1.5,
@@ -448,8 +448,8 @@
       "description": "屏幕、灯带、票口和交互锚点独立。",
       "state": "open",
       "file": "models/ticket-machine-open.glb",
-      "bytes": 371584,
-      "sha256": "d2a4940a6afc9125a72c3e17e8ebbd5ce4b985091000774f3b2e40684ff41b45",
+      "bytes": 371580,
+      "sha256": "5def86f894885e0f269c897897adafcd3ad2f34547b6250289efab615cfc1758",
       "bounds": {
         "min": [
           -0.42500001192092896,
@@ -497,7 +497,7 @@
       "state": "closed",
       "file": "models/ticket-machine-closed.glb",
       "bytes": 371480,
-      "sha256": "40a634032337c7076b5fc33925e7ce7db2618b18c7d3371613e1eb5c9929a2f3",
+      "sha256": "ff71e70ea50ba3c1fc6d76d66601e9687e758c54bfef841d240f0e43fcfb5c82",
       "bounds": {
         "min": [
           -0.42500001192092896,
@@ -545,7 +545,7 @@
       "state": "broken",
       "file": "models/ticket-machine-broken.glb",
       "bytes": 371536,
-      "sha256": "7b51a171ff2f4785b0e6cf82e265a8fb0db36fed6c642291d4da9db3b80d2141",
+      "sha256": "180df875264ece869d00a5943a9e33386cd4d8164963be9099b92e5178744d5a",
       "bounds": {
         "min": [
           -0.42500001192092896,
@@ -593,7 +593,7 @@
       "state": "open",
       "file": "models/security-arch-open.glb",
       "bytes": 348696,
-      "sha256": "d9b08660fc8f358b1f15d4bf6228e0f8b9aed64302eebdbad5c49a078ca7904a",
+      "sha256": "eba81a6bc31a69d3725379055f43bad7ade82ef884078966427886f4e48673ce",
       "bounds": {
         "min": [
           -0.9499999994039535,
@@ -654,7 +654,7 @@
       "state": "closed",
       "file": "models/security-arch-closed.glb",
       "bytes": 348644,
-      "sha256": "538e4f36ff0386fe2e4afa47cc7c446db12ac4e15ca4a24243f9b6519805968a",
+      "sha256": "db669300ff2c77c5563a10959615db66877efdf6938e30fb538839a0a6de6cda",
       "bounds": {
         "min": [
           -0.9499999994039535,
@@ -715,7 +715,7 @@
       "state": "broken",
       "file": "models/security-arch-broken.glb",
       "bytes": 348700,
-      "sha256": "1c4bbfaa341e97c22a94aedb7b29e936ad66f3372ec9277e423b685e200e361e",
+      "sha256": "960e86bab5ad6221e551cc57fdfc5a113091089af64ee582055758ff7a437349",
       "bounds": {
         "min": [
           -0.9499999994039535,
@@ -776,7 +776,7 @@
       "state": "open",
       "file": "models/fare-gate-open.glb",
       "bytes": 351796,
-      "sha256": "89fa6d24298ec65f01999cea37b8c71a49cc70bcb1707a6f2421b5bd74b30bca",
+      "sha256": "404a233a59bd32740f0b7234a0ecb976aac3e73a871d156646d5eb4573f3536b",
       "bounds": {
         "min": [
           -0.5949999967217445,
@@ -839,7 +839,7 @@
       "state": "closed",
       "file": "models/fare-gate-closed.glb",
       "bytes": 351744,
-      "sha256": "f4035cadee85e4d80496b0d75caae27f3167d46dbaf6a14514e054759c6e13ca",
+      "sha256": "543b278a1957d73822f33d34c1cb047f6ee3df2c41cd443298c65f0f87179073",
       "bounds": {
         "min": [
           -0.5949999967217445,
@@ -902,7 +902,7 @@
       "state": "broken",
       "file": "models/fare-gate-broken.glb",
       "bytes": 351800,
-      "sha256": "352ad7edcd8b9ff58f8b2f077ee5ec6a41f873a050f17489a6c6250b74b57db6",
+      "sha256": "77f45f432824f8c20224426bf875adfef575e12f7eb4f227dc2e7c89b80441d1",
       "bounds": {
         "min": [
           -0.5949999967217445,
@@ -965,7 +965,7 @@
       "state": "open",
       "file": "models/sign-totem.glb",
       "bytes": 331708,
-      "sha256": "6b6777486a073b5c8c4bb06a81c5c2a78401842c5cf0249ff7a2edf41c6e1838",
+      "sha256": "96ff9288de39cb16c876da7eb3dc82159d3b4a3fd7381da78b8958e9f0f4114d",
       "bounds": {
         "min": [
           -0.30000001192092896,
@@ -1008,7 +1008,7 @@
       "state": "open",
       "file": "models/sign-panel.glb",
       "bytes": 331640,
-      "sha256": "f203bd2e426c96b60632977b34180d526d6f09864a13b0ab28f26a3c62065407",
+      "sha256": "ba8a8d874e8768b7966d0688fd5f93c17d24ed19e8df9de8fc8bd0019c995024",
       "bounds": {
         "min": [
           -1.399999976158142,
@@ -1051,7 +1051,7 @@
       "state": "open",
       "file": "models/marking-arrow.glb",
       "bytes": 1760,
-      "sha256": "c8944bdb5990dfe9646baacccae1cd85b6f3f54d94e747948b28b179b81ce25d",
+      "sha256": "f7d85b2719f05252b7ad71399d7f16b0fd64f3ebb554e3b5f98ac1e309007fc5",
       "bounds": {
         "min": [
           -0.3199999928474426,
@@ -1084,7 +1084,7 @@
       "state": "open",
       "file": "models/marking-queue.glb",
       "bytes": 325260,
-      "sha256": "ce2208ee17bf71f8dfa957be748e43a9fdc85bed7ef2fd9055c0b636e292e1aa",
+      "sha256": "faad5f64ca14574a67e6836fc238a176a2da35857d787c67eb2cce50eeb412f3",
       "bounds": {
         "min": [
           -0.20000000298023224,
@@ -1117,7 +1117,7 @@
       "state": "open",
       "file": "models/structural-frame.glb",
       "bytes": 388864,
-      "sha256": "69bb4bc8dbc983950f50207d0923428d604a615a2acb4ceedc3e5c776e62e5a4",
+      "sha256": "811af97df5b5a4dc46b6f3d8182c28766c952656c4e8e5c9be997b4e39f0fd52",
       "bounds": {
         "min": [
           -3.009999990463257,
@@ -1150,7 +1150,7 @@
       "state": "open",
       "file": "models/ceiling-panel.glb",
       "bytes": 7816,
-      "sha256": "87cf3a290fc668f32400462813bf8159968f7b28c7eff7fc9630e804276d8295",
+      "sha256": "7a892c025e35f1af714aafad02c8b5df97a1e2d20e7def79db5f4024536014e3",
       "bounds": {
         "min": [
           -1.5,
@@ -1184,7 +1184,7 @@
       "state": "open",
       "file": "models/light-strip.glb",
       "bytes": 7600,
-      "sha256": "ad418e7b7d2f415349eea97d53df3f33e19017a9b5fc699b5e111e2bf9e2f9b3",
+      "sha256": "77fcf54752e619b724148570a5b3da9b2202ead79abb09bd8ce5d5983bb69aa2",
       "bounds": {
         "min": [
           -0.07999999821186066,
@@ -1218,7 +1218,7 @@
       "state": "open",
       "file": "models/window-bay.glb",
       "bytes": 790448,
-      "sha256": "e82fbe5f95a287750fdcb3128dba624a1d78663f2d4d0e07c4739114b8be7ace",
+      "sha256": "eda0838af74779fa2981d18560baa8d9da1f6f4b4daa5cfc8ee554f62bcd7923",
       "bounds": {
         "min": [
           -1.5000000002980232,
@@ -1253,8 +1253,8 @@
       "description": "3m 长、0.46m 宽的独立地面漆带。",
       "state": "open",
       "file": "models/route-straight.glb",
-      "bytes": 1628,
-      "sha256": "ed9fa9e544a366f8f1293f95340e92b7d9acf2a1350e0acad313908402e79087",
+      "bytes": 1624,
+      "sha256": "cdbb325d370171d31c39ce45e1b1f11406ee3aca993fb9bc9fb55ef9ad45f160",
       "bounds": {
         "min": [
           -0.23000000417232513,
@@ -1286,8 +1286,8 @@
       "description": "3m 模数圆弯；可旋转拼接。",
       "state": "open",
       "file": "models/route-turn.glb",
-      "bytes": 3408,
-      "sha256": "870ee4e057bd7ad56565d078e015f149abd1e2b9a5a1a4c4abc4e4f4027f0e86",
+      "bytes": 3404,
+      "sha256": "66c9190d1ce8c815ac069cbb1988e85bd8ca908b0f24d9c85d3f4e28be712684",
       "bounds": {
         "min": [
           -0.22994795441627502,
@@ -1320,7 +1320,7 @@
       "state": "open",
       "file": "models/route-split.glb",
       "bytes": 2576,
-      "sha256": "e18bde4b5ffe0a5d2137bef0f86ea27fe248ff463371eadac6729cc8f95ee0f4",
+      "sha256": "29c265e5c128e8a11ef8cedcb80edf1e5fbfdfe2ead491c916d6e47d489516f3",
       "bounds": {
         "min": [
           -1.5,
@@ -1353,7 +1353,7 @@
       "state": "open",
       "file": "models/ceiling-fascia.glb",
       "bytes": 443668,
-      "sha256": "a0fe8660f6b8403e4b2ce0ef9b2f3fcc6cd457c0fa5ae04264832079581a3922",
+      "sha256": "442e5b5c2055b8d56d24c0857cbb50768fe42e234a8b7f435be3135833c4f2eb",
       "bounds": {
         "min": [
           -1.5,

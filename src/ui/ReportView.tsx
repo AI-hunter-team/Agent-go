@@ -23,7 +23,7 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `ai-hunter-report-seed${report.seed}-${Date.now()}.json`;
+    a.download = `agent-go-report-seed${report.seed}-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };

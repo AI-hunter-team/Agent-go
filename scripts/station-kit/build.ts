@@ -37,7 +37,7 @@ for (const asset of ASSETS) {
   }
 }
 const manifest = {
-  version: 2, title: "AI猎人 · 站厅空间与模块素材 V2", units: "metres", upAxis: "Y",
+  version: 2, title: "agent-go · Station Environment Kit V2", units: "metres", upAxis: "Y",
   rootConvention: "Footprint centre; floor top is Y=0. Ceiling/light assets use mounting-plane Y=0. Devices face +Z; approach +Z, exit -Z.",
   source: "Original procedural geometry and seeded textures; no third-party textures or character models included.",
   gridMetres: 3, wallHeightMetres: 3.5, pillarFootprintMetres: [2, 2],

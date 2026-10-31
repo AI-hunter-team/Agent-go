@@ -88,7 +88,7 @@ export async function exportGlb(root: Object3D, textureDirectory: string) {
   };
   const rootId = await visit(root);
   const json: Json = {
-    asset: { version: "2.0", generator: "AI Hunter station-kit v1" }, scene: 0,
+    asset: { version: "2.0", generator: "agent-go station-kit v2" }, scene: 0,
     scenes: [{ name: root.name, nodes: [rootId] }], nodes, meshes, materials, accessors,
     bufferViews: views, buffers: [{ byteLength: offset }],
     ...(images.length ? { images, textures, samplers: [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }] } : {}),

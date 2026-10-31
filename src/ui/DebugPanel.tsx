@@ -12,7 +12,7 @@ export function DebugPanel({ report }: { report: GameReport }) {
     const blob = new Blob([JSON.stringify(debug, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `ai-hunter-debug-${debug.runId}.json`; a.click(); URL.revokeObjectURL(url);
+    a.href = url; a.download = `agent-go-debug-${debug.runId}.json`; a.click(); URL.revokeObjectURL(url);
   };
   return <details className="debug-panel">
     <summary>Debug 日志与 AI 耗时</summary>
