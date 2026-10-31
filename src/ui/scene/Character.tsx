@@ -26,7 +26,7 @@ export class ModelBoundary extends Component<{ children: ReactNode; fallback: Re
 }
 
 /** 加载并适配带骨骼的角色，将游戏动作映射为模型动画。 */
-function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; session: GameSession; actorId: string; reducedMotion: boolean }) {
+function ImportedModel({ url, session, actorId, reducedMotion, onLoaded }: { url: string; session: GameSession; actorId: string; reducedMotion: boolean; onLoaded?: (url: string) => void }) {
   // Local uncompressed GLB/glTF needs no external Draco or font CDN.
   const { scene, animations } = useGLTF(url, false, false);
   const model = useMemo(() => {
@@ -49,6 +49,7 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
   const performance = getScenePerformance(session);
   const constrainRootMotion = useMemo(() => createAvatarRootMotionGuard(model), [model]);
   const root = useRef<Group>(null);
+  useEffect(() => { onLoaded?.(url); }, [onLoaded, url]);
   // 仅主角登记舞蹈和问候；保安的普通播放仍服从世界冻结。
   useEffect(() => {
     if (actorId !== "player") return;
@@ -122,7 +123,7 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
 }
 
 /** 插值角色位置与方向，为主角和保安应用各自的模型及额外朝向。 */
-export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string) => void; reducedMotion: boolean }) {
+export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, onModelLoadStart, onModelLoaded, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string, url?: string) => void; onModelLoadStart?: (url: string) => void; onModelLoaded?: (url: string) => void; reducedMotion: boolean }) {
   const root = useRef<Group>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const ring = useRef<MeshBasicMaterial>(null);
@@ -138,6 +139,9 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
   }, [canvas, kind]);
   // 更换主角资源时立即撤销旧动作能力，加载失败的模型不会保留旧舞蹈状态。
   useEffect(() => { if (kind === "player") performance.setAsset(assetUrl); }, [kind, performance, assetUrl]);
+  useEffect(() => {
+    if (kind === "player" && assetUrl) onModelLoadStart?.(assetUrl);
+  }, [assetUrl, kind, onModelLoadStart]);
   /** 记录命中主角的按下位置，保持原有相机拖动传播。 */
   function down(event: ThreeEvent<PointerEvent>) {
     if (kind !== "player") return;
@@ -167,8 +171,8 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
     {kind === "player" && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
       <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial ref={ring} color="#315c65" transparent opacity={0.65} depthWrite={false} />
     </mesh>}
-    {(kind === "player" || kind === "guard") && assetUrl ? <ModelBoundary key={assetUrl} fallback={placeholder} onError={onAssetError}>
-      <Suspense fallback={placeholder}><group rotation={[0, assetRotation * Math.PI / 180, 0]}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} /></group></Suspense>
+    {(kind === "player" || kind === "guard") && assetUrl ? <ModelBoundary key={assetUrl} fallback={placeholder} onError={(message) => onAssetError(message, kind === "player" ? assetUrl : undefined)}>
+      <Suspense fallback={placeholder}><group rotation={[0, assetRotation * Math.PI / 180, 0]}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} onLoaded={onModelLoaded} /></group></Suspense>
     </ModelBoundary> : placeholder}
   </group>;
 });
