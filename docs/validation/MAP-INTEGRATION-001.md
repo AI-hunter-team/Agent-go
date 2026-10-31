@@ -2,6 +2,8 @@
 
 状态：2026-10-31（Asia/Shanghai）本地集成验证快照，尚未合入远端。负责人：本聊天 Codex，单一实施及集成人；[任务简报](../tasks/MAP-INTEGRATION-001.md)。
 
+交付：受测功能提交 `215a5f5eb2ba89d009c254f3c0ccb2425d854d60` 已推送并创建 [PR #29](https://github.com/AI-hunter-team/Agent-go/pull/29)。随后仅补本行和交接链接；远端CI结果在PR按头提交核对，不以本地结果替代。旧PR #28保持打开。
+
 ## 版本与环境
 
 - 基线：已 fetch 的 main `26ddb2bd983be5be2a64bb0c58912a8e3614a0df`；发布前再次 fetch，主线未变化。
