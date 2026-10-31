@@ -25,6 +25,8 @@
 - 类型、主程序及素材预览构建通过。本地全量测试两轮分别有 3 / 1 项默认 5 秒超时，定点复验和最终 CI 如实写入[集成验证](docs/validation/PR18-MERGE-001.md)，不冒称本地全量通过。
 - 74 个构建文件已保存到原项目 `artifacts/pr18-merge/` 并核对 SHA256；原 Responses 和自定义角色工作区保持原状。
 - 本轮人工修改报告索引、中央记录、任务简报、验证报告、PROGRESS 和 TODO；未新增函数，故无新增函数职责。最终合入见 [PR #18](https://github.com/AI-hunter-team/Agent-go/pull/18)，不部署；临时 worktree 交付后归档。
+- 最终交付：集成提交 `57c2c41` 的 Ubuntu 与 Compose 通过，Windows 首次一个既有用例超时，单独重试一次后完整通过；PR 已合入 main `9fe6c94`，合并代码树与受测集成头一致。本地失败记录保留，结果与构建位于原项目 `artifacts/pr18-merge/`。
+- 临时目录清理受应用限制：当前工作区被视为聊天主目录，`archive_worktree` 拒绝移除；原目录不是 managed worktree，不能通过 attach 切回。隐藏临时目录暂留，未绕过保护删除当前聊天工作区。
 
 ## PR #14 函数说明（历史）
 
