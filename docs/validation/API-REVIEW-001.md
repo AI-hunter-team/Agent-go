@@ -10,7 +10,7 @@
 | 检查 | 结果与证据 |
 |---|---|
 | 分支和工作区 | `git status --short --branch`、`git worktree list`、`git rev-parse HEAD` 均退出 0；本地两个 worktree 均位于上述提交，未同步远端 |
-| 源码核对 | [openai.ts](../../server/openai.ts) 第 50 行为 `/chat/completions`，第 106–118 行使用 messages/tools，第 127–154 行解析并校验 tool_calls；[llm.ts](../../server/llm.ts) 第 8–33 行选择 OpenAI 兼容或 Anthropic 分支 |
+| 源码核对 | [openai.ts](https://github.com/AI-hunter-team/Agent-go/blob/44e2230322c7fdddf33cbd451ca5a6a5436dff70/server/openai.ts)（删除前版本） 第 50 行为 `/chat/completions`，第 106–118 行使用 messages/tools，第 127–154 行解析并校验 tool_calls；[llm.ts](../../server/llm.ts) 第 8–33 行选择 OpenAI 兼容或 Anthropic 分支 |
 | 会话与配置边界 | [sessions.ts](../../server/sessions.ts) 保存 chatMessages；[示例配置](../../.env.example) 使用兼容网关。未读取实际 .env，不能确认运行配置或网关 Responses 能力 |
 | 官方资料 | 已搜索并打开 [OpenAI 迁移指南](https://developers.openai.com/api/docs/guides/migrate-to-responses)：推荐新项目使用 Responses，Chat Completions 仍受支持；迁移涉及输入、输出、状态、工具与流式事件 |
 | 文档检查 | 相对链接、命令及源码依据人工核对；`git diff --check` 退出 0；对本轮四个文档检查行尾空白及冲突标记，无匹配 |
