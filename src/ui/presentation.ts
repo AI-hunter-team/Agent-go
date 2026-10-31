@@ -1,4 +1,4 @@
-import type { FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
+import type { AlertLevel, ItemKind, FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
 import type { Engine } from "../sim/engine";
 import { STAIRS_TOP, STAIRS_BOTTOM } from "../sim/layout";
 import type { ReplayFrame } from "../replay/trajectory";
@@ -24,6 +24,9 @@ export interface FacilityFrame {
   readonly serving: boolean;
 }
 export interface SceneSnapshot {
+  readonly alerts: readonly {observerId: string; subjectId: string; level: AlertLevel; ring: number}[];
+  readonly items: readonly {id: string; kind: ItemKind; x: number; z: number; holderId: string | null}[];
+  readonly speech: readonly {speakerId: string; text: string; t: number}[];
   readonly t: number;
   readonly actors: ReadonlyMap<string, ActorFrame>;
   readonly facilities: readonly FacilityFrame[];
@@ -64,6 +67,13 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     actors.set(guard.def.id, Object.freeze({ id: guard.def.id, kind: "guard", x: guard.pos.x, z: guard.pos.y, yaw: Math.PI / 2 - guard.facing, motion: moving ? "walk" : "idle", jump: 0 }));
   }
   return Object.freeze({
+    alerts: Object.freeze([...engine.alerts.records.values()].filter(r => r.subjectId === "player" && r.level !== "none").map(r => Object.freeze({observerId:r.observerId,subjectId:r.subjectId,level:r.level,ring:r.ring}))),
+    items: Object.freeze([...engine.world.items.items.values()].filter(i => !i.used && (i.location.type === "ground" || i.location.type === "spot" || (i.location.type === "held" && i.location.slot === "hand"))).flatMap(i => {
+      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,holderId:engine.world.items.holderId(i)})] : [];
+    })),
+    speech: Object.freeze(engine.world.events.filter(e => e.kind === "speech" && engine.t-e.t<=4).slice(-8).flatMap(e => {
+      const match=e.text.match(/^([^：]+)：(.*)$/); return match ? [Object.freeze({speakerId:match[1],text:match[2],t:e.t})] : [];
+    })),
     t: engine.t,
     actors,
     path: Object.freeze((engine.player.activity.kind === "walking" || engine.player.activity.kind === "to_queue" ? engine.player.activity.path : []).map((point) => Object.freeze({ x: point.x, z: point.y }))),

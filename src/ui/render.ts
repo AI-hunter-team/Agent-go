@@ -1,3 +1,4 @@
+import { captureScene } from "./presentation";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import type { Engine } from "../sim/engine";
 import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_WALL, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
@@ -136,6 +137,19 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
     ctx.strokeStyle = "rgba(31,78,121,0.8)";
     ctx.lineWidth = 1;
     polyline(ctx, [player.pos, ...a.path]);
+  }
+
+  if (!replay) {
+    const scene=captureScene(engine);
+    for(const i of scene.items) { ctx.fillStyle=COLORS.ochre;ctx.fillRect(px(i.x)-3,px(i.z)-3,6,6); }
+    for(const a of scene.alerts) {
+      const actor=scene.actors.get(a.observerId); if(!actor) continue;
+      const color=a.level === "white" ? "#faf7ee":a.level === "yellow" ? COLORS.ochre:COLORS.brick;
+      ctx.fillStyle=color;ctx.strokeStyle=COLORS.ink;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,4,0,Math.PI*2);ctx.fill();ctx.stroke();
+      if(a.level!=="red") {ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,7,-Math.PI/2,-Math.PI/2+Math.PI*2*a.ring);ctx.stroke();}
+    }
+    ctx.fillStyle=COLORS.ink;ctx.font="10px system-ui";
+    for(const s of scene.speech) {const a=scene.actors.get(s.speakerId);if(a) ctx.fillText(s.text.slice(0,30),px(a.x)+8,px(a.z)-16);}
   }
 
   // People

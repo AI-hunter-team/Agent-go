@@ -92,3 +92,19 @@ test("queued and serving actors turn toward their facility after arriving from t
     expect(buffer.current.actors.get(p.id)!.motion).toBe(kind === "service" ? "interact" : "walk");
   }
 });
+
+test("interaction snapshots copy directed badges, physical items and expiring speech", () => {
+  const e=new Engine(1);
+  e.alerts.records.set("test",{observerId:"p1",subjectId:"player",level:"yellow",ring:.4,hiddenFor:0,since:0,causeEventId:"e1",reaction:null});
+  const item=e.world.items.spawn("umbrella",{type:"ground",pos:{x:7,y:15}},null);
+  e.world.log("speech","p1：请注意排队",true);
+  const s=captureScene(e);
+  expect(s.alerts).toEqual([{observerId:"p1",subjectId:"player",level:"yellow",ring:.4}]);
+  expect(s.items.find(i=>i.id===item.id)).toMatchObject({x:7,z:15,kind:"umbrella"});
+  expect(s.speech[0].text).toBe("请注意排队");
+  e.alerts.records.get("test")!.ring=.8;
+  expect(s.alerts[0].ring).toBe(.4);
+  e.world.t=5;
+  expect(captureScene(e).speech).toHaveLength(0);
+  expect(JSON.stringify(e.observe())).not.toContain('"ring"');
+});

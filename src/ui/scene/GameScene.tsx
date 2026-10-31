@@ -1,3 +1,4 @@
+import { AlertBadge, SceneItems } from "./Interactions";
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrthographicCamera, PerspectiveCamera, Vector3, type Mesh } from "three";
@@ -157,6 +158,8 @@ function Contents(props: SceneProps) {
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
     <Station session={session} />
     {actors.map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
+    {actors.filter(a=>a.id!=="player").map(a=><AlertBadge key={a.id} id={a.id} session={session}/>)}
+    <SceneItems session={session}/>
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
 }
