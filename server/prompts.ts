@@ -1,5 +1,5 @@
 import type { AgentTurn, NormalizedGuidance } from "../src/shared/types";
-import { ATTRACTIONS, BOARDING_INTERVAL, ESCALATOR_SECONDS, ESCALATOR_WALK_SECONDS, ESCALATOR_TOP, STAIRS_TOP, FACILITIES, NAV_NODES, STAIRS_SECONDS, STAIRS_X, PLATFORM_X } from "../src/sim/layout";
+import { ATTRACTIONS, BLACKOUT_SWITCH, BOARDING_INTERVAL, ESCALATOR_SECONDS, ESCALATOR_WALK_SECONDS, ESCALATOR_TOP, STAIRS_TOP, FACILITIES, NAV_NODES, STAIRS_SECONDS, STAIRS_X, PLATFORM_X } from "../src/sim/layout";
 import { FACILITY_MULTIPLIER, PROFILES, RULES } from "../src/sim/scenario";
 import { assertSafeText, SAFETY_SYSTEM_PROMPT, untrustedData, validateNormalized } from "./security";
 import { buildGameObjective } from "./objective";
@@ -55,6 +55,7 @@ function fixedKnowledge(settings: Readonly<GameSettings>): string {
 
 ## 可前往的地点（move_to 的 target 也可以填设施编号，表示走到该设施当前队尾）
 ${nodes}
+- BLACKOUT_SWITCH：墙边电闸（${BLACKOUT_SWITCH.x}, ${BLACKOUT_SWITCH.y}）；靠近后可主动操作，触发限时熄灯。
 
 ## 设施
 ${facilities}

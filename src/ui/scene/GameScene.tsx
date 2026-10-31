@@ -295,7 +295,7 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
 }
 
 /** 为正式站厅建立环境反射与分区照明，并按当前画质控制阴影。 */
-function StationLighting({ standard }: { standard: boolean }) {
+function StationLighting({ standard, blackout }: { standard: boolean; blackout: boolean }) {
   const { gl, scene } = useThree();
   const target = useMemo(() => { const node = new Object3D(); node.position.set(35, 0, 15); return node; }, []);
   useEffect(() => {
@@ -306,11 +306,11 @@ function StationLighting({ standard }: { standard: boolean }) {
     return () => { scene.environment = old; map.dispose(); };
   }, [gl, scene]);
   return <>
-    <hemisphereLight args={["#fff2d9", "#a1a28f", 1.1]} />
-    <ambientLight intensity={0.55} />
+    <hemisphereLight args={["#fff2d9", "#a1a28f", blackout ? 0.22 : 1.1]} />
+    <ambientLight intensity={blackout ? 0.12 : 0.55} />
     <primitive object={target} />
-    <directionalLight target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
-    {[8, 24, 39, 56, 76, WIDTH - 3].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, 15]} intensity={28} distance={23} decay={2} />)}
+    <directionalLight target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={blackout ? 0.35 : 2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
+    {[8, 24, 39, 56, 76, WIDTH - 3].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, 15]} intensity={blackout ? 2 : 28} distance={23} decay={2} />)}
   </>;
 }
 
@@ -371,7 +371,7 @@ function Contents(props: SceneProps) {
     <RenderSchedule session={session} targetFps={props.targetFps} metrics={metrics} reducedMotion={props.reducedMotion} />
     <CharacterKeyboard session={session} reducedMotion={props.reducedMotion} />
     <color attach="background" args={["#e9e1cf"]} />
-    <StationLighting standard={props.quality === "standard"} />
+    <StationLighting standard={props.quality === "standard"} blackout={session.presentation.current.blackout.active} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} />
     <Station session={session} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
     <MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />

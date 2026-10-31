@@ -60,7 +60,8 @@ describe("shared prompts and tools", () => {
   });
 
   test("tools are strict and parse into actions", () => {
-    expect(AGENT_TOOLS.every((t) => t.strict)).toBe(true);
+  expect(AGENT_TOOLS.every((t) => t.strict)).toBe(true);
+  expect(parseToolUse("operate_switch", { reason: "主动熄灯" })).toEqual({ action: { type: "operate_switch", reason: "主动熄灯" } });
     expect(parseToolUse("wait", { seconds: 99, reason: "" })).toEqual({ action: { type: "wait", seconds: 20, reason: "" } });
     expect(parseToolUse("move_to", { target: "MOON" })).toHaveProperty("error");
     expect(parseToolUse("fly", {})).toHaveProperty("error");

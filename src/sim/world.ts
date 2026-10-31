@@ -66,8 +66,14 @@ export interface Facility {
 export class World {
   t = 0;
   readonly outages = new Map<Zone, number>();
+  blackoutUntil = 0;
   onWorldEvent: ((event: Omit<import("../shared/interaction").WorldEvent, "id">) => void) | null = null;
-  lightAt = (pos: Vec) => (this.outages.get(zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
+  lightAt = (pos: Vec) => this.blackoutUntil > this.t || (this.outages.get(zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
+  blackout(duration: number) {
+    this.blackoutUntil = Math.max(this.blackoutUntil, this.t + duration);
+    this.onWorldEvent?.({ t: this.t, kind: "power_out", actorId: "player", severity: "odd", pos: { x: 13, y: 15 }, loudness: 12 });
+    this.log("power_out", `车站熄灯 ${duration} 秒，视距降低`, true);
+  }
   powerOut(zone: Zone, duration: number) {
     this.outages.set(zone, this.t + duration);
     const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
@@ -367,6 +373,11 @@ export class World {
 
   /** Advance people and facilities by one fixed step. */
   stepPeopleAndFacilities(startsCaptured = false) {
+    if (this.blackoutUntil > 0 && this.blackoutUntil <= this.t) {
+      this.blackoutUntil = 0;
+      this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: "player", severity: "odd", pos: { x: 13, y: 15 }, loudness: 4 });
+      this.log("power_restored", "车站恢复照明", true);
+    }
     for (const [zone, until] of this.outages) if (until <= this.t) {
       this.outages.delete(zone);
       const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];

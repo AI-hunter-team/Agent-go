@@ -37,6 +37,9 @@ export const STAIRS_REACH = 0.8;
 export const QUEUE_SPACING = 0.8;
 
 export const ENTRANCE: Vec = { x: 2, y: 15 };
+/** Wall-mounted placeholder position for the Agent-controlled blackout switch. */
+export const BLACKOUT_SWITCH: Vec = { x: 4, y: 28 };
+export const BLACKOUT_SWITCH_REACH = 1.5;
 
 export const ITEM_SPOTS: ItemSpot[] = [
   ...[6,15,24].map((y,i) => ({id:`confiscated-S${i+1}`,label:`${i+1}号安检保管处`,pos:{x:26,y:y+.7},stock:[],takeSeconds:1.5})),
@@ -178,6 +181,7 @@ export const NAV_NODES: NavNode[] = [
   { id: "STAIRS_TOP", label: "下楼梯入口（上层平台）", pos: STAIRS_TOP },
   { id: "ESCALATOR_TOP", label: "下行扶梯入口侧边", pos: ESCALATOR_APPROACH },
   { id: "PLATFORM", label: "下层站台", pos: STAIRS_BOTTOM },
+  { id: "BLACKOUT_SWITCH", label: "墙边电闸", pos: BLACKOUT_SWITCH },
   ...ATTRACTIONS.map(a => ({ id: a.id, label: a.label, pos: a.approach })),
 ];
 

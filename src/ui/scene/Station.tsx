@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { BufferGeometry, Float32BufferAttribute, DoubleSide, Group, Mesh, PointLight } from "three";
 import { makeMaterials, setFacilityState, setGateProgress } from "../../assets/station-kit/index";
-import { FACILITIES, GATE_X, SECURITY_X, STAIRS_X, PLATFORM_X, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
+import { BLACKOUT_SWITCH, FACILITIES, GATE_X, SECURITY_X, STAIRS_X, PLATFORM_X, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
 import { createSignTexture, SIGN_FACE } from "../../assets/station-kit/signs";
 import { createFloorReflection, disposeFloorReflection } from "../../assets/station-kit/reflection";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
@@ -88,6 +88,10 @@ function ImportedStation({ kit, session, overview, standard, reducedMotion }: { 
   });
   const steel = kit.materials.get("kit.metal.satin")!, ink = kit.materials.get("kit.coating.charcoal")!;
   return <group name="station-kit-game">
+    <group name="blackout-switch" position={[BLACKOUT_SWITCH.x, 1.1, BLACKOUT_SWITCH.y]}>
+      <mesh material={ink} castShadow><boxGeometry args={[0.7, 1.5, 0.28]} /></mesh>
+      <mesh material={session.presentation.current.blackout.active ? kit.materials.get("kit.paint.brick")! : steel} position={[-0.38, 0.05, 0]}><boxGeometry args={[0.06, 0.8, 0.42]} /></mesh>
+    </group>
     <FloorReflections enabled={standard && !overview} />
     <primitive object={staticGroup} dispose={null} />
     {devices.map((root: Group) => <primitive key={root.name} object={root} dispose={null} />)}

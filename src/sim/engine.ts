@@ -23,7 +23,7 @@ import { ActionExecutor } from "./actions/executor";
 import { DialogueSystem } from "./dialogue";
 import { buildIntentContext, parsePlan } from "./intent";
 import { GuardSystem } from "./guards";
-import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
+import { BLACKOUT_SWITCH, BLACKOUT_SWITCH_REACH, ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
 import { findPath, nodeById } from "./nav";
 import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
@@ -258,7 +258,8 @@ export class Engine {
   }
 
   observe(): Observation {
-    return buildObservation(this.world, this.guards);
+    const remaining = Math.max(0, round1(this.world.blackoutUntil - this.world.t));
+    return { ...buildObservation(this.world, this.guards), blackout: { active: remaining > 0, remaining, switchDistance: round1(Math.hypot(this.player.pos.x - BLACKOUT_SWITCH.x, this.player.pos.y - BLACKOUT_SWITCH.y)), canOperate: Math.hypot(this.player.pos.x - BLACKOUT_SWITCH.x, this.player.pos.y - BLACKOUT_SWITCH.y) <= BLACKOUT_SWITCH_REACH } };
   }
 
   /** Validate and start an action. `mechanic` is required for attempt_creative. */
@@ -345,6 +346,15 @@ export class Engine {
         }
         this.wakeAt = round1(w.t + s);
         return { ok: true, text: `保持当前动作，${s} 秒后再评估` };
+      }
+      case "operate_switch": {
+        const distance = Math.hypot(p.pos.x - BLACKOUT_SWITCH.x, p.pos.y - BLACKOUT_SWITCH.y);
+        if (distance > BLACKOUT_SWITCH_REACH) return { ok: false, text: `距离墙边电闸还太远（需要在 ${BLACKOUT_SWITCH_REACH} 米内）` };
+        const remaining = Math.max(0, round1(w.blackoutUntil - w.t));
+        if (remaining > 0) return { ok: false, text: `熄灯已经生效，还剩 ${remaining} 秒` };
+        w.blackout(RULES.blackoutSeconds);
+        this.notify("facility_changed", `已操作墙边电闸，车站熄灯 ${RULES.blackoutSeconds} 秒`);
+        return { ok: true, text: `电闸已操作，熄灯 ${RULES.blackoutSeconds} 秒` };
       }
       case "descend_stairs": {
         const err = w.descendStairs(p);

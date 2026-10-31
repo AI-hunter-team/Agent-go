@@ -1,7 +1,7 @@
 import { memo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Mesh } from "three";
-import { FACILITIES, GATE_X, HEIGHT, PILLARS, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, queueSlot, type FacilityDef } from "../../sim/layout";
+import { BLACKOUT_SWITCH, FACILITIES, GATE_X, HEIGHT, PILLARS, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, queueSlot, type FacilityDef } from "../../sim/layout";
 import { TVM_MODEL_OFFSET_X } from "../../sim/facilityGeometry";
 import type { GameSession } from "../gameSession";
 import { box, materials, type colors } from "./resources";
@@ -25,6 +25,10 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
   });
   const [x, z] = [def.pos.x, def.pos.y];
   return <group>
+    <group name="blackout-switch" position={[BLACKOUT_SWITCH.x, 1.1, BLACKOUT_SWITCH.y]}>
+      <Block position={[0, 0, 0]} scale={[0.7, 1.5, 0.28]} color={session.presentation.current.blackout.active ? "brick" : "ink"} />
+      <Block position={[-0.38, 0.05, 0]} scale={[0.06, 0.8, 0.42]} color="ochre" />
+    </group>
     {def.kind === "tvm" ? <>
       <Block position={[x, 0.82, z - TVM_MODEL_OFFSET_X]} scale={[0.85, 1.64, 0.62]} color="ink" />
       <Block position={[x, 1.15, z + 0.05]} scale={[0.6, 0.46, 0.025]} color="screen" />

@@ -25,6 +25,7 @@ export type AgentAction = import("./interaction").InteractionAction
   | { type: "join_queue"; facility: string; reason: string }
   | { type: "leave_queue"; reason: string }
   | { type: "wait"; seconds: number; reason: string }
+  | { type: "operate_switch"; reason: string }
   | { type: "descend_stairs"; reason: string }
   | { type: "take_escalator"; reason: string }
   | { type: "inspect_attraction"; attraction: string; mode: "glance" | "linger"; reason: string }
@@ -128,6 +129,8 @@ export interface Observation {
   /** Optional for recordings made before the commercial hall iteration. */
   attractions?: AttractionObservation[];
   routes?: RouteObservation[];
+  /** Explicitly actionable station blackout switch state. */
+  blackout?: { active: boolean; remaining: number; switchDistance: number; canOperate: boolean };
 }
 
 export interface AttractionObservation {
