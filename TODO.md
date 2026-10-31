@@ -2,13 +2,13 @@
 
 ## VICTORY-001
 
-- [ ] 按追加授权提交、普通推送并创建面向 main 的 PR。
+- [x] 按追加授权提交、普通推送并创建面向 main 的 [PR #33](https://github.com/AI-hunter-team/Agent-go/pull/33)。
 - [x] 核对最新基线、动画资产与接入点。
 - [x] 接入默认资产、胜利循环和问候混合。
 - [x] 接入电影镜头、点击与可见性调度。
 - [x] 执行必要自动检查和浏览器验收。
 - [x] 更新任务、中央记录及验证报告，交付文件/函数说明和产物位置。
-- 本地交付完成；尚未提交、推送或合入。验证范围见 [VICTORY-001](docs/validation/VICTORY-001.md)。
+- 本地交付与 PR 提交完成；未合入。验证范围见 [VICTORY-001](docs/validation/VICTORY-001.md)，远端状态以 PR #33 为准。
 
 ## CI-SESSION-001
 
