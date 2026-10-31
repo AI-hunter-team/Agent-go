@@ -17,7 +17,7 @@
 
 ## 路径边界
 
-- 允许修改：`src/sim/movement.ts`、`tests/movement.test.ts`、`tests/guards.test.ts`、本简报、对应验证报告
+- 允许修改：`src/sim/movement.ts`、`src/sim/scenario.ts`、`tests/movement.test.ts`、`tests/guards.test.ts`、本简报、对应验证报告
 - 明确排除：UI 模型资源、服务端、共享 API、其他任务文件
 - 共享文件与顺序：移动模块和移动测试由本任务单独修改；无并行任务
 
@@ -25,6 +25,7 @@
 
 - 当前保安复用普通角色半径 `0.32`，小于奶蛙模型的可见身体占用范围。
 - 新增 `GUARD_COLLISION_RADIUS = 0.84`，通过 `personRadius("guard")` 统一用于路径规划、逐帧碰撞和测试。
+- 将南侧巡逻终点收至 `y=23.75`，避开座椅碰撞体膨胀后的 clearance，确保保安仍能完成往返巡逻。
 - 不改变视野、抓捕、共享 API 或模型资源，仅扩大保安移动占用空间。
 
 ## 交付

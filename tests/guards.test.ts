@@ -36,7 +36,7 @@ describe("guards", () => {
 
   test("patrol guard walks the route and turns around", () => {
     const gs = new GuardSystem([{
-      id: "patrol", label: "巡逻测试保安", route: [{ x: 41, y: 4 }, { x: 41, y: 26 }],
+      id: "patrol", label: "巡逻测试保安", route: [{ x: 41, y: 4 }, { x: 41, y: 23.75 }],
       facing: Math.PI / 2, speed: 1, pauseSeconds: 2,
     }]);
     const b = gs.guards[0];
@@ -44,9 +44,9 @@ describe("guards", () => {
     stepSeconds(gs, 5);
     expect(b.pos.y).toBeGreaterThan(startY);
     expect(b.facing).toBeCloseTo(Math.PI / 2);
-    stepSeconds(gs, 30); // reach the far end (22 m), pause, head back (the larger guard collider stops at the fixture clearance)
-    expect(b.pos.y).toBeLessThanOrEqual(25.6 + 1e-6);
-    expect(b.facing).toBeCloseTo(Math.PI / 2);
+    stepSeconds(gs, 30); // reach the far end, pause, and head back
+    expect(b.pos.y).toBeLessThan(23.75);
+    expect(b.facing).toBeCloseTo(-Math.PI / 2);
   });
 
   test("a complaint turns nearby guards toward it", () => {

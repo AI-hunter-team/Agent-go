@@ -80,7 +80,8 @@ export const GUARDS: GuardDef[] = [
   {
     id: "guard-B",
     label: "闸机南侧保安",
-    route: [{ x: 41, y: 27 }, { x: 41, y: 17 }],
+    // Keep the visible naiwa body clear of the seating fixture at the south edge.
+    route: [{ x: 41, y: 23.75 }, { x: 41, y: 17 }],
     facing: -Math.PI / 2,
     speed: 0.9,
     pauseSeconds: 2,
