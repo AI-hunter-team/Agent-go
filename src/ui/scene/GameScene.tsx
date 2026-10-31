@@ -22,7 +22,12 @@ export interface SceneProps {
   simpleCrowd: boolean;
   reducedMotion: boolean;
   assetUrl: string;
+  assetRotation: number;
+  guardAssetUrl: string;
+  guardAssetRotation: number;
   onAssetError: (message: string) => void;
+  onGuardAssetError: (message: string) => void;
+  onStationAssetError: (message: string) => void;
   onFailure: (message: string) => void;
   metrics: FrameMetrics;
   showVision: boolean;
@@ -179,6 +184,7 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   </group>;
 }
 
+/** 为正式站厅建立环境反射与分区照明，并按当前画质控制阴影。 */
 function StationLighting({ standard }: { standard: boolean }) {
   const { gl, scene } = useThree();
   const target = useMemo(() => { const node = new Object3D(); node.position.set(35, 0, 15); return node; }, []);
@@ -198,7 +204,7 @@ function StationLighting({ standard }: { standard: boolean }) {
   </>;
 }
 
-/** 组装场景并记录实际渲染开销；节能设置只改变展示层。 */
+/** 组合正式站厅、性能设置与两组角色外观，分别反馈站厅和角色资源错误。 */
 function Contents(props: SceneProps) {
   const { session, metrics } = props;
   const { gl } = useThree();
@@ -234,9 +240,9 @@ function Contents(props: SceneProps) {
     <color attach="background" args={["#e9e1cf"]} />
     <StationLighting standard={props.quality === "standard"} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
-    <Station session={session} overview={props.camera.mode === "overview"} onAssetError={props.onAssetError} />
+    <Station session={session} overview={props.camera.mode === "overview"} onAssetError={props.onStationAssetError} />
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
-    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
+    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
 }
