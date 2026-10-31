@@ -25,6 +25,13 @@ describe("engine", () => {
     for (let i = 0; i < 201; i++) e.step();
     expect(e.observe().blackout?.active).toBe(false);
   });
+  test("default runs never cut power when the agent does not operate the switch", () => {
+    const e = new Engine(1);
+    for (let i = 0; i < 900 && e.status === "running"; i++) e.step();
+    expect(e.world.blackoutUntil).toBe(0);
+    expect(e.events.events.some((event) => event.kind === "power_out")).toBe(false);
+    expect(e.events.events.some((event) => event.kind === "power_restored")).toBe(false);
+  });
   test("starts with a start trigger and only the nearby end of the ticket bank visible", () => {
     const e = new Engine(1);
     expect(e.takeTriggers().map((t) => t.kind)).toEqual(["start"]);

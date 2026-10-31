@@ -30,6 +30,7 @@ test("seeded failures vary across all gates, ticket machines and times while kee
     expect(scenario.events.filter((e) => e.type === "recheck")).toEqual([
       { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
     ]);
+    expect(scenario.events.some((e) => e.type === "power")).toBe(false);
     expect(scenario.spawns.some((s) => s.startQueue === gate)).toBe(false);
     const world = new World(seed);
     new NpcDirector(world, scenario);
