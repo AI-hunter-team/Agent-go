@@ -156,7 +156,7 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
         op: "drop",
         itemId: item.id,
         mode: /扔|throw/i.test(text) ? "throw" : /放下/.test(text) ? "place" : "drop",
-        ...(npcId && /向|给|at/i.test(text) ? {
+        ...(NAV_NODES.find(n=>hasId(text,n.id)) ? {at:{kind:"node",id:NAV_NODES.find(n=>hasId(text,n.id))!.id} as const} : npcId && /向|给|at/i.test(text) ? {
           at: {
             kind: "person",
             id: npcId
