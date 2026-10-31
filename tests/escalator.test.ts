@@ -112,3 +112,52 @@ describe("escalator admission", () => {
     expect(e.world.transit.queue.length).toBe(before);
   });
 });
+
+test("NPCs reroute to the stairs when the escalator fills while they approach", () => {
+  const e = atEntrance();
+  const transit = e.world.transit;
+  for (let i = 0; i < 14; i++) {
+    const p = e.world.addPerson("normal", transit.slot(i), { hasTicket: true });
+    p.screened = p.passedGate = true;
+    p.transitRoute = "escalator";
+    p.activity = { kind: "idle" };
+    transit.queue.push(p.id);
+  }
+  const npc = e.world.addPerson("normal", { x: 61, y: 23.2 }, { hasTicket: true });
+  npc.screened = npc.passedGate = true;
+  npc.transitRoute = "escalator";
+  npc.activity = { kind: "idle" };
+
+  e.world.t = 1;
+  transit.routeNpc(npc);
+
+  expect(npc.transitRoute).toBe("stairs");
+  expect(npc.activity.kind).toBe("walking");
+  expect((npc.activity as unknown as { kind: "walking"; label: string }).label).toBe("楼梯入口");
+  expect(transit.queue).not.toContain(npc.id);
+
+  for (let i = 0; i < 100; i++) e.world.stepPeopleAndFacilities();
+  expect(["walking", "stairs"]).toContain(npc.activity.kind);
+  expect(npc.pos.y).toBeLessThan(23.2);
+});
+
+test("NPCs already walking to a full escalator switch to the stairs route", () => {
+  const e = atEntrance();
+  const transit = e.world.transit;
+  for (let i = 0; i < 14; i++) {
+    const p = e.world.addPerson("normal", transit.slot(i), { hasTicket: true });
+    p.screened = p.passedGate = true;
+    p.activity = { kind: "escalator_queue", joinedAt: 0 };
+    transit.queue.push(p.id);
+  }
+  const npc = e.world.addPerson("normal", { x: 55, y: 22 }, { hasTicket: true });
+  npc.screened = npc.passedGate = true;
+  npc.transitRoute = "escalator";
+  npc.activity = { kind: "walking", path: [{ x: 61, y: 23.2 }], label: "扶梯入口" };
+
+  transit.step();
+
+  expect(npc.transitRoute).toBe("stairs");
+  expect(npc.activity.kind).toBe("walking");
+  expect((npc.activity as unknown as { kind: "walking"; label: string }).label).toBe("楼梯入口");
+});

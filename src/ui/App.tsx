@@ -771,11 +771,11 @@ export function App() {
         {watching && runner && (
           <>
             {broadcast && (
-              <div className={styles.broadcast} role="status">
+              <div className={styles.broadcast} role="status" data-scene-obstacle>
                 ◖ 现场播报：{broadcast}
               </div>
             )}
-            <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录">
+            <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录" data-scene-obstacle>
               <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
                 onClick={() => setRecordState({ generation: session.generation, expanded: !recordExpanded })}>
                 <span>{recordExpanded ? "收起行程记录" : mobile ? describeActivity(session.engine.world, session.engine.player) : "展开行程记录"}</span>
@@ -826,7 +826,7 @@ export function App() {
               </Modal>
               </div>
             </section>
-            <section key={`timer-${session.generation}`} className={`${styles.timer} ${styles.panel}`}>
+            <section key={`timer-${session.generation}`} className={`${styles.timer} ${styles.panel}`} data-scene-obstacle>
               <span className={styles.eyebrow}>剩余时间</span>
               <strong>{clock}</strong>
               <progress max={settings.timeLimitSeconds} value={remaining} />
@@ -840,6 +840,7 @@ export function App() {
                       : "前往购票区"}
               </span>
             </section>
+            <div className={styles.runDock} data-scene-obstacle>
             <div className={styles.controls}>
               <button
                 className="primary"
@@ -888,6 +889,8 @@ export function App() {
                 <p>情景种子：{seed}</p>
                 <p>时限：{settings.timeLimitSeconds} 秒</p>
               </Modal>
+              {j.previousRun && <button onClick={openPrevious}>上一局报告</button>}
+            </div>
             </div>
           </>
         )}
@@ -916,7 +919,7 @@ export function App() {
           </>
         )}
         {j.previousRun && previousReport && <>
-          {!j.working && <button className={styles.previousReport} onClick={openPrevious}>上一局报告</button>}
+          {!j.working && !watching && <button className={styles.previousReport} onClick={openPrevious}>上一局报告</button>}
           <JourneyReview key={`previous-${j.previousRun.generation}`} report={previousReport} engine={j.previousRun.engine} review={j.previousRun.review} open={previousOpen} onClose={closePrevious} previous />
         </>}
         {debug && (
