@@ -304,8 +304,11 @@ function GuardVision({ id, session }: { id: string; session: GameSession }) {
     const actor = session.presentation.current.actors.get(id);
     if (mesh.current && actor) { mesh.current.position.set(actor.x, 0.018, actor.z); mesh.current.rotation.set(-Math.PI / 2, 0, actor.yaw - Math.PI / 2); }
   });
-  const half = RULES.guardFovDeg * Math.PI / 360;
-  return <mesh ref={mesh}><circleGeometry args={[RULES.guardRange, 40, -half, half * 2]} /><meshBasicMaterial color="#7f9485" transparent opacity={0.18} depthWrite={false} /></mesh>;
+  const actor = session.engine.guards.guards.find((g) => g.def.id === id);
+  const vision = actor ? session.engine.guards.vision(actor) : { fov: RULES.guardFovDeg, range: RULES.guardRange };
+  const half = vision.fov * Math.PI / 360;
+  const range = vision.range;
+  return <mesh ref={mesh}><circleGeometry args={[range, 40, -half, half * 2]} /><meshBasicMaterial color="#7f9485" transparent opacity={0.18} depthWrite={false} /></mesh>;
 }
 
 /** 绘制可选的视距、历史轨迹和当前路径。 */
