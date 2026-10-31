@@ -4,7 +4,7 @@ import { bossContextValid, validatePlan } from "./boss";
 import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDialogue";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
-import { validPlan, type JourneyInput, type JourneyPreparation, type JourneyPlan } from "../src/shared/journey";
+import { planToNormalized, validPlan, type JourneyInput, type JourneyPreparation, type JourneyPlan } from "../src/shared/journey";
 import { extname, resolve } from "node:path";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
@@ -156,7 +156,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.prepareJourney!(input));
     if (!validPlan(plan)) return void res.status(502).json({ error: "初始方案格式无效，请重试" });
     assertSafeText(JSON.stringify(plan));
-    const normalized: NormalizedGuidance = { summary: plan.understanding, priorities: [], risk: "", rules: [], creativeIdeas: [], notExecutable: [], initialPlan: [...plan.actions, plan.adjustment] };
+    const normalized = planToNormalized(plan);
+    validateNormalized(normalized);
     const result: JourneyPreparation = { id: randomUUID(), model: current.llm!.model, normalized, plan, debug };
     for (const [id, item] of preparations) if (Date.now() - item.created > 600_000) preparations.delete(id);
     if (preparations.size >= 100) preparations.delete(preparations.keys().next().value!);
@@ -186,6 +187,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     const binding = runtime(req);
     let loadout;
     try { loadout = resolveLoadout(req.body?.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
+    let preparationId: string | undefined;
     if (req.body?.preparationId !== undefined) {
       const prepared = preparations.get(req.body.preparationId);
       if (!prepared || Date.now() - prepared.created > 600_000 || prepared.runtime.llm !== binding.llm || prepared.runtime.token !== binding.token
@@ -198,7 +200,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
         return void res.status(409).json({ error: "方案已过期或条件改变，请重新生成初始方案" });
       }
       normalized = prepared.result.normalized;
-      preparations.delete(req.body.preparationId);
+      preparationId = req.body.preparationId;
     }
     const err = guidanceError(guidance);
     if (err) return void res.status(400).json({ error: err });
@@ -210,6 +212,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       return void res.status(400).json({ error: `每条初始开放队列固定额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
     }
     const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings, loadout);
+    if (preparationId !== undefined) preparations.delete(preparationId);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
     void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });

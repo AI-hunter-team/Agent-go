@@ -1,21 +1,9 @@
-import { Component, Suspense, useEffect, useMemo, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei/core/Gltf";
 import { Box3, Vector3 } from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
-class ThumbnailBoundary extends Component<
-  { children: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    return this.state.failed ? null : this.props.children;
-  }
-}
 function Preview({ url }: { url: string }) {
   const { scene } = useGLTF(url, false, false);
   const fitted = useMemo(() => {
@@ -58,11 +46,9 @@ export default function AvatarThumbnail({ url }: { url: string }) {
     >
       <ambientLight intensity={1.8} />
       <directionalLight position={[2, 3, 4]} intensity={2} />
-      <ThumbnailBoundary>
-        <Suspense fallback={null}>
-          <Preview url={url} />
-        </Suspense>
-      </ThumbnailBoundary>
+      <Suspense fallback={null}>
+        <Preview url={url} />
+      </Suspense>
     </Canvas>
   );
 }

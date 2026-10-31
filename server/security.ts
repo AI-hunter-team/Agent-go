@@ -1,4 +1,5 @@
 import type { NormalizedGuidance } from "../src/shared/types";
+import { NORMALIZED_MAX_JSON_LENGTH, NORMALIZED_MAX_TEXT_LENGTH } from "../src/shared/guidance";
 
 /** Server-owned prefix. Never interpolate player or model-generated text here. */
 export const SAFETY_SYSTEM_PROMPT = `你是地铁站游戏内的专用 AI，只处理当前调用指定的游戏决策、玩家策略整理、行动分类或 NPC 沟通。
@@ -50,10 +51,10 @@ export function validateNormalized(value: unknown): asserts value is NormalizedG
   const lists = ["priorities", "rules", "creativeIdeas", "notExecutable", "initialPlan"];
   const fields = ["summary", "risk", ...lists];
   if (Object.keys(data).some((key) => !fields.includes(key))) return invalid();
-  const validText = (text: unknown): text is string => typeof text === "string" && text.length <= 1000;
+  const validText = (text: unknown): text is string => typeof text === "string" && text.length <= NORMALIZED_MAX_TEXT_LENGTH;
   if (!validText(data.summary) || !validText(data.risk) || !lists.every((key) =>
     Array.isArray(data[key]) && data[key].length <= 20 && data[key].every(validText))) return invalid();
   const json = JSON.stringify(data);
-  if (json.length > 8000) return invalid();
+  if (json.length > NORMALIZED_MAX_JSON_LENGTH) return invalid();
   assertSafeText(json);
 }

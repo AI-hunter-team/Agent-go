@@ -33,6 +33,18 @@ import styles from "./App.module.css";
 
 const AvatarThumbnail = lazy(() => import("./AvatarThumbnail"));
 const GameScene = lazy(() => import("./scene/GameScene"));
+class ThumbnailBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 class SceneBoundary extends Component<
   { children: ReactNode; onError: () => void },
   { failed: boolean }
@@ -448,10 +460,12 @@ export function App() {
                   onClick={() => chooseCharacter(c.id)}
                 >
                   <span className={styles.portrait}>
-                    {c.url ? (
-                      <Suspense fallback={c.mark}>
-                        <AvatarThumbnail url={c.url} />
-                      </Suspense>
+                    {c.url && renderer === "3d" && !sceneError ? (
+                      <ThumbnailBoundary fallback={c.mark}>
+                        <Suspense fallback={c.mark}>
+                          <AvatarThumbnail url={c.url} />
+                        </Suspense>
+                      </ThumbnailBoundary>
                     ) : (
                       c.mark
                     )}

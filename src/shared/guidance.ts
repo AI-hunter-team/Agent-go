@@ -1,5 +1,9 @@
 import { GUIDANCE_MAX_CHARS } from "./types";
 
+/** Limits for each normalized field and its serialized representation. */
+export const NORMALIZED_MAX_TEXT_LENGTH = 1000;
+export const NORMALIZED_MAX_JSON_LENGTH = 8000;
+
 /** Character count used for the 300-character limit: Unicode code points, so 一个汉字 = 1. */
 export function countChars(text: string): number {
   return [...text].length;

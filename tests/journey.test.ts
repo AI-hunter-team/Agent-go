@@ -121,6 +121,35 @@ test("invalid preparation is rejected before calling model", async () => {
   }
   expect(prepareJourney).not.toHaveBeenCalled();
 });
+test("preparation rejects model plans that exceed session limits before returning an id", async () => {
+  const { call, prepareJourney, sessions } = await start();
+  for (const invalid of [
+    { ...plan, understanding: "x".repeat(1001) },
+    { ...plan, adjustment: "x".repeat(1001) },
+    { ...plan, actions: Array.from({ length: 8 }, () => "x".repeat(1000)) },
+  ]) {
+    prepareJourney.mockResolvedValueOnce(invalid);
+    const prepared = await call("/api/journey/prepare", input);
+    expect(prepared.status).toBe(502);
+    expect(prepared.body.id).toBeUndefined();
+    expect(sessions.size).toBe(0);
+  }
+  prepareJourney.mockResolvedValueOnce({ ...plan, understanding: "x".repeat(1000), adjustment: "y".repeat(1000) });
+  const prepared = await call("/api/journey/prepare", input);
+  expect(prepared.status).toBe(200);
+  expect((await call("/api/session", { ...input, preparationId: prepared.body.id })).status).toBe(200);
+});
+test("a session creation failure does not consume a valid preparation", async () => {
+  const { call, sessions } = await start();
+  const prepared = await call("/api/journey/prepare", input);
+  expect(prepared.status).toBe(200);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(sessions, "create").mockImplementationOnce(() => { throw new Error("fixture session failure"); });
+  const request = { ...input, preparationId: prepared.body.id };
+  expect((await call("/api/session", request)).status).toBe(500);
+  expect((await call("/api/session", request)).status).toBe(200);
+  expect((await call("/api/session", request)).status).toBe(409);
+});
 test("navigation and changed dependencies discard stale planning responses", () => {
   const planning = journeyReducer(initialFlow, {
     type: "navigate",
