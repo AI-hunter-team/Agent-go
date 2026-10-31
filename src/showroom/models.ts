@@ -1,3 +1,4 @@
+import { serviceBankSigns,stationNamePositions } from "../ui/scene/stationWayfinding";
 import { propDebug } from "./propDebug";
 import { STATION_PROPS } from "../shared/stationProps";
 import { createDetailAsset, detailMaterials } from "../assets/station-detail/models";
@@ -116,13 +117,13 @@ export function assembledRoom(kit:StationKit,p:GeneratedPalette,d:WorldDefinitio
     for(const f of d.layout.FACILITIES){const device=kit.models.get(f.kind==="tvm"?"ticket-machine":f.kind==="security"?"security-arch":"fare-gate")!.clone(true);device.position.set(...devicePosition(f.kind,f.pos.x,f.pos.y,f.queueDirection));device.rotation.y=Math.atan2(f.queueDirection?.x??-1,f.queueDirection?.y??0);model.root.add(device);devices.push(device);}
     for(const detail of d.details){const root=createGeneratedProp(detail,p);root.position.set(detail.pos.x,detail.pos.floorId==="platform"?-6:0,detail.pos.y);model.root.add(root);owned.push(root);}
     const addSign=(text:string,position:XYZ,width:number,yaw=0)=>{const s=roomSign(text,position,width,yaw);signs.push(s);model.root.add(s.mesh);};
-    for(const x of [14,22,60,65])addSign(x===14||x===65?"售票与安检 / 进站 →":"检票进站 / 站台 ↓",[x,2.8,15],4,x<36?-Math.PI/2:Math.PI/2);
-    for(const c of d.connectors!)addSign(`${c.groupId} ${c.kind==="stairs"?"楼梯":"扶梯"} ↓ 站台`,[c.from.x,2.7,c.from.y],2.8,c.groupId==="A"?-Math.PI/2:Math.PI/2);
-    for(const x of [12,36,60])for(const side of [-1,1])addSign("青禾站 / QINGHE",[x,-3.27,15+side*6.65],4,side>0?Math.PI:0);
+    for(const s of serviceBankSigns(d))addSign(s.text,[s.x,2.8,15],4,s.west?-Math.PI/2:Math.PI/2);
+    for(const c of d.connectors!)addSign(`${c.groupId} ${c.kind==="stairs"?"楼梯":"扶梯"} ↓ 站台`,[c.from.x,2.7,c.from.y],2.8,c.to.x>c.from.x?-Math.PI/2:Math.PI/2);
+    for(const x of stationNamePositions(d))for(const side of [-1,1])addSign("青禾站 / QINGHE",[x,-3.27,15+side*6.65],4,side>0?Math.PI:0);
     const detailScene=d.props?stationDetailScene(d,p,kit):null;
     if(detailScene)model.root.add(detailScene.root);
     const view=(id:string)=>{const v=d.architecture!.views.find(v=>v.id===id)!;return {eye:v.eye,target:v.target};};
-    const views:Record<RoomView,CameraPose>={overview:{eye:[62,45,65],target:[36,-2,15]},hall:view("gate"),entrance:view("gate"),connections:view("descent"),platform:view("platform"),services:view("gate")};
+    const views:Record<RoomView,CameraPose>={overview:{eye:[d.layout.WIDTH*.86,Math.max(45,d.layout.WIDTH*.6),65],target:[d.layout.WIDTH/2,-2,15]},hall:view("gate"),entrance:view("gate"),connections:view("descent"),platform:view("platform"),services:view("gate")};
     return {root:model.root,definition:d,devices,views,setView(mode:RoomView,showRoof:boolean,_labels:boolean){model.ceiling.visible=mode!=="overview"||showRoof;model.deck.visible=mode!=="overview";},dispose(){if(detailScene){model.root.remove(detailScene.root);detailScene.dispose();}devices.forEach(device=>model.root.remove(device));signs.forEach(s=>{model.root.remove(s.mesh);s.dispose();});owned.forEach(root=>{model.root.remove(root);disposeSurfaceGeometry(root);});model.dispose();}};
   }
   const l=d.layout,root=new Group(),upper=new Group(),lower=new Group(),connections=new Group(),roof=new Group();

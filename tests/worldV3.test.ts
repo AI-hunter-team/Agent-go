@@ -18,6 +18,7 @@ describe("V3 architectural and facility fusion",()=>{
   for(const seed of [0,-1,1.5,NaN,Infinity,4294967296]){expect(()=>createWorldV2(seed)).toThrow(RangeError);expect(()=>specimen(seed)).toThrow(RangeError);}
  });
  it("restores both V2 producers and both historical V1 descriptors",()=>{
+  expect(restoreWorld(1,{generatorVersion:"metro-v3",layoutHash:"8e3cc409"})?.layout.WIDTH).toBe(72);
   const architectural=createWorldV2(1),detail=generateWorld(1,{version:"metro-v2"});
   expect(architectural.layoutHash).toBe("acc3b052");expect(detail.props!.length).toBeGreaterThan(0);expect(detail.connectors).toBeUndefined();
   for(const d of [architectural,detail,specimen(),generateWorldV1(1)])expect(serializableWorld(restoreWorld(d.seed,{generatorVersion:d.generatorVersion,layoutHash:d.layoutHash})!)).toEqual(serializableWorld(d));
@@ -38,8 +39,8 @@ describe("V3 architectural and facility fusion",()=>{
    if(p.body){expect(d.layout.solids).toContainEqual(p.body);expect(e.world.spatial.clearOfScenery(p.pos,p.pos,.1),p.id).toBe(false);expect(atlas.floors.flatMap(f=>f.shapes).some(s=>s.id===p.id)).toBe(true);}
   }
  });
- it("publishes explicit IDs to model tools and boards through the actual train door",async()=>{
-  const d=specimen(),e=new Engine(1,{},undefined,undefined,d),r=new GameRunner(e,new HeuristicAgent(),async i=>classifyByKeywords(i));
+ it.each([1,45])("publishes IDs and boards through the actual door at seed %i",async(seed)=>{
+  const d=specimen(seed),e=new Engine(seed,{},undefined,undefined,d),r=new GameRunner(e,new HeuristicAgent(),async i=>classifyByKeywords(i));
   const tool=agentTools(publicMap(d)).find(t=>t.name==="traverse")!;
   expect((tool.parameters.properties as Record<string,{enum?:string[]}>).connectorId.enum).toEqual(d.connectors!.map(c=>c.id));
   await r.runToEnd();expect(e.status).toBe("success");expect(e.player.onTrain).toBe(true);expect(r.report().world!.generatorVersion).toBe("metro-v3");expect(r.report().trail.some(p=>p.connectorId==="A:stairs")).toBe(true);

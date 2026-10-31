@@ -14,10 +14,11 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
  const occupied=[...l.PILLARS,...(l.solids??[]),...l.ATTRACTIONS.flatMap(a=>a.body?[a.body]:[]),...l.FACILITIES.flatMap(f=>facilitySolids(f.kind,f.pos,f.queueDirection))];
  const reserved:Rect[]=[...l.NAV_NODES.map(n=>({x:n.pos.x-1.2,y:n.pos.y-1.2,w:2.4,h:2.4,floorId:n.pos.floorId})),...l.ITEM_SPOTS.map(n=>({x:n.pos.x-1,y:n.pos.y-1,w:2,h:2,floorId:n.pos.floorId})),...(l.openings??[]).map(r=>({...r,x:r.x-.7,y:r.y-.7,w:r.w+1.4,h:r.h+1.4})),...l.FACILITIES.flatMap(f=>Array.from({length:7},(_,i)=>({x:f.head.x+(f.queueDirection?.x??-1)*i*1.1-.8,y:f.head.y+(f.queueDirection?.y??0)*i*1.1-.8,w:1.6,h:1.6,floorId:f.head.floorId}))),...l.FACILITIES.flatMap(f=>f.exit?[{x:f.exit.x-.8,y:f.exit.y-.8,w:1.6,h:1.6,floorId:f.exit.floorId}]:[])];
  for(const c of d.connectors??[]){
+  if(c.arrivalArea)reserved.push(c.arrivalArea);
   reserved.push({x:c.to.x-1.5,y:c.to.y-1.5,w:3,h:3,floorId:c.to.floorId});
   if(c.kind!=="escalator")continue;
-  const dx=Math.sign(c.to.x-c.from.x),space=Math.max(1,QUEUE_SPACING);
-  for(let i=0;i<ESCALATOR_CAPACITY;i++)reserved.push({x:c.from.x-dx*Math.min(i,4)*space-.65,y:c.from.y+dx*Math.max(0,i-4)*space-.65,w:1.3,h:1.3,floorId:"concourse"});
+  const dx=Math.sign(c.to.x-c.from.x),space=Math.max(1,QUEUE_SPACING),bend=c.queueTurnAfter??4;
+  for(let i=0;i<ESCALATOR_CAPACITY;i++)reserved.push({x:c.from.x-dx*Math.min(i,bend)*space-.65,y:c.from.y+dx*Math.max(0,i-bend)*space-.65,w:1.3,h:1.3,floorId:"concourse"});
  }
  const publicPoint=(x:number,y:number,floor:FloorId)=>d.architecture!.areas.some(a=>a.floorId===floor&&x>=a.bounds.x&&x<=a.bounds.x+a.bounds.w&&y>=a.bounds.y&&y<=a.bounds.y+a.bounds.h);
  const add=(assetId:string,x:number,z:number,yaw=0,cluster:PropCluster="entrance",floor:FloorId="concourse",elevation=0)=>{
@@ -65,7 +66,7 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
   add("cctv",x,1,0,"maintenance","concourse",height-.4);
   for(const z of [6,24]){add("ceiling-light",x,z,0,"maintenance","concourse",height-.25);add("smoke-detector",x+2,z,0,"maintenance","concourse",height-.15);}
  }
- for(const x of [10,60]){add("bin-double",x,15,0,"platform","platform");add("bench-metal",x+3,15,0,"platform","platform");add("platform-display",x,15,0,"platform","platform",2.6);add("help-panel",x,21.78,Math.PI,"platform","platform",1.2);}
+ for(const x of (d.train?[10,l.WIDTH-18]:[10,60])){add("bin-double",x,15,0,"platform","platform");add("bench-metal",x+3,15,0,"platform","platform");add("platform-display",x,15,0,"platform","platform",2.6);add("help-panel",x,21.78,Math.PI,"platform","platform",1.2);}
  for(const e of d.entrances??[])add("drain",e.bottom.x,e.bottom.y,Math.atan2(e.inward.x,e.inward.y),"entrance");
  return props;
 }

@@ -36,7 +36,7 @@ export class TransitSystem {
     const spacing = Math.max(1, QUEUE_SPACING);
     if(this.world.definition.generatorVersion !== "legacy-v0") {
       const top=this.top,bottom=this.bottom,length=Math.hypot(bottom.x-top.x,bottom.y-top.y);
-      const dx=(bottom.x-top.x)/length,dy=(bottom.y-top.y)/length,straight=Math.min(index,4)*spacing,turn=Math.max(0,index-4)*spacing;
+      const dx=(bottom.x-top.x)/length,dy=(bottom.y-top.y)/length,bend=this.connector?.queueTurnAfter??4,straight=Math.min(index,bend)*spacing,turn=Math.max(0,index-bend)*spacing;
       return {...top,x:top.x-dx*straight-dy*turn,y:top.y-dy*straight+dx*turn};
     }
     let x = this.top.x;

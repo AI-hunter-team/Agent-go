@@ -22,6 +22,10 @@ export interface EntranceDefinition {
 export interface StationConnector {
  id:string; groupId:string; kind:"stairs"|"escalator"; from:Vec; to:Vec; approach:Vec;
  node:string; width:number; opening:Rect; queueAnchor:Vec; travelSeconds:number;
+ /** Shared clear arrival apron for both members of this group; never a prop footprint. */
+ arrivalArea?:Rect;
+ /** Number of straight queue intervals before turning away from the stairs. */
+ queueTurnAfter?:number;
 }
 export interface StationArchitecture {
  areas:{id:string;floorId:FloorId;bounds:Rect}[];
@@ -30,6 +34,7 @@ export interface StationArchitecture {
  views:{id:string;eye:[number,number,number];target:[number,number,number]}[];
 }
 export interface WorldDefinition extends WorldDescriptor {
+  train?:{carCount:number};
   props?: import("./stationProps").PropPlacement[];
  architecture?:StationArchitecture;
  connectors?:StationConnector[];
@@ -43,9 +48,10 @@ export interface WorldDefinition extends WorldDescriptor {
   layout: StationLayout;
   guards: GuardDef[];
   details: DetailPlacement[];
-  generation: { attempts: number; fallback: boolean; reasons: string[]; emptyRouteSeconds: number };
+  generation: { attempts: number; fallback: boolean; reasons: string[]; emptyRouteSeconds: number; entryBudgets?:Record<string,number> };
 }
 export interface PublicStationMap extends WorldDescriptor {
+  train?:WorldDefinition["train"];
   connectors?:StationConnector[];
   entrances?: EntranceDefinition[];
   name: string;

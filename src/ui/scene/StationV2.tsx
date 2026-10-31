@@ -1,3 +1,4 @@
+import { serviceBankSigns,stationNamePositions,stationLightPositions } from "./stationWayfinding";
 import { stationDetailScene } from "./stationDetailScene";
 import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
@@ -32,9 +33,9 @@ export function StationV2({session,kit,overview}:{session:GameSession;kit?:Stati
   {devices.map(root=><primitive key={root.name} object={root} dispose={null}/>)}
   {!kit&&d.layout.FACILITIES.map(f=><mesh key={f.id} position={[f.pos.x,.8,f.pos.y]} material={palette.steel}><boxGeometry args={[.6,1.6,.8]}/></mesh>)}
   {props.map((root,i)=><primitive key={d.details[i].id} object={root} dispose={null}/>)}
-  {[14,22,60,65].map((x,i)=><Sign key={x} text={i%2?"检票进站  /  站台 ↓":"售票与安检  /  进站 →"} position={[x,2.8,15]} width={4} facing={x<36?"west":"east"}/>)}
-  {d.connectors!.map(c=><Sign key={c.id} text={`${c.groupId}  ${c.kind==="stairs"?"楼梯":"扶梯"}  ↓ 站台`} position={[c.from.x,2.7,c.from.y]} width={2.8} facing={c.groupId==="A"?"west":"east"}/>)}
-  {[12,36,60].flatMap(x=>[-1,1].map(side=><Sign key={`${x}:${side}`} text="青禾站  /  QINGHE" position={[x,-3.3,15+side*6.65]} width={4} facing={side===1?"north":"south"}/>))}
-  {[6,18,30,42,54,66].flatMap(x=>[0,-6].map(y=><pointLight key={`${x}:${y}`} position={[x,y+(y===0?3.25:3.05),15]} intensity={session.presentation.current.blackout.active?2:58} distance={16} decay={2} color="#fff5e6"/>))}
+  {serviceBankSigns(d).map(s=><Sign key={s.id} text={s.text} position={[s.x,2.8,15]} width={4} facing={s.west?"west":"east"}/>)}
+  {d.connectors!.map(c=><Sign key={c.id} text={`${c.groupId}  ${c.kind==="stairs"?"楼梯":"扶梯"}  ↓ 站台`} position={[c.from.x,2.7,c.from.y]} width={2.8} facing={c.to.x>c.from.x?"west":"east"}/>)}
+  {stationNamePositions(d).flatMap(x=>[-1,1].map(side=><Sign key={`${x}:${side}`} text="青禾站  /  QINGHE" position={[x,-3.3,15+side*6.65]} width={4} facing={side===1?"north":"south"}/>))}
+  {stationLightPositions(d).flatMap(x=>[0,-6].map(y=><pointLight key={`${x}:${y}`} position={[x,y+(y===0?3.25:3.05),15]} intensity={session.presentation.current.blackout.active?2:58} distance={16} decay={2} color="#fff5e6"/>))}
  </group>;
 }

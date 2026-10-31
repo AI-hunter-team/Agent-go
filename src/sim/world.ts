@@ -128,6 +128,7 @@ export class World {
   gatePassed = 0;
   private nextId = 1;
   collisionGuards: MovingBody[] = [];
+  private readonly walkReplanAt=new WeakMap<Person,number>();
   private readonly detourCache=new Map<string,{target:Vec;waypoint:Vec;until:number}>();
   readonly tickStarts = new Map<string, Vec>();
   readonly cutInReservations = new Map<string, { facility: string; npcId: string }>();
@@ -594,6 +595,16 @@ export class World {
   }
 
   private followPath(p: Person, path: Vec[], stride: number): boolean {
+    // Crowd avoidance can carry a walker away from its original visible segment.
+    // Rejoin the static route around floor openings instead of steering at a point
+    // behind the slab indefinitely. Queue/service/transit paths keep their rules.
+    if(this.definition.connectors&&p.activity.kind==="walking"&&path.length&&this.t>=(this.walkReplanAt.get(p)??0)){
+      this.walkReplanAt.set(p,this.t+.5);
+      if(!this.spatial.clearOfScenery(p.pos,path[0],personRadius(p.kind))){
+        const route=this.navigation.findPath(p.pos,path.at(-1)!,personRadius(p.kind));
+        if(route)path.splice(0,path.length,...route);
+      }
+    }
     let budget = stride;
     while (path.length && budget > 1e-8) {
       const next = path[0];

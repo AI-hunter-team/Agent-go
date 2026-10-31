@@ -1,7 +1,7 @@
 import { CatmullRomCurve3, ExtrudeGeometry, Mesh, MeshStandardMaterial, Shape, TubeGeometry, Vector3 } from "three";
 import type { WorldDefinition, EntranceDefinition } from "../../shared/world";
 import { createMetroCar, metroMaterials, METRO } from "../../assets/metro-train";
-import { generatedTrainLayout } from "../../shared/generatedTrain";
+import { worldTrainLayout } from "../../shared/generatedTrain";
 export { generatedTrainLayout } from "../../shared/generatedTrain";
 import type { GeneratedPalette } from "./generatedSurfaces";
 import { SurfaceBuilder, disposeSurfaceGeometry, type XYZ } from "./surfaceGeometry";
@@ -64,7 +64,7 @@ export function texturedMetroMaterials(p: GeneratedPalette) {
 
 export function createGeneratedPlatform(d: WorldDefinition, p: GeneratedPalette, openFront = false) {
   const side = d.layout.platformAxis?.direction === "y", length = side ? d.layout.HEIGHT : d.layout.WIDTH;
-  const centre = d.layout.platformAxis?.center ?? d.layout.HEIGHT / 2, b = new SurfaceBuilder(), layout = generatedTrainLayout(length);
+  const centre = d.layout.platformAxis?.center ?? d.layout.HEIGHT / 2, b = new SurfaceBuilder(), layout = worldTrainLayout(d);
   b.box(p.stone, [length, .28, 14], [length / 2, -.14, 0]);
   for (const direction of [-1, 1]) {
     const track = direction * layout.trackCentre;

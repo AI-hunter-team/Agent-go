@@ -298,7 +298,7 @@ test("generated layouts are validated and bound to prepared sessions",async()=>{
 
 test("both V2 producers and historical V1 worlds remain consistent with V3 prepared sessions",async()=>{
  const {call,sessions}=await start();
- const worlds=[{generatorVersion:"metro-v1" as const,layoutHash:"50e78bc1"},descriptor(generateWorld(1,{version:"metro-v1"})),{generatorVersion:"metro-v2" as const,layoutHash:"acc3b052"},descriptor(generateWorld(1,{version:"metro-v2"})),descriptor(generateWorld(1,{version:"metro-v3"}))];
+ const worlds=[{generatorVersion:"metro-v3" as const,layoutHash:"8e3cc409"},{generatorVersion:"metro-v1" as const,layoutHash:"50e78bc1"},descriptor(generateWorld(1,{version:"metro-v1"})),{generatorVersion:"metro-v2" as const,layoutHash:"acc3b052"},descriptor(generateWorld(1,{version:"metro-v2"})),descriptor(generateWorld(1,{version:"metro-v3"}))];
  for(const world of worlds){
   const body={...input,seed:1,world};
   const prepared=await call("/api/journey/prepare",body);expect(prepared.status).toBe(200);
@@ -306,7 +306,7 @@ test("both V2 producers and historical V1 worlds remain consistent with V3 prepa
   expect(sessions.get(created.body.sessionId)?.publicMap).toMatchObject(world);
  }
  const {service,requests}=fake([jsonResponse(plan)]);
- await service.prepareJourney({...input,seed:1,world:worlds[0]});
+ await service.prepareJourney({...input,seed:1,world:worlds[1]});
  const payload=JSON.stringify(requests[0].body);
  expect(payload).toContain("50e78bc1");expect(payload).toContain("metro-v1");expect(payload).not.toContain("metro-v2");
 });

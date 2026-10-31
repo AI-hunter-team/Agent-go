@@ -1,3 +1,5 @@
+import { generateWorld } from "../sim/worldDefinition";
+import { previewWorldVersion } from "../ui/worldVersion";
 import "./style.css";
 import { ACESFilmicToneMapping, Box3, BoxGeometry, BoxHelper, Color, DirectionalLight, GridHelper, Group, HemisphereLight, Mesh, MeshStandardMaterial, PCFSoftShadowMap, PerspectiveCamera, PMREMGenerator, Raycaster, Scene, Vector2, Vector3, WebGLRenderer, type Object3D } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -111,7 +113,7 @@ function display(reset=true){
   clearHighlight();model?.dispose();if(model)content.remove(model.root);model=undefined;
   if(room)room.root.visible=mode==="room";
   if(palette&&kit){
-    if(mode==="room"&&room){if(controls)controls.maxPolarAngle=Math.PI*(!!room.definition.architecture?.51:.49);room.setView(view,el<HTMLInputElement>("roof").checked,el<HTMLInputElement>("labels").checked);studio.scale.set(140,1,100);studio.position.set(36,-7.66,18);if(reset){if(view==="overview"){room.root.updateMatrixWorld(true);move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));}else move(room.views[view],!!room.definition.architecture);}}
+    if(mode==="room"&&room){if(controls)controls.maxPolarAngle=Math.PI*(!!room.definition.architecture?.51:.49);room.setView(view,el<HTMLInputElement>("roof").checked,el<HTMLInputElement>("labels").checked);studio.scale.set(room.definition.layout.WIDTH+68,1,100);studio.position.set(room.definition.layout.WIDTH/2,-7.66,room.definition.layout.HEIGHT/2);if(reset){if(view==="overview"){room.root.updateMatrixWorld(true);move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));}else move(room.views[view],!!room.definition.architecture);}}
     else{
       model=mode==="asset"?exhibitModel(selected,palette,kit,variant):materialStudy(palette,surface,channel);content.add(model.root);const debug=model.root.getObjectByName("prop-debug");if(debug)debug.visible=propDebugVisible;
       const box=new Box3().setFromObject(model.root),size=box.getSize(new Vector3());studio.scale.set(Math.max(9,size.x+7),1,Math.max(8,size.z+6));studio.position.set(0,-.17,0);
@@ -127,7 +129,7 @@ async function loadAssets(){
   try{loaded=await loadStationKit();formal=true;}catch{formal=false;}
   if(disposed)return;
   cleanupAssets();palette=createGeneratedPalette(loaded);kit=loaded??(localKit=localStationKit(palette));
-  try{room=assembledRoom(kit,palette);content.add(room.root);el("asset-status").textContent=formal?"正式材质已载入":"本地模型与备用材质";el("retry-kit").hidden=formal;display();}
+  try{const requestedSeed=Number(params.get("seed")??1),seed=Number.isInteger(requestedSeed)&&requestedSeed>=1&&requestedSeed<=4294967295?requestedSeed:1;room=assembledRoom(kit,palette,generateWorld(seed,{version:previewWorldVersion()}));content.add(room.root);el("asset-status").textContent=formal?"正式材质已载入":"本地模型与备用材质";el("retry-kit").hidden=formal;display();}
   catch(error){showError("部分展品未能布置",error instanceof Error?error.message:"请重试载入素材。");}
   finally{loading=false;el("loading-note").hidden=true;}
 }

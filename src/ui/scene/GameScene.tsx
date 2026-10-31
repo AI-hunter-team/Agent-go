@@ -247,7 +247,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady, s
     const study=session.engine.world.definition.architecture?session.engine.world.definition.architecture?.views.find(v=>v.id===studyId):undefined;
     if(study){state.camera.position.set(...study.eye);state.camera.lookAt(worldTarget.set(...study.target).applyMatrix4(dock.matrix));return;}
     if (settings.mode === "overview") {
-      state.camera.position.set(centerX - 28, 62, viewBounds.y + HEIGHT + 28); state.camera.lookAt(worldTarget.set(centerX,-.5,centerY).applyMatrix4(dock.matrix)); return;
+      state.camera.position.set(centerX - WIDTH*.38, Math.max(62,WIDTH*.65), viewBounds.y + HEIGHT + 28); state.camera.lookAt(worldTarget.set(centerX,-.5,centerY).applyMatrix4(dock.matrix)); return;
     }
     // 大厅展示车站全景；选角时重新初始化角色镜头，避免从远处穿越设施。
     if (settings.shot === "lobby") {

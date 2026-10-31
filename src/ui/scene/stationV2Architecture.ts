@@ -14,6 +14,7 @@ function subtract(r:Rect,h:Rect):Rect[]{
 }
 /** Shared specimen geometry; opaque slabs, openings and guardrails follow the simulated connectors. */
 export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette){
+ const width=d.layout.WIDTH,height=d.layout.HEIGHT,centre=height/2;
  const root=new Group(),slabs=new SurfaceBuilder(),walls=new SurfaceBuilder(),roof=new SurfaceBuilder(),edge=new SurfaceBuilder(),trim=new SurfaceBuilder();
  root.name="station-v2-architecture";
  for(const a of d.architecture!.areas.filter(a=>a.floorId==="concourse")){
@@ -24,8 +25,8 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
   }
  }
  // Segmented facade: entrance apertures have the same positions as the navigation envelope.
- for(const horizontal of [true,false])for(const at of horizontal?[0,30]:[0,72]){
-  const length=horizontal?72:30;
+ for(const horizontal of [true,false])for(const at of horizontal?[0,height]:[0,width]){
+  const length=horizontal?width:height;
   const doors=(d.entrances??[]).filter(e=>Math.abs((horizontal?e.foot.y:e.foot.x)-at)<.01).map(e=>({a:(horizontal?e.foot.x:e.foot.y)-e.width/2,b:(horizontal?e.foot.x:e.foot.y)+e.width/2})).sort((a,b)=>a.a-b.a);
   let begin=0;const spans:{a:number;b:number}[]=[];for(const door of doors){spans.push({a:begin,b:door.a});begin=door.b;}spans.push({a:begin,b:length});
   for(const s of spans){if(s.b<=s.a)continue;const len=s.b-s.a,c=(s.a+s.b)/2,x=horizontal?c:at,z=horizontal?at:c;
@@ -47,20 +48,20 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
   for(const side of [-1,1])trim.box(p.steel,[.07,.36,r.h*.8],[x+side*r.w*.35,.2,z]);
  }
  // Flush maintenance/fire cabinets do not occupy the circulation lane.
- for(const x of d.props?[]:[11.6,60.5]){
+ for(const x of d.props?[]:[11.6,width-11.5]){
   trim.box(p.red,[.62,1.15,.1],[x,1.25,.08]);trim.box(p.glass,[.53,1.04,.02],[x,1.25,.14]);
   trim.box(p.steel,[1.55,2.65,.08],[x+2,1.325,.07]);trim.box(p.paint,[1.43,2.53,.02],[x+2,1.325,.12]);
   trim.bar(p.steel,[x+2.5,1.1,.15],[x+2.5,1.35,.15],.018);
  }
  const power=stationSwitch(d).position;trim.box(p.dark,[.45,1.2,.2],[power.x,1.1,power.y]);trim.box(p.red,[.12,.26,.23],[power.x-.2,1.15,power.y]);
  // Column-aligned beams, slatted ceiling and inset linear lighting.
- for(let x=0;x<72;x+=6){
-  roof.box(p.paint,[.4,.22,30],[x,3.48,15]);
+ for(let x=0;x<width;x+=6){
+  roof.box(p.paint,[.4,.22,height],[x,3.48,centre]);
   for(const z of [5,15,25])roof.box(p.light,[4.6,.04,.24],[x+3,3.48,z]);
   for(const z of [8,22])roof.box(p.dark,[2.1,.035,.7],[x+3,3.53,z]);
  }
- for(let z=.15;z<30;z+=.32)roof.box(p.paint,[72,.09,.08],[36,3.59,z]);
- roof.box(p.dark,[72,.08,30],[36,3.69,15]);
+ for(let z=.15;z<height;z+=.32)roof.box(p.paint,[width,.09,.08],[width/2,3.59,z]);
+ roof.box(p.dark,[width,.08,height],[width/2,3.69,centre]);
  for(const r of [...d.layout.SECURITY_BARRIERS,...d.layout.GATE_BARRIERS]){
   const x=r.x+r.w/2;
   edge.bar(p.steel,[x,1.05,r.y],[x,1.05,r.y+r.h],.035);
@@ -87,7 +88,7 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
  // Continuous platform screen-door frontage with real openings aligned to train doors.
  const doors=generatedTrainDoors(d);
  for(const side of d.props?[]:[-1,1]){
-  const z=15+side*6.82;
+  const z=centre+side*6.82;
   let start=0;
   for(const door of doors.filter(v=>v.side===side).sort((a,b)=>a.pos.x-b.pos.x)){
    const left=door.pos.x-.78,right=door.pos.x+.78;
@@ -104,11 +105,11 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
    trim.box(p.glass,[.7,2.25,.04],[left-.38,-4.85,z-.06*side]);trim.box(p.glass,[.7,2.25,.04],[right+.38,-4.85,z-.06*side]);
    trim.box(p.tactile,[1.55,.016,.12],[door.pos.x,-5.984,z-side*.6]);start=right;
   }
-  if(start<72)trim.box(p.glass,[72-start,2.3,.045],[(72+start)/2,-4.85,z]);
-  trim.box(p.paint,[72,.45,.24],[36,-3.27,z]);trim.box(p.jade,[72,.045,.255],[36,-3.33,z]);
+  if(start<width)trim.box(p.glass,[width-start,2.3,.045],[(width+start)/2,-4.85,z]);
+  trim.box(p.paint,[width,.45,.24],[width/2,-3.27,z]);trim.box(p.jade,[width,.045,.255],[width/2,-3.33,z]);
  }
  // Lower ceiling repeats a shallow beam and light rhythm, without opening new holes.
- for(let x=3;x<72;x+=6){roof.box(p.paint,[.3,.18,14],[x,-2.68,15]);for(const z of [10,20])roof.box(p.light,[4.6,.04,.2],[x,-2.75,z]);}
+ for(let x=3;x<width;x+=6){roof.box(p.paint,[.3,.18,14],[x,-2.68,centre]);for(const z of [10,20])roof.box(p.light,[4.6,.04,.2],[x,-2.75,z]);}
  const deck=slabs.finish("v2-floor-slabs"),structure=walls.finish("v2-walls-columns"),ceiling=roof.finish("v2-ceilings"),rails=edge.finish("v2-guardrails"),fittings=trim.finish("v2-trim-screen-doors");
  root.add(deck,structure,ceiling,rails,fittings);
  return {root,deck,ceiling,structure,dispose(){platform.dispose();root.remove(platform.root);disposeSurfaceGeometry(root);}};

@@ -1,4 +1,5 @@
 import { populateStationProps } from "./stationPropPlacement";
+import { createWorldV3Prototype } from "./worldV3Prototype";
 import { createWorldV3 } from "./worldV3";
 import { createWorldV2 } from "./worldV2";
 import { buildEntrances, entranceLength } from "./entranceGeometry";
@@ -203,6 +204,7 @@ export function restoreWorld(seed:number, expected:WorldDescriptor):WorldDefinit
  if(!expected||!['legacy-v0','metro-v1','metro-v2','metro-v3'].includes(expected.generatorVersion))return null;
  const d=generateWorld(seed,{version:expected.generatorVersion});
  if(d.layoutHash===expected.layoutHash)return d;
+ if(expected.generatorVersion==="metro-v3"){const old=createWorldV3Prototype(seed);return old.layoutHash===expected.layoutHash?old:null;}
  if(expected.generatorVersion==="metro-v2"){
   const architectural=createWorldV2(seed);
   return architectural.layoutHash===expected.layoutHash?architectural:null;
@@ -224,6 +226,6 @@ export function hydrateWorld(d:WorldDefinition):WorldDefinition {
 }
 
 export function descriptor(d:WorldDefinition):WorldDescriptor{return {generatorVersion:d.generatorVersion,layoutHash:d.layoutHash};}
-export function publicMap(d:WorldDefinition):PublicStationMap{return {...descriptor(d),name:d.name,...(d.connectors?{connectors:d.connectors}:{}),...(d.entrances?{entrances:d.entrances}:{}),floors:d.floors,regions:d.regions,itemSpots:d.layout.ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})),attractions:d.layout.ATTRACTIONS.map(({id,label,pos})=>({id,label,pos})),nodes:d.generatorVersion !== "legacy-v0" ? [...d.layout.NAV_NODES, { id: "BLACKOUT_SWITCH", label: "墙边电闸接近点", pos: stationSwitch(d).approach }, ...generatedTrainDoors(d).map(({ id, label, pos }) => ({ id, label, pos }))] : d.layout.NAV_NODES,facilities:d.layout.FACILITIES.map(({id,kind,label,pos})=>({id,kind,label,pos})),routes:d.connectors?d.connectors.map(c=>({id:c.kind,connectorId:c.id,node:c.node,position:c.approach,travelSeconds:c.travelSeconds})):[{id:"stairs",node:"STAIRS_TOP",position:d.layout.STAIRS_TOP,travelSeconds:6},{id:"escalator",node:"ESCALATOR_TOP",position:d.layout.ESCALATOR_APPROACH,travelSeconds:10}]};}
+export function publicMap(d:WorldDefinition):PublicStationMap{return {...descriptor(d),name:d.name,...(d.train?{train:d.train}:{}),...(d.connectors?{connectors:d.connectors}:{}),...(d.entrances?{entrances:d.entrances}:{}),floors:d.floors,regions:d.regions,itemSpots:d.layout.ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})),attractions:d.layout.ATTRACTIONS.map(({id,label,pos})=>({id,label,pos})),nodes:d.generatorVersion !== "legacy-v0" ? [...d.layout.NAV_NODES, { id: "BLACKOUT_SWITCH", label: "墙边电闸接近点", pos: stationSwitch(d).approach }, ...generatedTrainDoors(d).map(({ id, label, pos }) => ({ id, label, pos }))] : d.layout.NAV_NODES,facilities:d.layout.FACILITIES.map(({id,kind,label,pos})=>({id,kind,label,pos})),routes:d.connectors?d.connectors.map(c=>({id:c.kind,connectorId:c.id,node:c.node,position:c.approach,travelSeconds:c.travelSeconds})):[{id:"stairs",node:"STAIRS_TOP",position:d.layout.STAIRS_TOP,travelSeconds:6},{id:"escalator",node:"ESCALATOR_TOP",position:d.layout.ESCALATOR_APPROACH,travelSeconds:10}]};}
 
 export const serializableWorld=(d:WorldDefinition):WorldDefinition=>JSON.parse(JSON.stringify(d)) as WorldDefinition;
