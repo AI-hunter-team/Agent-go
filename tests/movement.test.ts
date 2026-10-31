@@ -43,14 +43,14 @@ test("oncoming NPCs yield on consistent sides and both reach their destination",
 
 test("walking around a ticket machine never sweeps through its solid geometry", () => {
   const w = new World(1);
-  const p = w.addPerson("normal", { x: 11, y: 6 });
-  w.walkTo(p, { x: 17, y: 6 }, "past TVM-1");
+  const p = w.addPerson("normal", { x: 7, y: 4 });
+  w.walkTo(p, { x: 13, y: 4 }, "past TVM-2");
   for (let i = 0; i < 200; i++) {
     const start = { ...p.pos };
     w.stepPeopleAndFacilities();
     expect(clearOfScenery(start, p.pos, personRadius(p.kind))).toBe(true);
   }
-  expect(p.pos).toEqual({ x: 17, y: 6 });
+  expect(p.pos).toEqual({ x: 13, y: 4 });
 });
 
 test.each(["normal", "luggage"] as const)("%s passenger reaches S1 from behind its conveyor", (kind) => {
@@ -69,11 +69,12 @@ test.each(["normal", "luggage"] as const)("%s passenger reaches S1 from behind i
 test("a waiting passenger cannot advance onto the passenger being served", () => {
   const w = new World(1), f = w.facility("TVM-2")!;
   const a = w.addPerson("luggage", { ...f.def.head });
-  const b = w.addPerson("luggage", { x: f.def.head.x - 1.05, y: f.def.head.y });
+  const b = w.addPerson("luggage", { x: f.def.head.x, y: f.def.head.y + 1.05 });
   a.activity = { kind: "service", facility: f.def.id }; f.serving = { personId: a.id, remaining: 100, recheck: false };
   b.activity = { kind: "queued", facility: f.def.id }; f.queue = [b.id];
   for (let i = 0; i < 100; i++) w.stepPeopleAndFacilities();
   expect(b.pos.x).toBeCloseTo(w.queueStandPoint(f, 0).x);
+  expect(b.pos.y).toBeCloseTo(w.queueStandPoint(f, 0).y);
   expect(a.pos).toEqual(f.def.head);
   expect(f.queue).toEqual([b.id]);
 });
@@ -130,9 +131,9 @@ test("a clear look-ahead cannot bypass the sweep of the actual short stride", ()
 
 // A queue's machine-side corner is inside TVM-3's body clearance: route around both obstacles.
 test("a queue detour beside a ticket machine reaches its waypoint without oscillating", () => {
-  let pos = { x: 14.4, y: 24.8 };
-  const target = { x: 13.475, y: 23.225 };
-  const queue = { x: 8, y: 23.33, w: 5.72, h: 1.34 };
+  let pos = { x: 14.8, y: 3.6 };
+  const target = { x: 13.225, y: 4.525 };
+  const queue = { x: 13.33, y: 4.28, w: 1.34, h: 5.72 };
   const radius = personRadius("normal");
   for (let tick = 0; tick < 200 && Math.hypot(pos.x - target.x, pos.y - target.y) > 1e-6; tick++) {
     const waypoint = detourAroundQueues(pos, target, [queue], radius);

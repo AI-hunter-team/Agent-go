@@ -15,10 +15,10 @@ function runUntilTrigger(e: Engine, maxSeconds = 200) {
 }
 
 describe("engine", () => {
-  test("starts with a start trigger and nothing visible from the entrance", () => {
+  test("starts with a start trigger and only the nearby end of the ticket bank visible", () => {
     const e = new Engine(1);
     expect(e.takeTriggers().map((t) => t.kind)).toEqual(["start"]);
-    expect(e.observe().facilities).toHaveLength(0);
+    expect(e.observe().facilities.map(f => f.id)).toEqual(["TVM-1"]);
     expect(e.observe().self.timeLeft).toBe(120);
   });
 

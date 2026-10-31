@@ -1,15 +1,12 @@
 import type { PassengerKind, Vec } from "../shared/types";
 import { dist, moveToward, segmentIntersectsRect, type Rect } from "./geometry";
-import { FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_BARRIERS, WIDTH } from "./layout";
+import { ATTRACTIONS, FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_BARRIERS, WIDTH } from "./layout";
 import { facilitySolids } from "./facilityGeometry";
 
 export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
 export const personRadius = (kind: PassengerKind | "guard") => kind === "luggage" ? 0.48 : 0.32;
-const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos));
-const floorEdges: Rect[] = [
-  { x: 48, y: -1, w: 9, h: 14 }, { x: 48, y: 17, w: 9, h: HEIGHT - 16 },
-];
-const solids = [...PILLARS, ...furniture, ...floorEdges];
+const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos, f.queueDirection));
+const solids = [...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
 /** Shared by persistent route planning and the per-tick collision sweep. */
 export const SCENERY_OBSTACLES: readonly Rect[] = [...MOVE_BLOCKERS.slice(0, 3), ...solids];
 
@@ -35,6 +32,11 @@ export function clearOfPeople(from: Vec, to: Vec, radius: number, others: readon
   return others.every((other) => {
     const start = other.from ?? other.pos;
     const gap = radius + other.radius + 0.02;
+    // Reject distant swept pairs before the exact relative-motion calculation.
+    const x0 = from.x - start.x, x1 = to.x - other.pos.x;
+    const y0 = from.y - start.y, y1 = to.y - other.pos.y;
+    if ((x0 > gap && x1 > gap) || (x0 < -gap && x1 < -gap)
+      || (y0 > gap && y1 > gap) || (y0 < -gap && y1 < -gap)) return true;
     const initial = dist(from, start);
     // Imported/test positions may already touch: permit only an outward recovery.
     return initial < gap - 1e-6

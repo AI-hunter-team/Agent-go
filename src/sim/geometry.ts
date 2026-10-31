@@ -23,6 +23,8 @@ export function moveToward(from: Vec, to: Vec, step: number): Vec {
 
 /** Liang–Barsky clip test: does segment a→b pass through the rectangle? */
 export function segmentIntersectsRect(a: Vec, b: Vec, r: Rect): boolean {
+  if ((a.x < r.x && b.x < r.x) || (a.x > r.x + r.w && b.x > r.x + r.w)
+    || (a.y < r.y && b.y < r.y) || (a.y > r.y + r.h && b.y > r.y + r.h)) return false;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   let t0 = 0;

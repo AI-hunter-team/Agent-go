@@ -71,7 +71,7 @@ function RenderSchedule({ session, targetFps, metrics }: Pick<SceneProps, "sessi
 /** 更新跟随/总览相机，仅在镜头尚未停稳时继续补绘静止场景。 */
 function CameraRig({ session, settings, reducedMotion }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean }) {
   const { gl, size, set, invalidate } = useThree();
-  const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 160), overview: new OrthographicCamera(-35, 35, 20, -20, 0.1, 180) }), []);
+  const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 240), overview: new OrthographicCamera(-50, 50, 30, -30, 0.1, 240) }), []);
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; pointer: number } | null>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
@@ -82,7 +82,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     if (active instanceof PerspectiveCamera) active.aspect = size.width / Math.max(1, size.height);
     else {
       const aspect = size.width / Math.max(1, size.height);
-      const halfHeight = Math.max(26, 40 / aspect); const halfWidth = halfHeight * aspect;
+      const halfHeight = Math.max(28, (WIDTH / 2 + HEIGHT * 0.4) / aspect); const halfWidth = halfHeight * aspect;
       active.left = -halfWidth; active.right = halfWidth; active.top = halfHeight; active.bottom = -halfHeight;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
@@ -120,7 +120,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
   useFrame((state, delta) => {
     const { target, desired, eye } = vectors;
     if (settings.mode === "overview") {
-      state.camera.position.set(WIDTH / 2 - 23, 50, HEIGHT + 23); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
+      state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
     }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
     target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
@@ -201,7 +201,7 @@ function StationLighting({ standard }: { standard: boolean }) {
     <ambientLight intensity={0.55} />
     <primitive object={target} />
     <directionalLight target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
-    {[8, 24, 39, 63].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, 15]} intensity={28} distance={23} decay={2} />)}
+    {[8, 24, 39, 56, 76, WIDTH - 3].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, 15]} intensity={28} distance={23} decay={2} />)}
   </>;
 }
 
@@ -241,7 +241,7 @@ function Contents(props: SceneProps) {
     <color attach="background" args={["#e9e1cf"]} />
     <StationLighting standard={props.quality === "standard"} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
-    <Station session={session} overview={props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
+    <Station session={session} overview={props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
