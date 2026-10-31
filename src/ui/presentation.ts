@@ -38,6 +38,7 @@ export interface ViewOptions {
   thinking: boolean;
   replay?: ReplayFrame;
   trail?: readonly { readonly x: number; readonly y: number }[];
+  messages?: readonly { actorId: string; message: import("./headMessages").HeadMessage }[];
 }
 
 /** Copies primitives only: a renderer never receives mutable Person/Activity objects. */

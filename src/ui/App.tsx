@@ -29,6 +29,7 @@ import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
 import { ReportSummary, EventTimeline } from "./ReportView";
 import { TrajectoryReplayView } from "./TrajectoryReplay";
+import { getSessionHeadMessage, type HeadMessageMode } from "./headMessages";
 import styles from "./App.module.css";
 
 const AvatarThumbnail = lazy(() => import("./AvatarThumbnail"));
@@ -87,7 +88,10 @@ export function App() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
-  const [expandedReviewGeneration, setExpandedReviewGeneration] = useState<number | null>(null);
+  const [reviewState, setReviewState] = useState<{ generation: number; expanded: boolean } | null>(null);
+  const [collapsedRecordGeneration, setCollapsedRecordGeneration] = useState<number | null>(null);
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [renderer, setRenderer] = useState<"3d" | "2d">("3d");
   const [metrics] = useState(() => new FrameMetrics());
@@ -106,12 +110,6 @@ export function App() {
     showTrail: false,
     thinking: false,
   });
-  optionsRef.current = {
-    showVision,
-    showTrail,
-    thinking: runner?.phase === "thinking",
-    trail: session.engine.trail,
-  };
   const thought =
     flow.stage === "planning" || (watching && runner?.phase === "thinking")
       ? "thinking"
@@ -142,7 +140,24 @@ export function App() {
   };
   const broadcast = useBroadcast(session, watching);
   const won = report?.status === "success";
-  const expandedReview = won && expandedReviewGeneration === session.generation;
+  const recordExpanded = collapsedRecordGeneration !== session.generation;
+  const reviewOpened = reviewState?.generation === session.generation;
+  const expandedReview = reviewOpened && reviewState.expanded;
+  const messageMode: HeadMessageMode = watching ? recordExpanded ? "icons" : "full" : thought ? "icons" : "hidden";
+  optionsRef.current = {
+    showVision, showTrail, thinking: runner?.phase === "thinking", trail: session.engine.trail,
+    messages: renderer === "2d" ? [...session.presentation.current.actors.keys()].flatMap(actorId => {
+      const message = getSessionHeadMessage(session, actorId, messageMode, thought);
+      return message ? [{ actorId, message }] : [];
+    }) : undefined,
+  };
+  const closeReview = () => {
+    setReviewState({ generation: session.generation, expanded: false });
+    reviewTrigger.current?.focus();
+  };
+  useEffect(() => {
+    if (expandedReview) reviewHeading.current?.focus();
+  }, [expandedReview]);
   // 胜利展示始终从透视镜头开始；用户之后可自行切换镜头。
   useEffect(() => {
     if (won) j.setCamera((current) => current.mode === "follow" ? current : { ...current, mode: "follow" });
@@ -224,6 +239,7 @@ export function App() {
                   showVision={showVision}
                   showTrail={showTrail}
                   thought={thought}
+                  messageMode={messageMode}
                   onCameraReady={j.onCameraReady}
                 />
               </Suspense>
@@ -632,7 +648,13 @@ export function App() {
                 ◖ 现场播报：{broadcast}
               </div>
             )}
-            <section className={`${styles.action} ${styles.panel}`}>
+            <section className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录">
+              <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
+                onClick={() => setCollapsedRecordGeneration(recordExpanded ? session.generation : null)}>
+                <span>{recordExpanded ? "收起行程记录" : "展开行程记录"}</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+              <div id="journey-record-content" hidden={!recordExpanded}>
               <span className={styles.eyebrow}>当前行动</span>
               <h2>
                 {describeActivity(session.engine.world, session.engine.player)}
@@ -648,6 +670,7 @@ export function App() {
                 <>
                   <h3>最近决策</h3>
                   <p>{latestText}</p>
+                  {latest.thinking && <details><summary>模型返回的思考</summary><p>{latest.thinking}</p></details>}
                 </>
               )}
               {dialogue && (
@@ -674,6 +697,7 @@ export function App() {
                 ))}
                 {runner.interactionDialogues.map((d, i) => <p key={i}>{d.t.toFixed(1)}s 对 {d.request.npc.id}：「{d.request.message}」→「{d.response.reply}」· {d.response.decision}</p>)}
               </Modal>
+              </div>
             </section>
             <section className={`${styles.timer} ${styles.panel}`}>
               <span className={styles.eyebrow}>剩余时间</span>
@@ -749,10 +773,19 @@ export function App() {
           </div>
         )}
         {report && (
-          <section className={`${styles.review} ${styles.panel} ${won && !expandedReview ? styles.reviewSuccess : ""}`}>
+          <>
+          <div className={styles.endActions} aria-label="本局结束操作">
+            <button ref={reviewTrigger} aria-expanded={expandedReview} aria-controls="journey-review" onClick={() => {
+              if (expandedReview) closeReview();
+              else setReviewState({ generation: session.generation, expanded: true });
+            }}>{expandedReview ? "收起复盘" : "行程复盘"}</button>
+            <button className="primary" onClick={j.retry}>再来一局</button>
+          </div>
+          <section id="journey-review" aria-labelledby="journey-review-title" hidden={!expandedReview} className={`${styles.review} ${styles.panel}`}>
+            {reviewOpened && <>
             <div className={styles.reviewHeading}>
-              <h1>行程复盘</h1>
-              {won && <button aria-expanded={expandedReview} onClick={() => setExpandedReviewGeneration(expandedReview ? null : session.generation)}>{expandedReview ? "缩小复盘" : "展开复盘"}</button>}
+              <h1 id="journey-review-title" ref={reviewHeading} tabIndex={-1}>行程复盘</h1>
+              <button onClick={closeReview}>收起复盘</button>
             </div>
             <div className={styles.reviewGrid}>
               <div>
@@ -793,7 +826,9 @@ export function App() {
               <button onClick={j.replaceModel}>更换模型再试</button>
               <button onClick={j.returnLobby}>返回大厅</button>
             </div>
+            </>}
           </section>
+          </>
         )}
         {debug && (
           <details className={styles.debug}>

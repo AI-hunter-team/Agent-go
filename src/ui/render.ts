@@ -167,7 +167,20 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
       if(a.level!=="red") {ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,7,-Math.PI/2,-Math.PI/2+Math.PI*2*a.ring);ctx.stroke();}
     }
     ctx.fillStyle=COLORS.ink;ctx.font="10px system-ui";
-    for(const s of scene.speech) {const a=scene.actors.get(s.speakerId);if(a) ctx.fillText(s.text.slice(0,30),px(a.x)+8,px(a.z)-16);}
+    if (opts.messages) for (const {actorId,message} of opts.messages) {
+      const actor=scene.actors.get(actorId);
+      if (!actor) continue;
+      const x=px(actor.x)+8,y=px(actor.z)-16;
+      ctx.fillStyle=actorId==="player"?COLORS.player:COLORS.ochre;
+      if (message.text) ctx.fillText(`${actorId==="player"?"Agent":`NPC ${actorId}`} · ${message.text.slice(0,30)}`,x,y);
+      else {
+        ctx.strokeStyle=actorId==="player"?COLORS.player:COLORS.ochre;ctx.lineWidth=1.4;ctx.beginPath();
+        if(message.kind==="speech") {ctx.rect(x,y-9,14,9);ctx.moveTo(x+3,y);ctx.lineTo(x,y+3);}
+        else {ctx.arc(x+7,y-5,6,0,Math.PI*2);ctx.moveTo(x+2,y+3);ctx.arc(x+1,y+3,1,0,Math.PI*2);}
+        ctx.stroke();
+      }
+    }
+    else for(const s of scene.speech) {const a=scene.actors.get(s.speakerId);if(a) ctx.fillText(s.text.slice(0,30),px(a.x)+8,px(a.z)-16);}
   }
 
   // People
