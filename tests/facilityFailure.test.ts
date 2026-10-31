@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { World } from "../src/sim/world";
 import { Engine } from "../src/sim/engine";
+import { buildScenario } from "../src/sim/scenario";
 
 test.each(["TVM-1", "S1", "G2"])("%s stops unfinished service for both passengers and player on failure/closure", (id) => {
   for (const status of ["broken", "closed"] as const) for (const isPlayer of [true, false]) {
@@ -22,7 +23,7 @@ test.each(["TVM-1", "S1", "G2"])("%s stops unfinished service for both passenger
   }
 });
 
-test.each([["TVM-1", 25], ["S1", 40]] as const)("scripted %s shutdown takes priority over service completing on the same tick", (id, t) => {
+test.each(buildScenario(1).events.filter((e) => e.type === "status"))("scripted $facility shutdown takes priority over service completing on the same tick", ({ facility: id, t }) => {
   const e = new Engine(1); const f = e.world.facility(id)!; const p = e.player;
   e.world.t = t - 0.1; e.takeTriggers();
   p.pos = { ...f.def.head }; p.hasTicket = id === "S1"; p.screened = false;

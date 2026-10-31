@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { Engine } from "../src/sim/engine";
 import type { AgentAction } from "../src/shared/types";
+import { buildScenario } from "../src/sim/scenario";
 
 type Loose<T> = T extends unknown ? Omit<T, "reason"> & { reason?: string } : never;
 const act = (e: Engine, a: Loose<AgentAction>) => e.applyAction({ reason: "", ...a } as AgentAction);
@@ -41,7 +42,7 @@ describe("engine", () => {
     const plan: AgentAction[] = [
       { type: "join_queue", facility: "TVM-3", reason: "" },
       { type: "join_queue", facility: "S3", reason: "" },
-      { type: "join_queue", facility: "G5", reason: "" },
+      { type: "join_queue", facility: [...e.world.facilities.values()].filter((f) => f.def.kind === "gate" && f.status === "open").at(-1)!.def.id, reason: "" },
       { type: "move_to", target: "STAIRS_TOP", reason: "" },
       { type: "descend_stairs", reason: "" },
     ];
@@ -97,15 +98,16 @@ describe("engine", () => {
   test("seeing a broken facility for the first time triggers a decision", () => {
     const e = new Engine(1);
     e.takeTriggers();
-    act(e, { type: "move_to", target: "HALL_N" });
-    // TVM-1 breaks at t=25 while it is in view of HALL_N.
+    const failure = buildScenario(1).events.find((event) => event.type === "status" && event.status === "broken")!;
+    act(e, { type: "move_to", target: failure.facility });
+    // Reach the selected machine before its failure, then wait within sight.
     const seen: string[] = [];
-    for (let i = 0; i < 6 && e.t < 40; i++) {
+    for (let i = 0; i < 10 && e.t < 45; i++) {
       const triggers = runUntilTrigger(e, 40);
       seen.push(...triggers.map((t) => t.text));
       if (e.player.activity.kind === "idle") act(e, { type: "wait", seconds: 20 });
     }
-    expect(seen.some((s) => s.includes("TVM-1") && s.includes("故障"))).toBe(true);
+    expect(seen.some((s) => s.includes(failure.facility) && s.includes("故障"))).toBe(true);
   });
 
   test("same seed and same actions give identical runs", () => {

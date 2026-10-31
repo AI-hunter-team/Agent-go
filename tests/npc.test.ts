@@ -5,7 +5,7 @@ import { World } from "../src/sim/world";
 
 function simulate(seconds: number, seed = 1) {
   const world = new World(seed);
-  // Isolate the original NPC/scripted-event fixture from default crowd balancing.
+  // Isolate NPC/scripted events from default crowd balancing.
   const director = new NpcDirector(world, buildScenario(seed, { extraQueuePeople: 0 }));
   for (let i = 0; i < seconds * 10; i++) {
     world.t = Math.round((world.t + 0.1) * 10) / 10;
@@ -16,11 +16,13 @@ function simulate(seconds: number, seed = 1) {
 }
 
 describe("NPC director", () => {
-  test("starting crowd is queued and G3 starts broken", () => {
+  test("starting crowd is queued and the selected gate starts broken without a queue", () => {
     const w = simulate(0);
     expect(w.facility("TVM-2")!.queue).toHaveLength(4);
     expect(w.facility("S2")!.queue).toHaveLength(5);
-    expect(w.facility("G3")!.status).toBe("broken");
+    const [brokenGate] = Object.keys(buildScenario(1).initialStatus);
+    expect(w.facility(brokenGate)!.status).toBe("broken");
+    expect(w.facility(brokenGate)!.queue).toHaveLength(0);
   });
 
   test("NPCs flow through to the platform", () => {
@@ -30,12 +32,14 @@ describe("NPC director", () => {
 
   test("scripted closures happen on time and nobody queues at them", () => {
     const w = simulate(45);
-    expect(w.facility("TVM-1")!.status).toBe("broken");
+    const scenario = buildScenario(1);
+    const failedTvm = scenario.events.find((e) => e.type === "status" && e.status === "broken")!.facility;
+    expect(w.facility(failedTvm)!.status).toBe("broken");
     expect(w.facility("S1")!.status).toBe("closed");
     expect(w.facility("S1")!.queue).toHaveLength(0);
     for (const p of w.persons.values()) {
       if (p.activity.kind === "queued" || p.activity.kind === "to_queue") {
-        expect(["S1", "TVM-1", "G3"]).not.toContain(p.activity.facility);
+        expect(["S1", failedTvm, ...Object.keys(scenario.initialStatus)]).not.toContain(p.activity.facility);
       }
     }
   });

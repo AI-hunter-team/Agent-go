@@ -130,7 +130,12 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
     t += rng.range(2, 5);
   }
 
-  const initialStatus: Record<string, FacilityStatus> = { G3: "broken" };
+  // Keep failures reproducible and independent of passenger/crowd RNG draws.
+  const failures = new Rng(seed ^ 0x71f4ac39);
+  const brokenGate = failures.pick(FACILITIES.filter((f) => f.kind === "gate"));
+  const brokenTvm = failures.pick(FACILITIES.filter((f) => f.kind === "tvm"));
+  const tvmFailureTime = 20 + Math.floor(failures.range(0, 21));
+  const initialStatus: Record<string, FacilityStatus> = { [brokenGate.id]: "broken" };
   const crowd = new Rng(seed ^ 0x4d43f9a1);
   for (const f of FACILITIES) {
     if (initialStatus[f.id] && initialStatus[f.id] !== "open") continue;
@@ -142,9 +147,10 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
   return {
     seed,
     initialStatus,
-    spawns,
+    // A gate that starts broken must not receive the original starting crowd either.
+    spawns: spawns.filter((s) => !s.startQueue || !initialStatus[s.startQueue] || initialStatus[s.startQueue] === "open"),
     events: [
-      { t: 25, type: "status", facility: "TVM-1", status: "broken", note: "故障停用", broadcast: null },
+      { t: tvmFailureTime, type: "status", facility: brokenTvm.id, status: "broken", note: "故障停用", broadcast: null },
       {
         t: 40,
         type: "status",

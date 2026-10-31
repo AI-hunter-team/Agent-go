@@ -31,8 +31,10 @@ describe("observation", () => {
 
   test("a broken gate is only known once it is in view", () => {
     const far = worldWithPlayerAt(31, 7);
+    far.world.setStatus("G3", "broken", "故障");
     expect(buildObservation(far.world, far.guards).facilities.find((f) => f.id === "G3")).toBeUndefined();
     const near = worldWithPlayerAt(38, 15);
+    near.world.setStatus("G3", "broken", "故障");
     expect(buildObservation(near.world, near.guards).facilities.find((f) => f.id === "G3")?.status).toBe("broken");
   });
 
