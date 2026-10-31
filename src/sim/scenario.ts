@@ -163,6 +163,13 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
   const brokenGate = failures.pick(FACILITIES.filter((f) => f.kind === "gate"));
   const brokenTvm = failures.pick(FACILITIES.filter((f) => f.kind === "tvm"));
   const tvmFailureTime = 20 + Math.floor(failures.range(0, 21));
+  // A separate stream preserves the existing gate/TVM schedule for saved seeds.
+  const securityEvents = failures.fork("security-closure");
+  const securityLanes = FACILITIES.filter((f) => f.kind === "security");
+  const closedSecurity = securityEvents.pick(securityLanes);
+  const recheckSecurity = closedSecurity.id === "S2"
+    ? securityEvents.pick(securityLanes.filter((f) => f.id !== closedSecurity.id)).id
+    : "S2";
   const initialStatus: Record<string, FacilityStatus> = { [brokenGate.id]: "broken" };
   const crowd = new Rng(seed ^ 0x4d43f9a1);
   for (const f of FACILITIES) {
@@ -182,12 +189,12 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
       {
         t: 40,
         type: "status",
-        facility: "S1",
+        facility: closedSecurity.id,
         status: "closed",
         note: "临时停用",
-        broadcast: "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
+        broadcast: `广播：${closedSecurity.label}临时停用，请排队乘客改走其他安检通道。`,
       },
-      { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
+      { t: 55, type: "recheck", facility: recheckSecurity, extra: [10, 15] },
     ],
   };
 }

@@ -88,7 +88,8 @@ describe("GameRunner", () => {
         : { type: "move_to", target: "STAIRS_TOP", reason: "前往楼梯" });
       return ok({ type: "join_queue", facility: !p.hasTicket ? "TVM-1" : !p.screened ? "S2" : "G3", reason: "执行公开设施路线" });
     });
-    const runner = new GameRunner(new Engine(22), agent, keywords);
+    // Seed 1 keeps this public S2 route open; closures now vary with the seed.
+    const runner = new GameRunner(new Engine(1), agent, keywords);
     await runner.runToEnd();
     expect(runner.engine.settings).toEqual({ timeLimitSeconds: 150, extraQueuePeople: 3 });
     expect(runner.engine.status).toBe("success");

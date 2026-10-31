@@ -319,13 +319,15 @@ export function useJourney(interval: number) {
     void start(twoDimensional);
   });
   const edit = (text?: string) => {
+    const nextSeed = ended ? randomSeed(seed) : seed;
     preserveRun();
     if (text !== undefined) {
       setGuidance(text);
       setKind("llm");
     }
     invalidate();
-    session.preview(seed, settings, { backpack });
+    setSeed(nextSeed);
+    session.preview(nextSeed, settings, { backpack });
     navigate(text !== undefined || kind === "llm" ? "guidance" : "plan");
   };
   const retry = (options: { sameScenario?: boolean; twoDimensional?: boolean } = {}) => {
@@ -341,9 +343,11 @@ export function useJourney(interval: number) {
   };
   const returnLobby = () => {
     if (watching) session.stop();
+    const nextSeed = session.runner?.phase === "ended" ? randomSeed(seed) : seed;
     preserveRun();
     invalidate();
-    session.preview(seed, settings, { backpack });
+    setSeed(nextSeed);
+    session.preview(nextSeed, settings, { backpack });
     navigate("lobby");
   };
   const replaceModel = () => {
