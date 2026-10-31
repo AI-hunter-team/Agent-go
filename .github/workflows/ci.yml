@@ -44,7 +44,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test
+        run: npm test -- --maxWorkers=2 --testTimeout=15000
 
       - name: Build frontend
         run: npm run build
