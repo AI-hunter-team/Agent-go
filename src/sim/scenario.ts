@@ -32,6 +32,10 @@ export const RULES = {
   blackoutSeconds: 20,
 } as const;
 
+/** Security staff deliberately have a shorter, narrower idle cone than patrol guards.
+ * They are scanning their own lane, not acting as three extra station-wide sentries. */
+export const SECURITY_STAFF_VISION = { range: 8, fovDeg: 85 } as const;
+
 export const DECISION_LIMITS = {
   maxDecisions: 60,
   maxConsecutiveFailures: 3,
@@ -70,6 +74,9 @@ export interface GuardDef {
   facing: number;
   speed: number;
   pauseSeconds: number;
+  /** Optional role-specific idle perception. Omitted definitions use RULES. */
+  sightRange?: number;
+  sightFovDeg?: number;
 }
 
 export const GUARDS: GuardDef[] = [
@@ -90,10 +97,13 @@ export const GUARDS: GuardDef[] = [
 ];
 
 export const SECURITY_STAFF: GuardDef[] = [
-  { id: "security-S1", label: "1号安检员", role: "security_staff", route: [{ x: 28.5, y: 3.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
-  { id: "security-S2", label: "2号安检员", role: "security_staff", route: [{ x: 28.5, y: 12.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
-  { id: "security-S3", label: "3号安检员", role: "security_staff", route: [{ x: 28.5, y: 26.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
+  { id: "security-S1", label: "1号安检员", role: "security_staff", route: [{ x: 28.5, y: 3.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
+  { id: "security-S2", label: "2号安检员", role: "security_staff", route: [{ x: 28.5, y: 12.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
+  { id: "security-S3", label: "3号安检员", role: "security_staff", route: [{ x: 28.5, y: 26.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
 ];
+
+/** Production balance: the middle lane remains usable, but its service still works normally. */
+export const SECURITY_STAFF_BALANCED: GuardDef[] = [SECURITY_STAFF[0], SECURITY_STAFF[2]];
 
 export interface NpcSpawn {
   t: number;

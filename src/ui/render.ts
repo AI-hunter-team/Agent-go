@@ -140,11 +140,13 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
 
   // Guard view cones
   if (!replay) for (const g of guards.guards) {
-    const half = (RULES.guardFovDeg * Math.PI) / 360;
+    const vision = guards.vision(g);
+    const half = (vision.fov * Math.PI) / 360;
+    const range = vision.range;
     ctx.fillStyle = g.lookAt ? "rgba(180,83,60,0.20)" : "rgba(110,138,116,0.16)";
     ctx.beginPath();
     ctx.moveTo(px(g.pos.x), px(g.pos.y));
-    ctx.arc(px(g.pos.x), px(g.pos.y), px(RULES.guardRange), g.facing - half, g.facing + half);
+    ctx.arc(px(g.pos.x), px(g.pos.y), px(range), g.facing - half, g.facing + half);
     ctx.closePath();
     ctx.fill();
   }

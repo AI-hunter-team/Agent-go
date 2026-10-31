@@ -29,7 +29,7 @@ import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
 import { NpcBrain } from "./npcBrain";
 import { buildObservation, visibleFacilities } from "./observation";
-import { DT, GUARDS, SECURITY_STAFF, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
+import { DT, GUARDS, SECURITY_STAFF_BALANCED, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
 import { World, round1, type Person } from "./world";
 import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
@@ -40,7 +40,7 @@ import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 export class Engine {
   readonly settings: Readonly<GameSettings>;
   readonly world: World;
-  readonly guards = new GuardSystem([...GUARDS, ...SECURITY_STAFF]);
+  readonly guards = new GuardSystem([...GUARDS, ...SECURITY_STAFF_BALANCED]);
   readonly events = new EventBus();
   readonly perception: PerceptionSystem;
   readonly alerts: AlertSystem;
@@ -94,7 +94,10 @@ export class Engine {
   resolveInteractions(dt = DT) {
     const observers: Observer[] = [
       ...[...this.world.persons.values()].filter((p) => !p.isPlayer).map((p) => ({ id: p.id, role: "npc" as const, pos: p.pos, facing: p.facing, incapacitated: p.incapacitated })),
-      ...this.guards.guards.map((g) => ({ id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated })),
+      ...this.guards.guards.map((g) => {
+        const v = this.guards.vision(g);
+        return { id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated, sightRange: v.range, sightFovDeg: v.fov };
+      }),
     ];
     const previousChanges = this.alerts.history.length;
     const percepts = this.perception.step(observers);

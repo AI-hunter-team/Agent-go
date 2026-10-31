@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { GuardSystem } from "../src/sim/guards";
-import { DT, GUARDS } from "../src/sim/scenario";
+import { DT, GUARDS, SECURITY_STAFF, SECURITY_STAFF_VISION } from "../src/sim/scenario";
 import { angleDiff, angleTo, dist, segmentIntersectsRect } from "../src/sim/geometry";
 import { MOVE_BLOCKERS } from "../src/sim/layout";
 
@@ -143,5 +143,17 @@ describe("guards", () => {
     stepSeconds(a, 60);
     stepSeconds(b, 60);
     expect(a.guards.map((g) => [g.pos, g.facing])).toEqual(b.guards.map((g) => [g.pos, g.facing]));
+  });
+
+  test("security staff use a local scanning cone instead of patrol guard coverage", () => {
+    const gs = new GuardSystem([SECURITY_STAFF[1]]);
+    const staff = gs.guards[0];
+    expect(staff.def.sightRange).toBe(SECURITY_STAFF_VISION.range);
+    expect(staff.def.sightFovDeg).toBe(SECURITY_STAFF_VISION.fovDeg);
+    expect(gs.canSee(staff, { x: 24, y: 12.5 })).toBe(true);
+    expect(gs.canSee(staff, { x: 21, y: 12.5 })).toBe(true);
+    expect(gs.canSee(staff, { x: 20, y: 22 })).toBe(false);
+    gs.investigate(staff, { x: 20, y: 20 }, 1);
+    expect(gs.canSee(staff, { x: 20, y: 20 })).toBe(true);
   });
 });

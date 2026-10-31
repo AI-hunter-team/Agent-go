@@ -10,6 +10,8 @@ export interface Observer {
   pos: Vec;
   facing: number;
   incapacitated?: number;
+  sightRange?: number;
+  sightFovDeg?: number;
 }
 
 export class PerceptionSystem {
@@ -17,8 +19,10 @@ export class PerceptionSystem {
 
   canSee(observer: Observer, pos: Vec): boolean {
     const npc = observer.role === "npc";
+    const range = npc ? PERCEPTION_RULES.npcSightRange : observer.sightRange ?? RULES.guardRange;
+    const fov = npc ? PERCEPTION_RULES.npcFovDeg : observer.sightFovDeg ?? RULES.guardFovDeg;
     return !(observer.incapacitated && observer.incapacitated > 0)
-      && inViewCone(observer.pos, observer.facing, npc ? PERCEPTION_RULES.npcFovDeg : RULES.guardFovDeg, (npc ? PERCEPTION_RULES.npcSightRange : RULES.guardRange) * Math.min(this.lightAt(observer.pos), this.lightAt(pos)), pos)
+      && inViewCone(observer.pos, observer.facing, fov, range * Math.min(this.lightAt(observer.pos), this.lightAt(pos)), pos)
       && lineOfSight(observer.pos, pos, SIGHT_OCCLUDERS);
   }
 
