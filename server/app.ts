@@ -5,7 +5,7 @@ import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDi
 import express, { type NextFunction, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { planToNormalized, validPlan, type JourneyInput, type JourneyPreparation, type JourneyPlan } from "../src/shared/journey";
-import { extname, resolve } from "node:path";
+import { basename, extname, resolve } from "node:path";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
 import type {
@@ -55,9 +55,38 @@ const wrap = (h: Handler) => (req: Request, res: Response, next: NextFunction) =
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const boundedText = (value: unknown, max: number): value is string => typeof value === "string" && !!value.trim() && countChars(value) <= max;
 
+const YEAR_SECONDS = 31536000;
+const DAY_SECONDS = 86400;
+const WEEK_SECONDS = DAY_SECONDS * 7;
+
+/** Vite emits content hashes in production asset names, making these safe to cache for a year. */
+const isFingerprintedAsset = (filePath: string): boolean =>
+  /[/\\]assets[/\\][^/\\]+[.-][a-z0-9_-]{8,}\.[a-z0-9]+$/i.test(filePath);
+
+const setStaticCacheHeaders = (res: Response, filePath: string) => {
+  res.setHeader("Vary", "Accept-Encoding");
+  if (isFingerprintedAsset(filePath)) {
+    res.setHeader("Cache-Control", `public, max-age=${YEAR_SECONDS}, immutable`);
+    return;
+  }
+  if (basename(filePath).toLowerCase() === "index.html" || extname(filePath).toLowerCase() === ".html") {
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return;
+  }
+  res.setHeader("Cache-Control", `public, max-age=${DAY_SECONDS}, s-maxage=${WEEK_SECONDS}, stale-while-revalidate=${DAY_SECONDS}`);
+};
+
 export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, reviewModelParameters = modelParameters, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
+  // Sessions, model discovery, health and model responses must never be cached.
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
+    res.setHeader("CDN-Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Vary", "X-Model-Config");
+    next();
+  });
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
   type Runtime = { llm: LlmService | null; parameters: Record<string, unknown>; token: string };
   const bindings = new WeakMap<Session, Runtime>();
@@ -332,9 +361,10 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
   if (frontendDir) {
     // Keep API errors and missing assets out of the SPA fallback.
     app.use("/api", (_req, res) => { res.status(404).json({ error: "API 不存在" }); });
-    app.use(express.static(frontendDir));
+    app.use(express.static(frontendDir, { setHeaders: setStaticCacheHeaders }));
     app.get("*", (req, res, next) => {
       if (extname(req.path) || req.path.startsWith("/assets/") || !req.accepts("html")) return next();
+      setStaticCacheHeaders(res, resolve(frontendDir, "index.html"));
       res.sendFile(resolve(frontendDir, "index.html"));
     });
   }

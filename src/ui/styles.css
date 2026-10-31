@@ -306,7 +306,7 @@ html:has([data-reduced-motion=true]) *, html:has([data-reduced-motion=true]) *::
 .scene-message[data-mode=icons] { padding: 9px; border-radius: 50%; pointer-events: none; }
 .scene-message[data-kind=speech] .scene-message-thought, .scene-message[data-kind=thought] .scene-message-speech { display: none; }
 .scene-message-player { bottom: 0; }
-.scene-message[data-speaker=agent] { background: #eaf2ff; color: #1e3d63; border-color: #50729f; border-left-width: 3px; border-radius: 16px 16px 16px 4px; }
+.scene-message[data-speaker=agent] { background: #eaf2ff; color: #1e3d63; border-color: #50729f; border-radius: 16px 16px 16px 4px; box-shadow: none; }
 .scene-message[data-speaker=npc] { background: #fff8e6; color: #554019; border-color: #ae8337; border-right-width: 3px; border-radius: 16px 16px 4px 16px; }
 .scene-message-copy { display: grid; gap: 4px; min-width: 0; }
 .scene-message-speaker { font-size: 11px; line-height: 1.4; font-weight: 800; letter-spacing: .03em; }

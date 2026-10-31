@@ -10,6 +10,7 @@ import { LEGACY_GAME_SETTINGS } from "../shared/gameSettings";
 import { Api } from "../agent/remoteAgent";
 import { FailureReview } from "./FailureReview";
 import { ReviewSession } from "./reviewSession";
+import { reportOutcome } from "./reportPresentation";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "walking", label: "行走", color: "var(--blue)" },
@@ -24,8 +25,8 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
 ];
 
 /** 汇总真实终局成绩、耗时与调用记录，策略采纳入口位于下一局建议模块。 */
-export function ReportSummary({ report, onAdopt, replay, records, active = true }: { report: GameReport; onAdopt?: (guidance: string) => void; replay?: ReactNode; records?: ReactNode; active?: boolean }) {
-  const [review] = useState(() => report.status === "failed" ? new ReviewSession(report, Api.forReview(report)) : null);
+export function ReportSummary({ report, onAdopt, replay, records, active = true, mode = "full" }: { report: GameReport; onAdopt?: (guidance: string) => void; replay?: ReactNode; records?: ReactNode; active?: boolean; mode?: "full" | "data" }) {
+  const [review] = useState(() => mode === "full" && report.status === "failed" ? new ReviewSession(report, Api.forReview(report)) : null);
   const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
   const segments = SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0);
@@ -40,62 +41,8 @@ export function ReportSummary({ report, onAdopt, replay, records, active = true 
     URL.revokeObjectURL(a.href);
   };
 
-  return (
-    <section className="card report">
-      <div className="report-content">
-      <div className="report-result">
-      <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
-        {report.status === "success" ? (
-          <>
-            <span>已下楼到达站台</span>
-            <strong>{report.score!.toFixed(1)} 秒</strong>
-          </>
-        ) : (
-          <>
-            <span>本次未抵达站台 · 无成绩</span>
-            <strong className="reason-text">{report.failReason}</strong>
-          </>
-        )}
-      </div>
-      <dl className="report-metrics" aria-label="行程概况">
-        <div><dt>行程用时</dt><dd>{report.elapsed.toFixed(1)}<small> 秒</small></dd></div>
-        <div><dt>行动决策</dt><dd>{report.totals.decisions}<small> 次</small></dd></div>
-        <div><dt>违规记录</dt><dd>{report.violations.length}<small> 次</small></dd></div>
-      </dl>
-      </div>
-
-      <section className="report-section report-time" aria-labelledby="report-time-title">
-      <div className="report-section-heading"><h2 id="report-time-title">时间花在哪里</h2><span className="muted">时限 {settings.timeLimitSeconds} 秒</span></div>
-      {mainSegment ? <p className="report-takeaway">主要耗时在<strong>{mainSegment.label}</strong>，共 {(report.timeBreakdown[mainSegment.key] ?? 0).toFixed(1)} 秒。</p> : <p className="muted">本局尚未产生耗时记录。</p>}
-      {(report.timeBreakdown.distraction ?? 0) > 0 && <p className="small">关注用时可能包含减速行走；它不是全部净损失，可结合事件时间线复盘。</p>}
-      <div className="bar" aria-hidden="true">
-        {segments.map((s) => (
-          <i
-            key={s.key}
-            title={`${s.label} ${report.timeBreakdown[s.key]} 秒`}
-            style={{ width: `${((report.timeBreakdown[s.key] ?? 0) / total) * 100}%`, background: s.color }}
-          />
-        ))}
-      </div>
-      <div className="bar-legend">
-        {segments.map((s) => (
-          <span key={s.key}>
-            <i style={{ background: s.color }} />
-            {s.label} {(report.timeBreakdown[s.key] ?? 0).toFixed(1)}s
-          </span>
-        ))}
-      </div>
-
-      <p className="report-footnote">按世界时间统计，思考时暂停计时。</p>
-      </section>
-
-      {review && onAdopt && <FailureReview session={review} report={report} onAdopt={onAdopt} active={active} />}
-      {report.guidance && <details className="report-guidance"><summary>本局指导</summary><p className="quote">「{report.guidance}」</p></details>}
-
-      <div className="report-disclosures">
-      {replay && <details className="report-disclosure"><summary><span>轨迹回放<small>回看路线与当时的决策</small></span></summary><div className="report-disclosure-body">{replay}</div></details>}
-      <details className="report-disclosure"><summary><span>完整行程记录<small>事件、决策、模型用量与本局设置</small></span></summary><div className="report-disclosure-body">
-      <button className="ghost report-export" onClick={exportJson}>导出报告 JSON</button>
+  const detailContent = <>
+      {mode === "full" && <button className="ghost report-export" onClick={exportJson}>导出报告 JSON</button>}
       <h3>本局设置</h3>
       <p className="small">场景：{report.journey?.sceneName ?? "未记录"} · 角色：{report.journey?.characterName ?? "未记录"}</p>
       <p className="small">种子 {report.seed} · {report.agentKind === "llm" ? "大模型 Agent" : "离线规则 Agent"} · 模型：{report.journey ? (report.journey.model ?? "离线体验") : "未记录"}</p>
@@ -142,16 +89,74 @@ export function ReportSummary({ report, onAdopt, replay, records, active = true 
       {!!report.dialogues?.length && <details className="run-trace"><summary>全部 NPC 沟通（{report.dialogues.length} 次）</summary>{report.dialogues.map((record, i) => <NpcDialogue key={i} record={record} />)}</details>}
 
       {records}
-      </div></details>
+  </>;
+
+  return (
+    <section className="card report">
+      {mode === "full" && <div className="report-content">
+      <div className="report-result">
+      <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
+        {report.status === "success" ? (
+          <>
+            <span>已下楼到达站台</span>
+            <strong>{report.score!.toFixed(1)} 秒</strong>
+          </>
+        ) : (
+          <>
+            <span>{reportOutcome(report).tone === "stopped" ? "本局已结束 · 无成绩" : "本次未抵达站台 · 无成绩"}</span>
+            <strong className="reason-text">{report.failReason}</strong>
+          </>
+        )}
       </div>
+      <dl className="report-metrics" aria-label="行程概况">
+        <div><dt>行程用时</dt><dd>{report.elapsed.toFixed(1)}<small> 秒</small></dd></div>
+        <div><dt>行动决策</dt><dd>{report.totals.decisions}<small> 次</small></dd></div>
+        <div><dt>违规记录</dt><dd>{report.violations.length}<small> 次</small></dd></div>
+      </dl>
       </div>
 
+      <section className="report-section report-time" aria-labelledby="report-time-title">
+      <div className="report-section-heading"><h2 id="report-time-title">时间花在哪里</h2><span className="muted">时限 {settings.timeLimitSeconds} 秒</span></div>
+      {mainSegment ? <p className="report-takeaway">主要耗时在<strong>{mainSegment.label}</strong>，共 {(report.timeBreakdown[mainSegment.key] ?? 0).toFixed(1)} 秒。</p> : <p className="muted">本局尚未产生耗时记录。</p>}
+      {(report.timeBreakdown.distraction ?? 0) > 0 && <p className="small">关注用时可能包含减速行走；它不是全部净损失，可结合事件时间线复盘。</p>}
+      <div className="bar" aria-hidden="true">
+        {segments.map((s) => (
+          <i
+            key={s.key}
+            title={`${s.label} ${report.timeBreakdown[s.key]} 秒`}
+            style={{ width: `${((report.timeBreakdown[s.key] ?? 0) / total) * 100}%`, background: s.color }}
+          />
+        ))}
+      </div>
+      <div className="bar-legend">
+        {segments.map((s) => (
+          <span key={s.key}>
+            <i style={{ background: s.color }} />
+            {s.label} {(report.timeBreakdown[s.key] ?? 0).toFixed(1)}s
+          </span>
+        ))}
+      </div>
+
+      <p className="report-footnote">按世界时间统计，思考时暂停计时。</p>
+      </section>
+
+      {review && onAdopt && <FailureReview session={review} report={report} onAdopt={onAdopt} active={active} />}
+      {report.guidance && <details className="report-guidance"><summary>本局指导</summary><p className="quote">「{report.guidance}」</p></details>}
+
+      <div className="report-disclosures">
+      {replay && <details className="report-disclosure"><summary><span>轨迹回放<small>回看路线与当时的决策</small></span></summary><div className="report-disclosure-body">{replay}</div></details>}
+      <details className="report-disclosure"><summary><span>完整行程记录<small>事件、决策、模型用量与本局设置</small></span></summary><div className="report-disclosure-body">
+      {detailContent}
+      </div></details>
+      </div>
+      </div>}
+      {mode === "data" && detailContent}
     </section>
   );
 }
 
 /** 按时间展示事件，允许用户切换角色感知过滤。 */
-export function EventTimeline({ report }: { report: GameReport }) {
+export function EventTimeline({ report, onSeek }: { report: GameReport; onSeek?: (time: number) => void }) {
   const [onlyPerceived, setOnlyPerceived] = useState(true);
   const events = report.events.filter((e) => !onlyPerceived || e.playerVisible);
   return (
@@ -165,7 +170,7 @@ export function EventTimeline({ report }: { report: GameReport }) {
       <ol>
         {events.map((e, i) => (
           <li key={i} className={e.playerVisible ? "" : "unseen"}>
-            <span className="time">{e.t.toFixed(1)}s</span><span>{e.text}
+            {onSeek ? <button className="event-seek" aria-label={`回看 ${e.t.toFixed(1)} 秒`} onClick={() => onSeek(e.t)}>{e.t.toFixed(1)}s ↗</button> : <span className="time">{e.t.toFixed(1)}s</span>}<span>{e.text}
             {!e.playerVisible && <em> （角色未感知）</em>}</span>
           </li>
         ))}

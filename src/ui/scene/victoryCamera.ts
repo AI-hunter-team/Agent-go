@@ -2,37 +2,66 @@ import { Vector3 } from "three";
 import type { ActorPose } from "../presentation";
 import { cameraFraction } from "./cameraCollision";
 
-/** 平滑起止，不在进入环绕时突然加速。 */
+interface Shot { azimuth: number; distance: number; height: number; focus: number; offset: number; fov: number }
+const SHOT_SECONDS = 6;
+// 36秒闭合轨迹：环境揭示、低位推进、侧向掠过、升高拉远、英雄近景、斜向回收。
+const SHOTS: readonly Shot[] = [
+  { azimuth: -55, distance: 5.6, height: 2.6, focus: 0.95, offset: -0.15, fov: 48 },
+  { azimuth: -12, distance: 3.5, height: 1.05, focus: 1, offset: 0.05, fov: 42 },
+  { azimuth: 68, distance: 4.2, height: 1.65, focus: 1.05, offset: 0.18, fov: 44 },
+  { azimuth: 32, distance: 5.4, height: 3.4, focus: 0.9, offset: -0.12, fov: 47 },
+  { azimuth: -38, distance: 3.6, height: 0.88, focus: 1, offset: 0.15, fov: 40 },
+  { azimuth: -70, distance: 4.9, height: 1.95, focus: 0.95, offset: -0.12, fov: 46 },
+];
+const SHOT_FIELDS = ["azimuth", "distance", "height", "focus", "offset", "fov"] as const;
+
+/** 接管恢复时从零速度起步，到轨迹处无速度突变。 */
 function smooth(value: number) { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); }
 
-/** 计算正面低机位长镜头，并复用站厅遮挡约束。 */
+/** 相邻镜头参数使用同一条三次曲线，穿过节拍时持续运动而非逐段停顿。 */
+function cubic(a: number, b: number, c: number, d: number, t: number) {
+  return 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+}
+
+/** 循环采样角度、景别、高度及焦距，复用输出对象避免逐帧分配。 */
+function sampleShot(seconds: number, out: Shot) {
+  const phase = Math.max(0, seconds) / SHOT_SECONDS, index = Math.floor(phase), t = phase - index, n = SHOTS.length;
+  const a = SHOTS[(index + n - 1) % n], b = SHOTS[index % n], c = SHOTS[(index + 1) % n], d = SHOTS[(index + 2) % n];
+  for (const field of SHOT_FIELDS) out[field] = cubic(a[field], b[field], c[field], d[field], t);
+  out.azimuth = Math.max(-76, Math.min(76, out.azimuth));
+}
+
+/** 以不同景别和机位编排连续长镜头，并从手动视角平滑恢复。 */
 export class VictoryCamera {
   readonly position = new Vector3();
   readonly target = new Vector3();
+  fov = 45;
   private readonly start = new Vector3();
   private readonly startTarget = new Vector3();
   private readonly desired = new Vector3();
   private readonly focus = new Vector3();
+  private readonly shot = { ...SHOTS[0] };
   private captured = false;
+  private capturedAt = 0;
+  private startFov = 45;
 
-  /** 从当前真实相机视角接入，保留跟随/总览切入时的空间连续性。 */
-  capture(position: Vector3, direction: Vector3) {
-    this.start.copy(position); this.startTarget.copy(position).addScaledVector(direction, 4.2); this.captured = true;
+  /** 保存当前镜头与本次恢复时间，不重启已经播放的舞蹈或电影轨迹。 */
+  capture(position: Vector3, direction: Vector3, seconds = 0, fov = 45, focusDistance = 4.2) {
+    this.start.copy(position); this.startTarget.copy(position).addScaledVector(direction, focusDistance);
+    this.capturedAt = seconds; this.startFov = fov; this.captured = true;
   }
 
-  /** 用独立展示时间构图；窄画幅适当拉远，完整保留舞蹈的手脚。 */
+  /** 将导演轨迹转换为场景坐标，保留完整主体、窄屏构图及碰撞约束。 */
   update(pose: ActorPose, seconds: number, aspect: number, reducedMotion: boolean, assetRotation = 0) {
-    const t = reducedMotion ? 6 : seconds;
-    const push = smooth((t - 1.5) / 4.5);
-    const angle = t <= 6 ? -35 * (1 - push) : 35 * Math.sin((t - 6) * Math.PI * 2 / 16) * smooth((t - 6) / 2);
-    const yaw = pose.yaw + assetRotation * Math.PI / 180 + angle * Math.PI / 180;
-    const distance = (4.5 - 0.9 * push) * Math.max(1, 0.85 / Math.max(0.3, aspect));
-    this.focus.set(pose.x, pose.y + 0.95, pose.z);
-    this.desired.set(pose.x + Math.sin(yaw) * distance, pose.y + 1.75 - push * 0.5, pose.z + Math.cos(yaw) * distance);
-    const entrance = reducedMotion || !this.captured ? 1 : smooth(t / 1.5);
+    sampleShot(reducedMotion ? 6 : Math.max(0, seconds - 1.5), this.shot);
+    const shot = this.shot, yaw = pose.yaw + assetRotation * Math.PI / 180 + shot.azimuth * Math.PI / 180;
+    const distance = shot.distance * Math.max(1, 0.85 / Math.max(0.3, aspect));
+    this.focus.set(pose.x + Math.cos(yaw) * shot.offset, pose.y + shot.focus, pose.z - Math.sin(yaw) * shot.offset);
+    this.desired.set(pose.x + Math.sin(yaw) * distance, pose.y + shot.height, pose.z + Math.cos(yaw) * distance);
+    const entrance = reducedMotion || !this.captured ? 1 : smooth((seconds - this.capturedAt) / 1.5);
     this.position.lerpVectors(this.start, this.desired, entrance);
     this.target.lerpVectors(this.startTarget, this.focus, entrance);
-    // 角色到镜头的安全线段优先，避免楼梯扶手、顶板或墙柱遮住主体。
+    this.fov = this.startFov + (shot.fov - this.startFov) * entrance;
     const fraction = cameraFraction(this.focus, this.position);
     if (fraction < 1) this.position.lerpVectors(this.focus, this.position, fraction);
   }
