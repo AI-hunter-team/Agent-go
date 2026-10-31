@@ -54,7 +54,7 @@ IV2-19 报告 / 回放 / 复盘与旧接口清理
 ### IV2-01 共享契约与测试脚手架
 
 - **目标**：把 design.md C 节的类型落库，提供后续任务都要用的测试工具，记录离线基线。
-- **允许路径**：`src/shared/interaction.ts`（新）、`src/shared/types.ts`（只加 `import` / 再导出与新的可选字段，不改旧字段语义）、`src/sim/rng.ts`（`fork`）、`src/sim/engine.ts`（只加构造参数 `scenarioOverride?: Scenario`，供测试）、`tests/fixtures/`（新）、`tests/helpers/scriptedAgent.ts`（新）、`scripts/offline-baseline.ts`（新）、`docs/tasks/IV2-01.md`、`docs/validation/IV2-01.md`。
+- **允许路径**：`src/shared/interaction.ts`（新）、`src/shared/types.ts`（只加 `import` / 再导出与新的可选字段，不改旧字段语义）、`src/sim/rng.ts`（`fork`）、`src/sim/engine.ts`（只加构造参数 `scenarioOverride?: Scenario`，供测试）、`tests/fixtures/`（新）、`tests/helpers/scriptedAgent.ts`（新）、`scripts/offline-baseline.ts`（新）、`tests/rng.test.ts`、`tests/scriptedAgent.test.ts`、`tests/scenarioFixtures.test.ts`（契约与脚手架验证）、`docs/tasks/IV2-01.md`、`docs/validation/IV2-01.md`。
 - **步骤**：
   1. 新建 `interaction.ts`，包含 C1–C9 的导出类型（模拟内部类型 `WorldEvent`、`Percept`、`AlertRecord` 也放这里，便于 UI 和报告复用）。
   2. `Rng.fork(label: string): Rng`：`new Rng(this.seedBase ^ fnv1a(label))`，`seedBase` 为构造时的种子；不得消耗父流。
@@ -173,8 +173,8 @@ IV2-19 报告 / 回放 / 复盘与旧接口清理
 
 ### IV2-13 安检与背包
 
-- **允许路径**：`src/sim/world.ts`（安检办理耗时与没收）、`src/sim/layout.ts`（安检员站位、安检后售货机取物点）、`src/sim/scenario.ts`、`src/sim/content/items.ts`、`server/app.ts` 与 `src/ui/ControlPanel.tsx`（赛前背包选择，D1）、测试。
-- **要点**：有包安检加时；`inspect` 物品加时；`confiscate` 没收；安检员对安检口附近肢体冲突与可疑动静反应；绕过安检墙（`vault railing` 于安检口）为违规。
+- **允许路径**：`src/sim/world.ts`（安检办理耗时与没收）、`src/sim/layout.ts`（安检员站位、安检后售货机取物点）、`src/sim/scenario.ts`、`src/sim/content/items.ts`、`server/app.ts` 与 `src/ui/ControlPanel.tsx`（赛前背包选择，D1）、`src/ui/App.tsx`、`src/ui/gameSession.ts`、`src/agent/remoteAgent.ts`、`src/agent/runner.ts`、`src/shared/interaction.ts`、`src/shared/types.ts`、`src/sim/engine.ts`（仅 loadout 类型、状态与开局透传，不改其他语义）、测试。
+- **要点**：背包选择由 App 持有，preview / start / 重试、RemoteAgent.create 与 `/api/session` 全链路携带 `loadout`，Engine 以同一配置初始化物品；省略时默认带包，保持旧调用兼容。共享文件只改 loadout 相关部分，由集成负责人在 IV2-10 完成后串行接入。有包安检加时；`inspect` 物品加时；`confiscate` 没收；安检员对安检口附近肢体冲突与可疑动静反应；绕过安检墙（`vault railing` 于安检口）为违规。
 
 ### IV2-14 闸机、栏杆与注意力转移
 

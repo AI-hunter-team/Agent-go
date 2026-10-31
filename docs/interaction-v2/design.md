@@ -283,7 +283,7 @@ t += DT
 
 ### B7. 确定性与测试策略
 
-- `Rng.fork(label)`：以 `seed ^ hash(label)` 构造新流（persona、contest、reaction、items 各一条），避免新增系统改变原有乘客生成序列。
+- `Rng.fork(label)`：以构造种子 `seedBase ^ fnv1a(label)` 构造新流，不消耗父流；同一 label 每次调用都会重置为相同初态。persona、contest、reaction、items 各子系统在每局初始化时只派生一次并复用该子流，不能每次判定或生成 NPC 时重新 fork 固定 label。按实体派生时使用稳定唯一 label（如 `persona:${personId}`），保证确定性并避免重复抽样相关；新增系统不改变原有乘客生成序列。
 - 单元测试：每个子系统独立（见 tasks.md 各任务）。
 - **剧本测试**：`tests/fixtures/scenarios.ts` 提供可注入的小场景（`Engine` 增加 `scenarioOverride` 测试入口），配合 `ScriptedAgent` 按时间脚本发出动作，断言事件链与结局。垂直切片验收的六个场景都写成剧本测试。
 - 回归：离线启发式 Agent 在 seed 1–20 仍能在时限内通关（比例不低于改造前，基线在 IV2-01 中记录）。
@@ -442,7 +442,7 @@ export interface ActionPlan {
 export interface StepOutcome { ok: boolean; text: string; eventIds: string[] }
 ```
 
-`contest`（`src/sim/actions/contest.ts`）推荐公式，概率夹在 [0.05, 0.95]，用 `rng.fork("contest")` 抽样：
+`contest`（`src/sim/actions/contest.ts`）推荐公式，概率夹在 [0.05, 0.95]，用每局初始化时创建并保留的 `contestRng = rng.fork("contest")` 连续抽样（每次判定调用 `contestRng.next()`，不得重新 fork）：
 
 ```
 p = base[op] + 0.3·item.impact + 0.2·[目标未面向执行者] − 0.25·target.courage
