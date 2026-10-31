@@ -7,6 +7,7 @@ import type {
 import type { OperationDebug } from "../shared/debug";
 import type { GameSettings } from "../shared/gameSettings";
 import type { ReasoningEffort } from "../shared/modelConfig";
+import type { JourneyInput, JourneyPreparation } from "../shared/journey";
 import type { DraftResult, ReviewInput, ReviewResult, ReviewStrategy } from "../shared/review";
 import { ReviewFailure } from "../shared/review";
 import { classifyByKeywords } from "../sim/intent";
@@ -36,13 +37,13 @@ function sessionToken(sessionId?: string): string | null | undefined {
 }
 
 /** 统一调用本地业务 API，凭据由服务端临时 token 引用。 */
-async function api<T>(path: string, init: { method?: string; body?: unknown; configToken?: string | null } = {}): Promise<T> {
+async function api<T>(path: string, init: { method?: string; body?: unknown; configToken?: string | null; signal?: AbortSignal } = {}): Promise<T> {
   const token = init.configToken === undefined ? activeModelToken : init.configToken;
   let res: Response;
   let text: string;
   try {
     res = await fetch(path, {
-      signal: AbortSignal.timeout(30_000),
+      signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -66,6 +67,7 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
 }
 
 export const Api = {
+  prepareJourney: (input: JourneyInput, signal?: AbortSignal) => api<JourneyPreparation>("/api/journey/prepare", { body: input, signal }),
   /** 验证凭据并获取模型列表。 */
   review: (input: ReviewInput) => api<ReviewResult>("/api/review", { body: { input } }),
   draftGuidance: (guidance: string, strategies: ReviewStrategy[]) => api<DraftResult>("/api/review/guidance", { body: { guidance, strategies } }),
@@ -91,11 +93,12 @@ export const Api = {
   health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
   /** 以当前配置整理开局指导。 */
   normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
-  createSession: async (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout) => {
+  /** 创建会话前就引用凭据，避免并发换模型使正在创建的对局失效。 */
+  createSession: async (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout, prepared?: { preparationId: string; sceneId: string; seed: number }) => {
     const token = activeModelToken;
     if (token) tokenUsers.set(token, (tokenUsers.get(token) ?? 0) + 1);
     try {
-      const result = await api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings, loadout }, configToken: token });
+      const result = await api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings, loadout, ...prepared }, configToken: token });
       sessionTokens.set(result.sessionId, token);
       return result;
     } catch (error) { await releaseToken(token); throw error; }
@@ -116,8 +119,9 @@ export class RemoteAgent implements Agent {
   readonly kind = "llm" as const;
   private constructor(private sessionId: string) {}
 
-  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout): Promise<RemoteAgent> {
-    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings, loadout);
+  /** 创建局内远程 Agent。 */
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout, prepared?: { preparationId: string; sceneId: string; seed: number }): Promise<RemoteAgent> {
+    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings, loadout, prepared);
     return new RemoteAgent(sessionId);
   }
 

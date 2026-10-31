@@ -2,6 +2,8 @@ import { interpret, type Structured } from "./boss";
 import { respond } from "./npcDialogue";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
 import type { LlmService } from "./app";
+import type { JourneyInput, JourneyPlan } from "../src/shared/journey";
+import { validPlan } from "../src/shared/journey";
 import { normalizeBaseUrl, type ModelSettings } from "./modelSettings";
 import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
@@ -194,6 +196,21 @@ export class ResponsesLlmService implements LlmService {
       throw new Error("模型返回的指导格式无效");
     }
     validateNormalized(data);
+    return data;
+  }
+
+  async prepareJourney(input: JourneyInput): Promise<JourneyPlan> {
+    const schema = { type: "object", additionalProperties: false, properties: {
+      understanding: { type: "string" }, actions: { type: "array", items: { type: "string" } }, adjustment: { type: "string" },
+    }, required: ["understanding", "actions", "adjustment"] };
+    const prompt = "为地铁通行游戏生成简短初始策略。只基于公开规则和玩家指导，不知道队伍效率、隐藏人物性格或未来事件。忠实保留非常规策略，不自行改写成守序路线；行动仍由模拟器裁定。understanding说明对指导的理解，actions列出准备尝试的行动，adjustment说明遇到变化的调整方向。自主模式自行选择策略。不要宣称已观察到现场或保证成功。";
+    const data = await this.structured(prompt, untrustedData("公开规则与指导", {
+      guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
+      timeLimitSeconds: input.settings.timeLimitSeconds, goal: "抵达下层站台", extraQueuePeople: input.settings.extraQueuePeople,
+      backpack: input.loadout?.backpack ?? true,
+    }), schema, "journey_plan");
+    if (!validPlan(data)) throw new Error("初始方案格式无效，请重试");
+    assertSafeText(JSON.stringify(data));
     return data;
   }
 

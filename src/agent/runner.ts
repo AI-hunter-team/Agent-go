@@ -29,6 +29,7 @@ export const BUDGETS = { decisions: 80, boss: 20, npc: 30 } as const;
 export type RunnerPhase = "ready" | "running" | "thinking" | "ended";
 
 export interface RunnerOptions {
+  journey?: import("../shared/journey").JourneyMetadata;
   guidance?: string;
   normalizedGuidance?: NormalizedGuidance | null;
   maxDecisions?: number;
@@ -60,6 +61,9 @@ export class GameRunner {
   budgetExhausted = false;
   /** Latest decision while it is still being made, for the "thinking" indicator. */
   pending: Promise<void> | null = null;
+  get journey() {
+    return this.opts.journey ? { ...this.opts.journey, model: this.decisions.find(d => d.model)?.model ?? this.opts.journey.model } : undefined;
+  }
 
   private lastResult: ActionResult | null = null;
   private consecutiveFailures = 0;
@@ -436,6 +440,7 @@ export class GameRunner {
         row.unknownUsage += Number(!a.usage); row.realSeconds += (a.durationMs ?? 0) / 1000;
         return summary;
       }, {}),
+      ...(this.journey ? { journey: structuredClone(this.journey) } : {}),
       ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot() } : {}),
       debug: this.snapshotDebug(),
       seed: e.seed,

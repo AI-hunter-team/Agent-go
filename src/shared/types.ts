@@ -291,6 +291,7 @@ export interface GameReport {
   interactionDialogues?: { t: number; request: import("./interaction").NpcDialogueRequest; response: import("./interaction").NpcResponse }[];
   calls?: { decisions: number; boss: number; npc: number };
   operationUsage?: Record<string, { calls: number; inputTokens: number; outputTokens: number; unknownUsage: number; realSeconds: number }>;
+  journey?: import("./journey").JourneyMetadata;
   /** Global history, exposed only after the run ends. Older reports may omit it. */
   worldSnapshots?: WorldReviewSnapshot[];
   review?: ReviewResult;

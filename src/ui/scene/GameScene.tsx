@@ -1,7 +1,9 @@
 import { AlertBadge, SceneItems } from "./Interactions";
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, type Mesh } from "three";
+import { Html } from "@react-three/drei/web/Html";
+import { useProgress } from "@react-three/drei/core/Progress";
+import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { WIDTH, HEIGHT } from "../../sim/layout";
 import { platformElevation } from "../presentation";
@@ -13,9 +15,10 @@ import { Station } from "./Station";
 import { Character } from "./Character";
 import { SimpleCrowd } from "./SimpleCrowd";
 import { FollowCamera } from "./followCamera";
+import { cameraFraction } from "./cameraCollision";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 
-export interface CameraSettings { mode: "follow" | "overview"; reset: number; }
+export interface CameraSettings { mode: "follow" | "overview"; reset: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
 export interface SceneProps {
   session: GameSession;
   camera: CameraSettings;
@@ -34,6 +37,8 @@ export interface SceneProps {
   metrics: FrameMetrics;
   showVision: boolean;
   showTrail: boolean;
+  onCameraReady?: () => void;
+  thought?: "thinking" | "ready" | null;
 }
 
 /** 按目标频率唤醒按需渲染；空闲或隐藏时休眠，阶段与采样变化可立即唤醒。 */
@@ -70,14 +75,19 @@ function RenderSchedule({ session, targetFps, metrics }: Pick<SceneProps, "sessi
 }
 
 /** 更新跟随/总览相机，仅在镜头尚未停稳时继续补绘静止场景。 */
-function CameraRig({ session, settings, reducedMotion }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean }) {
+function CameraRig({ session, settings, reducedMotion, onReady }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean; onReady?: () => void }) {
   const { gl, size, set, invalidate } = useThree();
   const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 240), overview: new OrthographicCamera(-50, 50, 30, -30, 0.1, 240) }), []);
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; pointer: number } | null>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const follow = useMemo(() => new FollowCamera(), []);
+  const vectors = useMemo(() => ({ target: new Vector3(), desired: new Vector3(), eye: new Vector3(), anchor: new Vector3() }), []);
   const initial = useRef(true);
+  const cameraInitialized = useRef(false);
+  const readyKey = useRef("");
+  const assetsLoading = useProgress(state => state.active);
+  useEffect(() => { invalidate(); }, [assetsLoading, invalidate]);
   useEffect(() => {
     const active = cameras[settings.mode];
     if (active instanceof PerspectiveCamera) active.aspect = size.width / Math.max(1, size.height);
@@ -88,12 +98,12 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
   }, [cameras, set, settings.mode, size.width, size.height]);
-  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; invalidate(); }, [settings.reset, session.generation, follow, invalidate]);
+  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; invalidate(); }, [settings.reset, settings.shot, session.generation, follow, invalidate]);
   useEffect(() => {
     const canvas = gl.domElement;
     /** 记录跟随相机的拖动起点。 */
     const down = (event: PointerEvent) => {
-      if (event.button !== 0 || settings.mode !== "follow") return;
+      if (event.button !== 0 || settings.mode !== "follow" || (settings.shot && settings.shot !== "launch")) return;
       drag.current = { x: event.clientX, y: event.clientY, pointer: event.pointerId };
       canvas.setPointerCapture(event.pointerId);
     };
@@ -109,7 +119,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     const up = () => { drag.current = null; };
     /** 缩放跟随镜头，并唤醒静止画面。 */
     const wheel = (event: WheelEvent) => {
-      if (settings.mode !== "follow") return;
+      if (settings.mode !== "follow" || settings.shot) return;
       event.preventDefault(); orbit.current.distance = Math.max(2.2, Math.min(9, orbit.current.distance + event.deltaY * 0.006));
       invalidate();
     };
@@ -117,19 +127,65 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("wheel", wheel); drag.current = null; };
-  }, [gl, settings.mode, invalidate]);
+  }, [gl, settings.mode, settings.shot, invalidate]);
   useFrame((state, delta) => {
+    const { target, desired, eye, anchor } = vectors;
     if (settings.mode === "overview") {
       state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
     }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
+    target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
+    anchor.copy(target);
+    if (settings.shot && settings.shot !== "launch") {
+      const front = settings.shot !== "lobby";
+      const angle = pose.current.yaw;
+      const d = front ? 4.5 : 7;
+      desired.set(target.x - Math.sin(angle) * d, target.y + (front ? 0.25 : 1), target.z - Math.cos(angle) * d);
+      if (front) {
+        const narrow = size.width < 600;
+        target.x -= Math.cos(angle) * (narrow ? 0 : 1.4);
+        target.z += Math.sin(angle) * (narrow ? 0 : 1.4);
+        if (narrow) target.y -= 0.9;
+      }
+      const fraction = cameraFraction(anchor, desired);
+      eye.copy(anchor).lerp(desired, fraction);
+      if (!cameraInitialized.current || reducedMotion || fraction < 0.99) state.camera.position.copy(eye);
+      else state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
+      const safeFraction = cameraFraction(anchor, state.camera.position);
+      if (safeFraction < 1) state.camera.position.lerpVectors(anchor, state.camera.position, safeFraction);
+      state.camera.lookAt(target);
+      cameraInitialized.current = true;
+      if (session.frozen && state.camera.position.distanceToSquared(eye) > 0.00001) invalidate();
+      return;
+    }
     follow.update(pose.current, orbit.current, delta, initial.current, reducedMotion);
     initial.current = false;
-    state.camera.position.set(follow.position.x, follow.position.y, follow.position.z);
-    state.camera.lookAt(follow.target.x, follow.target.y, follow.target.z);
-    if (session.frozen && !follow.settled) invalidate();
+    eye.set(follow.position.x, follow.position.y, follow.position.z);
+    target.set(follow.target.x, follow.target.y, follow.target.z);
+    if (size.width < 600) target.y -= 0.55;
+    if (settings.shot === "launch" && cameraInitialized.current && !reducedMotion) {
+      state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
+      const safeFraction = cameraFraction(anchor, state.camera.position);
+      if (safeFraction < 1) state.camera.position.lerpVectors(anchor, state.camera.position, safeFraction);
+    } else state.camera.position.copy(eye);
+    state.camera.lookAt(target);
+    cameraInitialized.current = true;
+    const key = `${settings.reset}:${settings.shot}`;
+    if (settings.shot === "launch" && !assetsLoading && readyKey.current !== key && state.camera.position.distanceToSquared(eye) < 0.0001 && follow.settled) {
+      readyKey.current = key; queueMicrotask(() => onReady?.());
+    }
+    if (session.frozen && (!follow.settled || state.camera.position.distanceToSquared(eye) > 0.00001)) invalidate();
   });
   return null;
+}
+
+function ThoughtBubble({ session, state }: { session: GameSession; state: "thinking" | "ready" }) {
+  const node = useRef<import("three").Group>(null);
+  useFrame(() => {
+    const actor = session.presentation.current.actors.get("player");
+    if (node.current && actor) node.current.position.set(actor.x, (actor.elevation ?? 0) + 2.05, actor.z);
+  });
+  return <group ref={node}><Html center style={{ pointerEvents: "none" }}><div className="thought-bubble" aria-hidden="true">{state === "ready" ? "💡" : <><i /><i /><i /></>}</div></Html></group>;
 }
 
 /** 绘制开发用保安视距示意，不参与实际发现判定。 */
@@ -233,19 +289,26 @@ function Contents(props: SceneProps) {
     <RenderSchedule session={session} targetFps={props.targetFps} metrics={metrics} />
     <color attach="background" args={["#e9e1cf"]} />
     <StationLighting standard={props.quality === "standard"} />
-    <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
+    <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} onReady={props.onCameraReady} />
     <Station session={session} overview={props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
     {actors.filter(a=>a.id!=="player").map(a=><AlertBadge key={a.id} id={a.id} session={session}/>)}
     <SceneItems session={session}/>
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
+    {props.thought && <ThoughtBubble session={session} state={props.thought} />}
   </>;
+}
+
+function UnsupportedScene({ onFailure }: { onFailure: (message: string) => void }) {
+  useEffect(() => onFailure("浏览器无法建立三维画面，请重试或使用二维画面。"), [onFailure]);
+  return null;
 }
 
 /** 使用按需绘制；画质变化时重建图形上下文，确保抗锯齿设置确实生效。 */
 export default function GameScene(props: SceneProps) {
-  return <Canvas key={props.quality} frameloop="demand" shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维调试地图。</span>}>
+  if (typeof WebGLRenderingContext === "undefined") return <UnsupportedScene onFailure={props.onFailure} />;
+  return <Canvas key={props.quality} frameloop="demand" shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维画面。</span>}>
     <Contents {...props} />
   </Canvas>;
 }
