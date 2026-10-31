@@ -32,7 +32,7 @@ export class FollowCamera {
     this.position.y = this.target.y + dy;
     this.position.z = this.target.z + dz;
     const safe = cameraFraction(this.target, this.position);
-    if (initial || snap || safe < this.fraction) {
+    if (initial || snap || reducedMotion || safe < this.fraction) {
       this.fraction = safe;
       this.releaseDelay = safe < 1 ? 0.15 : 0;
     } else {

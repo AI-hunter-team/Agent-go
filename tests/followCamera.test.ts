@@ -60,3 +60,14 @@ test("pillar-edge clipping stays safe without repeatedly springing back to full 
   expect(Math.hypot(camera.position.x - camera.target.x, camera.position.z - camera.target.z)).toBeCloseTo(orbit.distance, 3);
   expect(camera.settled).toBe(true);
 });
+
+test("reduced motion immediately restores the safe camera distance after clearing an obstacle", () => {
+  const camera = new FollowCamera();
+  const pose = { x: 34, y: 0, z: 12, yaw: -Math.PI / 2 };
+  camera.update(pose, orbit, frame, false, true);
+  expect(camera.position.x - camera.target.x).toBeLessThan(1);
+  camera.update(pose, { ...orbit, yaw: Math.PI / 2 }, frame, false, true);
+  expect(Math.hypot(camera.position.x - camera.target.x, camera.position.z - camera.target.z)).toBeCloseTo(orbit.distance);
+  expect(cameraFraction(camera.target, camera.position)).toBe(1);
+  expect(camera.settled).toBe(true);
+});
