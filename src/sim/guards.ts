@@ -107,7 +107,17 @@ export class GuardSystem {
   }
 
   canSee(g: Guard, p: Vec): boolean {
-    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange * Math.min(this.lightAt(g.pos), this.lightAt(p)), p) && lineOfSight(g.pos, p, this.layout.SIGHT_OCCLUDERS);
+    const { range, fov } = this.vision(g);
+    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, fov, range * Math.min(this.lightAt(g.pos), this.lightAt(p)), p) && lineOfSight(g.pos, p, this.layout.SIGHT_OCCLUDERS);
+  }
+
+  /** Staff scan locally while idle, then regain a patrol guard's cone after a cue. */
+  vision(g: Guard): { range: number; fov: number } {
+    const attentive = g.mode === "investigate" || g.mode === "watch" || Boolean(g.lookAt);
+    return {
+      range: attentive ? RULES.guardRange : g.def.sightRange ?? RULES.guardRange,
+      fov: attentive ? RULES.guardFovDeg : g.def.sightFovDeg ?? RULES.guardFovDeg,
+    };
   }
 
   investigate(g: Guard, point: Vec, priority: number) {

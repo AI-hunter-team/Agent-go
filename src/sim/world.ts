@@ -166,14 +166,15 @@ export class World {
     if (this.definition.generatorVersion === "metro-v1" && f.def.kind === "security") {
       // The ticket bank sits behind the scanners. Turn long security queues
       // before they reach its service and exit spaces, in either orientation.
-      // A curved corner keeps adjacent body footprints apart as the line turns.
-      const travel = offset * 1.18, radius = .7, lead = 1.2;
-      const around = Math.max(0, travel - lead), angle = Math.min(Math.PI / 2, around / radius);
-      const straight = Math.min(travel, lead) + radius * Math.sin(angle);
-      const turn = radius * (1 - Math.cos(angle)) + Math.max(0, around - radius * Math.PI / 2);
       const side = { x: direction.y, y: -direction.x };
       const towardCentre = (this.layout.WIDTH / 2 - f.def.head.x) * side.x + (this.layout.HEIGHT / 2 - f.def.head.y) * side.y;
       const sign = towardCentre < 0 ? -1 : 1;
+      // Opposing lines occupy different depths, so their overflow slots do not
+      // intersect. The curved corner and extra spacing accommodate luggage.
+      const travel = offset * (sign < 0 ? 1.32 : 1.18), radius = sign < 0 ? .35 : .7, lead = sign < 0 ? .45 : 1.2;
+      const around = Math.max(0, travel - lead), angle = Math.min(Math.PI / 2, around / radius);
+      const straight = Math.min(travel, lead) + radius * Math.sin(angle);
+      const turn = radius * (1 - Math.cos(angle)) + Math.max(0, around - radius * Math.PI / 2);
       return { ...f.def.head, x: f.def.head.x + direction.x * straight + side.x * turn * sign,
         y: f.def.head.y + direction.y * straight + side.y * turn * sign };
     }
@@ -181,7 +182,7 @@ export class World {
   }
 
   /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
-  movePerson(p: Person, target: Vec, stride: number, detour = true): boolean {
+  movePerson(p: Person, target: Vec, stride: number, detour = true, avoidSingleQueue = false): boolean {
     const bodies = this.collisionBodies(p.id);
     // Approach an occupied final queue slot directly, then wait instead of circling it.
     // Safe forward progress still matters: stopping early can obstruct the surrounding traffic.
@@ -192,7 +193,7 @@ export class World {
     memberships.push(this.transit.queue);
     const queues = memberships.flatMap((ids) => {
       const people = ids.filter(id => id !== p.id).map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
-      if (people.length < 2) return [];
+      if (people.length < (avoidSingleQueue ? 1 : 2)) return [];
       const margin = personRadius(p.kind) + Math.max(...people.map((person) => personRadius(person.kind))) + 0.03;
       const minX = Math.min(...people.map((person) => person.pos.x)), maxX = Math.max(...people.map((person) => person.pos.x));
       const minY = Math.min(...people.map((person) => person.pos.y)), maxY = Math.max(...people.map((person) => person.pos.y));
@@ -529,10 +530,16 @@ export class World {
         const i = f.queue.indexOf(p.id);
         if (i >= 0) {
           const target = this.queueStandPoint(f, i);
-          // An approaching passenger can be nudged slightly off centre. Allow
-          // scenery detours only when needed, so it can re-align with the scanner.
+          // An approaching passenger can be nudged off centre, or a later
+          // arrival can stand ahead of the queue head. Let the head detour
+          // around that person without disturbing normally aligned queues.
+          const inverted = this.definition.generatorVersion === "metro-v1" && i === 0 && f.queue.slice(1).some(id => {
+            const other = this.persons.get(id);
+            return other && dist(other.pos, target) + .05 < dist(p.pos, target)
+              && !this.spatial.clearOfPeople(p.pos, target, personRadius(p.kind), [{ id: other.id, pos: other.pos, radius: personRadius(other.kind) }]);
+          });
           const blocked = this.definition.generatorVersion === "metro-v1" && !this.spatial.clearOfScenery(p.pos, target, personRadius(p.kind));
-          this.movePerson(p, target, stride, blocked);
+          this.movePerson(p, target, stride, blocked || inverted, inverted);
         }
         if (i >= 0 && dist(p.pos, this.queueStandPoint(f, i)) < 0.1) p.facing = angleTo(p.pos, f.def.pos);
         break;

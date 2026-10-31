@@ -63,7 +63,9 @@ export class HeuristicAgent implements Agent {
           if(remaining-estimate(other,kind)>12){this.switches.set(kind,{at:self.elapsed,count:(last?.count??0)+1});return {type:"join_queue",facility:other.id,reason:"现场可见的另一队预计明显更快，接受失去当前位次的代价"};}
         }
       }
-      if(self.queue || self.activity.startsWith("正在走向"))return {type:"wait",seconds:20,reason:"继续当前排队或移动，变化时重新判断"};
+      const approaching = /^正在走向 (.+) 队尾$/.exec(self.activity)?.[1];
+      const approachStopped = approaching && facilities.some(f => f.id === approaching && f.status !== "open");
+      if(self.queue || self.activity.startsWith("正在走向") && !approachStopped)return {type:"wait",seconds:20,reason:"继续当前排队或移动，变化时重新判断"};
       const visible=facilities.filter(f=>f.kind===kind&&f.status==="open").sort((a,b)=>estimate(a,kind)-estimate(b,kind));
       const known=publicMap.facilities.filter(f=>f.kind===kind&&!facilities.some(v=>v.id===f.id&&v.status!=="open")).sort((a,b)=>Math.hypot(a.pos.x-self.position.x,a.pos.y-self.position.y)-Math.hypot(b.pos.x-self.position.x,b.pos.y-self.position.y));
       const target=visible[0]??known[0];

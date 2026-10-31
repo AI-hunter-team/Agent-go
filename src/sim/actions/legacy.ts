@@ -36,13 +36,10 @@ export class CreativeSystem {
       dialogue
     });
     this.check = check ?? (() => {
-      const observers = guards.guards.map(g => ({
-        id: g.def.id,
-        role: g.role,
-        pos: g.pos,
-        facing: g.facing,
-        incapacitated: g.incapacitated
-      }));
+      const observers = guards.guards.map(g => {
+        const v = guards.vision(g);
+        return { id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated, sightRange: v.range, sightFovDeg: v.fov };
+      });
       return alerts.step(perception.step(observers), (id, subject) => {
         const g = guards.guards.find(g => g.def.id === id),
           p = world.persons.get(subject);

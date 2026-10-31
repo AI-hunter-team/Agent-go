@@ -100,7 +100,10 @@ export class Engine {
   resolveInteractions(dt = DT) {
     const observers: Observer[] = [
       ...[...this.world.persons.values()].filter((p) => !p.isPlayer).map((p) => ({ id: p.id, role: "npc" as const, pos: p.pos, facing: p.facing, incapacitated: p.incapacitated })),
-      ...this.guards.guards.map((g) => ({ id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated })),
+      ...this.guards.guards.map((g) => {
+        const v = this.guards.vision(g);
+        return { id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated, sightRange: v.range, sightFovDeg: v.fov };
+      }),
     ];
     const previousChanges = this.alerts.history.length;
     const percepts = this.perception.step(observers);
@@ -111,7 +114,7 @@ export class Engine {
     }, dt, (id) => (observers.find((o) => o.id === id)?.incapacitated ?? 0) > 0);
     for (const change of this.alerts.history.slice(previousChanges)) {
       const observer = observers.find(o => o.id === change.observerId);
-      if (change.subjectId === "player" && observer && playerCanSee(this.player.pos,observer.pos,this.world.lightAt)) this.world.notifyPlayer("noticed", `${observer.id} 开始留意你的举动`);
+      if (change.subjectId === "player" && observer && playerCanSee(this.player.pos,observer.pos,this.world.lightAt,this.world.layout)) this.world.notifyPlayer("noticed", `${observer.id} 开始留意你的举动`);
     }
     this.npcBrain.perceive(percepts);
     this.guards.respond(percepts, this.alerts, this.events);

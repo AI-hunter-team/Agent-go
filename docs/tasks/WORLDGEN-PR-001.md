@@ -1,12 +1,12 @@
 # WORLDGEN-PR-001：整合生成车站、休息室与小地图并创建 PR
 
-状态：实施中。负责人、集成负责人：本聊天 Codex，串行整合。
+状态：本地实施与验证完成，PR 和 CI 状态以远端为准。负责人、集成负责人：本聊天 Codex，串行整合。
 
 ## 目标、基线与依赖
 
 - 授权：用户要求将本聊天世界生成器/休息室与「讨论世界生成器设计 (2)」小地图工作一起创建一个 PR；明确包括本地提交、推送和创建 PR，不含合并或部署。
 - 源工作区：`codex/world-generator-v1`，`1032a9155aec1801249054da63a98ffbbd96b093`加142个未提交文件；从独立Git索引得到快照`f324a7ba905760962afdf97c754fd51ad61dd005`，源工作区及原暂存区未修改。
-- 目标基线：远端`main`的`1a5f73c4bae435b4ea05d2ea05f13e42bc2f8817`，2026-11-01已fetch；实施中追加 main `54070661cd9df0a53f7b79a25a8fd605ff714cc9`，包含复盘页恢复和仅显式操作电闸触发熄灯；集成分支`codex/worldgen-lounge-minimap-pr`及独立工作区代号`Agent-go-worldgen-unified-pr`。
+- 目标基线：远端`main`的`1a5f73c4bae435b4ea05d2ea05f13e42bc2f8817`，2026-11-01已fetch；实施中追加 main `54070661cd9df0a53f7b79a25a8fd605ff714cc9`和`8a98665ddcd293fcf37858909b636aec23179468`，包含复盘页恢复、仅显式操作电闸触发熄灯及安保视野平衡；集成分支`codex/worldgen-lounge-minimap-pr`及独立工作区代号`Agent-go-worldgen-unified-pr`。
 - 源内容：WORLDGEN-001至004、CONTROLROOM-001至004、SHOWROOM-001、MINIMAP-001至003；查看各任务与验证记录，不把旧版本验证冒充集成版结果。
 - 前置：主线自源基线之后新增列车、旅程结算、观察/交互、演出与UI变更；逐项整合，避免丢失已合入行为。
 

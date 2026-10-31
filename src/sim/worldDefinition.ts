@@ -6,7 +6,7 @@ import { createNavigation } from "./nav";
 import * as legacy from "./layout";
 import type { WorldDefinition, StationLayout, WorldDescriptor, PublicStationMap, DetailPlacement } from "../shared/world";
 import type { Vec, FacilityKind } from "../shared/types";
-import { GUARDS, SECURITY_STAFF } from "./scenario";
+import { GUARDS, SECURITY_STAFF_BALANCED, SECURITY_STAFF_VISION } from "./scenario";
 import { Rng } from "./rng";
 import type { Rect } from "./geometry";
 
@@ -15,7 +15,7 @@ export function deepFreeze<T>(value: T): T { if (value && typeof value === "obje
 export function layoutHash(value: unknown): string { const text=JSON.stringify(value); let h=2166136261; for(let i=0;i<text.length;i++) h=Math.imul(h^text.charCodeAt(i),16777619); return (h>>>0).toString(16).padStart(8,"0"); }
 export function legacyWorld(seed=1): WorldDefinition {
   const layout = Object.fromEntries(Object.entries(legacy).filter(([key]) => /^[A-Z_]+$/.test(key) || key === "zoneOf" || key === "atRailing")) as unknown as StationLayout;
-  return {generatorVersion:"legacy-v0",layoutHash:"legacy-v0",seed,archetype:"legacy",name:"旧版站厅",regions:[],theme:{accent:"#b9a36b",wall:"#dedbd0",floor:"#a0b3a5",variant:0},floors:[{id:"concourse",elevation:0,ceiling:6,bounds:{x:0,y:0,w:90,h:30}},{id:"platform",elevation:-2,ceiling:6,bounds:{x:72,y:0,w:18,h:30}}],layout,guards:[...GUARDS,...SECURITY_STAFF],details:[],generation:{attempts:1,fallback:false,reasons:[],emptyRouteSeconds:0}};
+  return {generatorVersion:"legacy-v0",layoutHash:"legacy-v0",seed,archetype:"legacy",name:"旧版站厅",regions:[],theme:{accent:"#b9a36b",wall:"#dedbd0",floor:"#a0b3a5",variant:0},floors:[{id:"concourse",elevation:0,ceiling:6,bounds:{x:0,y:0,w:90,h:30}},{id:"platform",elevation:-2,ceiling:6,bounds:{x:72,y:0,w:18,h:30}}],layout,guards:[...GUARDS,...SECURITY_STAFF_BALANCED],details:[],generation:{attempts:1,fallback:false,reasons:[],emptyRouteSeconds:0}};
 }
 function barriers(x:number, height:number, ys:number[], gap:number):Rect[] {
   const result:Rect[]=[]; let start=0;
@@ -94,7 +94,11 @@ function candidate(seed:number, attempt:number, appearanceSeed=seed):WorldDefini
   const center=archetype==="side"?(layout.STAIRS_TOP.y+layout.STAIRS_BOTTOM.y)/2:layout.HEIGHT/2;
   layout.platformAxis={direction:"x",center,halfWidth:7};
   layout.MOVE_BLOCKERS.push(...[{x:0,y:0,w:layout.WIDTH,h:center-7},{x:0,y:center+7,w:layout.WIDTH,h:layout.HEIGHT-center-7}].map(r=>({...r,floorId:"platform"})));
-  const guards: import("./scenario").GuardDef[]=layout.FACILITIES.filter(f=>f.kind==="security").map(f=>({id:`security-${f.id}`,label:`${f.id}安检员`,role:"security_staff" as const,route:[{...f.exit!,x:f.exit!.x+(f.queueDirection?.y??0)*2.2,y:f.exit!.y-(f.queueDirection?.x??-1)*2.2}],facing:Math.atan2(f.queueDirection?.y??0,f.queueDirection?.x??-1),speed:.9,pauseSeconds:0}));
+  const securityLanes = layout.FACILITIES.filter(f => f.kind === "security");
+  // Match the balanced mainline: staff monitor the two outer lanes while the
+  // middle lane still provides normal service without its own stationary guard.
+  const staffedLanes = [securityLanes[0], securityLanes[securityLanes.length - 1]];
+  const guards: import("./scenario").GuardDef[]=staffedLanes.map(f=>({id:`security-${f.id}`,label:`${f.id}安检员`,role:"security_staff" as const,route:[{...f.exit!,x:f.exit!.x+(f.queueDirection?.y??0)*2.2,y:f.exit!.y-(f.queueDirection?.x??-1)*2.2}],facing:Math.atan2(f.queueDirection?.y??0,f.queueDirection?.x??-1),speed:.9,pauseSeconds:0,sightRange:SECURITY_STAFF_VISION.range,sightFovDeg:SECURITY_STAFF_VISION.fovDeg}));
   guards.push(...[{id:"guard-A",label:"付费区巡视",role:"guard" as const,route:[{...layout.STAIRS_TOP,y:layout.STAIRS_TOP.y-2},{...layout.STAIRS_TOP,x:layout.STAIRS_TOP.x-2,y:layout.STAIRS_TOP.y-2}],facing:Math.PI,speed:.9,pauseSeconds:2}]);
   const floors:WorldDefinition["floors"]=[{id:"concourse",elevation:0,ceiling:6,bounds:{x:0,y:0,w:layout.WIDTH,h:layout.HEIGHT}},{id:"platform",elevation:-6,ceiling:-1,bounds:{x:0,y:0,w:layout.WIDTH,h:layout.HEIGHT}}];
   const regions:WorldDefinition["regions"]=[{kind:"hall",bounds:{x:0,y:0,w:sx,h:height},floorId:"concourse"},{kind:"concourse",bounds:{x:sx,y:0,w:gx-sx,h:height},floorId:"concourse"},{kind:"landing",bounds:{x:gx,y:0,w:paidEnd-gx,h:height},floorId:"concourse"},{kind:"hall",bounds:{x:archetype==="dual"?width-7:paidEnd,y:0,w:archetype==="dual"?7:width-paidEnd,h:height},floorId:"concourse"}];

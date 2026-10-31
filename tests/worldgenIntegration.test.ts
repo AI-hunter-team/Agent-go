@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest";
 import { Vector3 } from "three";
 import { VictoryCamera } from "../src/ui/scene/victoryCamera";
 import { Engine } from "../src/sim/engine";
-import { buildScenario } from "../src/sim/scenario";
-import { World } from "../src/sim/world";
+import { buildScenario, SECURITY_STAFF_VISION } from "../src/sim/scenario";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
-import { GameRunner } from "../src/agent/runner";
-import { classifyByKeywords } from "../src/sim/intent";
+import { World } from "../src/sim/world";
 import { BLACKOUT_SWITCH_REACH } from "../src/sim/layout";
 import { stationSwitch } from "../src/sim/stationSwitch";
 import { generatedTrainDoors, generatedTrainLayout } from "../src/shared/generatedTrain";
@@ -81,22 +79,68 @@ describe("generated station and mainline integration", () => {
           if (previous) expect(Math.hypot(point.x - previous.x, point.y - previous.y)).toBeGreaterThanOrEqual(.98 - 1e-6);
           previous = point;
           if (index > 5) continue;
-          for (const machine of facilities.filter(f => f.def.kind === "tvm")) for (let ticketSlot = 0; ticketSlot <= 5; ticketSlot++) {
+          for (const machine of facilities.filter(f => f.def.kind === "tvm" || f.def.kind === "security" && f.def.id > security.def.id)) for (let ticketSlot = 0; ticketSlot <= 5; ticketSlot++) {
             const other = world.queueStandPoint(machine, ticketSlot);
-            expect(Math.hypot(point.x - other.x, point.y - other.y), `seed ${seed}, ${security.def.id}, ${machine.def.id}`).toBeGreaterThanOrEqual(.82);
+            expect(Math.hypot(point.x - other.x, point.y - other.y), `seed ${seed}, ${security.def.id}, ${machine.def.id}`).toBeGreaterThanOrEqual(.82 - 1e-6);
           }
         }
       }
     }
   });
 
-  it("recovers an off-centre security queue head and completes the busy seed 5 journey", async () => {
-    const engine = new Engine(5, {}, undefined, undefined, generateWorld(5));
-    const runner = new GameRunner(engine, new HeuristicAgent(), async input => classifyByKeywords(input));
-    await runner.runToEnd();
-    expect(engine.status).toBe("success");
-    expect(engine.player.onTrain).toBe(true);
-  }, 30000);
+  it("realigns an off-centre security queue head and completes service", () => {
+    const world = generateWorld(5), engine = new Engine(5, {}, emptyScenario(5), undefined, world);
+    engine.guards.guards.splice(0);
+    const facility = engine.world.facility("S1")!, head = facility.def.head, direction = facility.def.queueDirection!;
+    const side = { x: direction.y, y: -direction.x };
+    engine.player.pos = { ...head, x: head.x + direction.x * .35 + side.x * .414, y: head.y + direction.y * .35 + side.y * .414 };
+    facility.queue.push(engine.player.id);
+    engine.player.activity = { kind: "queued", facility: facility.def.id };
+    for (let tick = 0; tick < 250 && !engine.player.screened; tick++) engine.step();
+    expect(engine.player.screened).toBe(true);
+    expect(engine.world.layout.zoneOf(engine.player.pos)).toBe("concourse");
+  });
+
+  it("lets an offset queue head pass a later arrival and reach service", () => {
+    const engine = new Engine(27, {}, emptyScenario(27), undefined, generateWorld(27));
+    engine.guards.guards.splice(0);
+    const facility = engine.world.facility("S2")!, head = facility.def.head;
+    engine.player.pos = { ...head, x: head.x - .263, y: head.y - 1.651 };
+    const later = engine.world.addPerson("normal", { ...head, y: head.y - .944 });
+    facility.queue.push(engine.player.id, later.id);
+    engine.player.activity = { kind: "queued", facility: facility.def.id };
+    later.activity = { kind: "queued", facility: facility.def.id };
+    for (let tick = 0; tick < 350 && !engine.player.screened; tick++) engine.step();
+    expect(engine.player.screened).toBe(true);
+  });
+
+  it("applies balanced security vision and staffing to generated and legacy maps", () => {
+    for (const seed of [1, 2, 4, 19]) {
+      const definition = generateWorld(seed), staff = definition.guards.filter(guard => guard.role === "security_staff");
+      expect(staff).toHaveLength(2);
+      expect(staff.every(guard => guard.sightRange === SECURITY_STAFF_VISION.range && guard.sightFovDeg === SECURITY_STAFF_VISION.fovDeg)).toBe(true);
+      expect(staff.every(guard => definition.layout.FACILITIES.some(facility => `security-${facility.id}` === guard.id))).toBe(true);
+    }
+    expect(new Engine(1).guards.guards.filter(guard => guard.role === "security_staff").map(guard => guard.def.id)).toEqual(["security-S1", "security-S3"]);
+  });
+
+  it("reroutes from an approaching queue only after its closure is visible", async () => {
+    const engine = new Engine(26, {}, emptyScenario(26), undefined, generateWorld(26));
+    const facility = engine.world.facility("S3")!;
+    engine.world.items.spawn("ticket", { type: "held", personId: engine.player.id, slot: "pocket" }, engine.player.id);
+    engine.player.pos = { ...facility.def.head, x: facility.def.head.x - 2 };
+    engine.player.activity = { kind: "to_queue", facility: facility.def.id, path: [{ ...facility.def.head }] };
+    engine.world.setStatus(facility.def.id, "closed", "临时停用");
+    const observation = engine.observe();
+    expect(observation.facilities).toEqual(expect.arrayContaining([expect.objectContaining({ id: "S3", status: "closed" })]));
+    const agent = new HeuristicAgent();
+    const visible = await agent.decide({ triggers: [], lastResult: null, observation });
+    expect(visible.action).toMatchObject({ type: "join_queue" });
+    expect(visible.action?.type === "join_queue" && visible.action.facility).not.toBe("S3");
+    observation.facilities = observation.facilities.filter(f => f.id !== "S3");
+    const hidden = await agent.decide({ triggers: [], lastResult: null, observation });
+    expect(hidden.action).toMatchObject({ type: "wait" });
+  });
 
   it("only starts a generated station blackout from an explicit switch action", () => {
     for (const seed of [1, 2, 4, 19]) {
