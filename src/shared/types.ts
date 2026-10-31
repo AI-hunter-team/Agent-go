@@ -1,6 +1,11 @@
 // Types shared by the simulation, the agents, the API server and the UI.
 import type { OperationDebug, RunDebug } from "./debug";
 import type { GameSettings } from "./gameSettings";
+import type {
+  ActionObservation, AlertChange, BagObservation, BossRecord, InventoryEntry,
+  ItemObservation, ItemTransfer, Persona, PersonObservation, WorldEvent,
+} from "./interaction";
+export type * from "./interaction";
 import type { DraftResult, ReviewAttempt, ReviewResult, WorldReviewSnapshot } from "./review";
 
 export interface Vec {
@@ -15,7 +20,7 @@ export type PassengerKind = "normal" | "elderly" | "luggage" | "hurried" | "play
 // ---------------------------------------------------------------------------
 // Agent actions (what the agent may request; the engine validates and executes)
 
-export type AgentAction =
+export type AgentAction = import("./interaction").InteractionAction
   | { type: "move_to"; target: string; reason: string }
   | { type: "join_queue"; facility: string; reason: string }
   | { type: "leave_queue"; reason: string }
@@ -61,8 +66,11 @@ export type TriggerKind =
   | "queue_closed"
   | "creative_done"
   | "periodic"
-  | "attraction_seen"
-  | "fallback";
+  | "fallback"
+  | "action_interrupted"
+  | "noticed"
+  | "spoken_to"
+  | "attraction_seen";
 
 export interface Trigger {
   kind: TriggerKind;
@@ -70,6 +78,9 @@ export interface Trigger {
 }
 
 export interface SelfObservation {
+  inventory?: InventoryEntry[];
+  bag?: BagObservation;
+  action?: ActionObservation | null;
   position: Vec;
   zone: string;
   nearestNode: string;
@@ -100,6 +111,7 @@ export interface FacilityObservation {
 }
 
 export interface GuardObservation {
+  doing?: string;
   id: string;
   position: Vec;
   facing: string;
@@ -107,6 +119,8 @@ export interface GuardObservation {
 }
 
 export interface Observation {
+  people?: PersonObservation[];
+  items?: ItemObservation[];
   t: number;
   self: SelfObservation;
   facilities: FacilityObservation[];
@@ -269,6 +283,14 @@ export interface TrailPoint extends Vec {
 }
 
 export interface GameReport {
+  alerts?: AlertChange[];
+  items?: ItemTransfer[];
+  worldEvents?: WorldEvent[];
+  personas?: Record<string, Persona>;
+  boss?: BossRecord[];
+  interactionDialogues?: { t: number; request: import("./interaction").NpcDialogueRequest; response: import("./interaction").NpcResponse }[];
+  calls?: { decisions: number; boss: number; npc: number };
+  operationUsage?: Record<string, { calls: number; inputTokens: number; outputTokens: number; unknownUsage: number; realSeconds: number }>;
   /** Global history, exposed only after the run ends. Older reports may omit it. */
   worldSnapshots?: WorldReviewSnapshot[];
   review?: ReviewResult;
@@ -278,6 +300,7 @@ export interface GameReport {
   selectedStrategyIds?: string[];
   /** Missing only on recordings made before configurable difficulty. */
   settings?: GameSettings;
+  loadout?: import("./interaction").Loadout;
   debug?: RunDebug;
   seed: number;
   agentKind: "llm" | "offline";

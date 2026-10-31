@@ -20,11 +20,6 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ModelSettin
   return { model: env.AGENT_MODEL || DEFAULT_MODEL, maxTokens: tokens, reasoningEffort: effort, openaiStream: env.OPENAI_STREAM !== "0" };
 }
 
-/** NPC 模型由开发者固定，关闭思考并沿用统一总输出预算，不继承 Agent 的档位。 */
-export function npcConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ModelSettings {
-  return configFromEnv({ AGENT_MODEL: env.NPC_MODEL?.trim(), DECISION_MAX_TOKENS: env.DECISION_MAX_TOKENS, OPENAI_REASONING_EFFORT: "none", OPENAI_STREAM: "0" });
-}
-
 /** 保留用户填写的基础路径，只清除结尾斜线，不猜测 /v1。 */
 export function normalizeBaseUrl(value: string): string {
   const url = new URL(value.trim());

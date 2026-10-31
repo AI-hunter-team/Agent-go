@@ -38,9 +38,12 @@ test("jump height is a visual offset, and guard facing maps the planar axes corr
   engine.guards.guards[0].facing = Math.PI;
   const buffer = new PresentationBuffer(engine);
   expect(buffer.current.actors.get("guard-A")!.yaw).toBeCloseTo(-Math.PI / 2);
+  // Isolate the active jump animation from guard failure/cancellation.
+  engine.guards.guards.splice(0);
   engine.applyAction({ type: "attempt_creative", intent: "翻闸", reason: "test" }, "jump_gate");
   for (let i = 0; i < 10; i++) engine.step();
   buffer.capture(engine);
+  expect(engine.status).toBe("running");
   const actual = { ...engine.player.pos };
   const pose = { x: 0, y: 0, z: 0, yaw: 0 };
   sampleActor(buffer, "player", 0.5, pose);
@@ -74,6 +77,7 @@ test("queued and serving actors turn toward their facility after arriving from t
   for (const facilityId of ["TVM-2", "S2", "G2"]) for (const kind of ["queued", "service"] as const) {
     const engine = new Engine(1);
     engine.world.persons.clear();
+    engine.world.items.items.clear();
     const f = engine.world.facility(facilityId)!;
     const p = engine.world.addPerson("player", { x: f.def.head.x, y: f.def.head.y - 1 }, { isPlayer: true });
     const buffer = new PresentationBuffer(engine);
@@ -90,6 +94,21 @@ test("queued and serving actors turn toward their facility after arriving from t
   }
 });
 
+test("interaction snapshots copy directed badges, physical items and expiring speech", () => {
+  const e=new Engine(1);
+  e.alerts.records.set("test",{observerId:"p1",subjectId:"player",level:"yellow",ring:.4,hiddenFor:0,since:0,causeEventId:"e1",reaction:null});
+  const item=e.world.items.spawn("umbrella",{type:"ground",pos:{x:7,y:15}},null);
+  e.world.log("speech","p1：请注意排队",true);
+  const s=captureScene(e);
+  expect(s.alerts).toEqual([{observerId:"p1",subjectId:"player",level:"yellow",ring:.4}]);
+  expect(s.items.find(i=>i.id===item.id)).toMatchObject({x:7,z:15,kind:"umbrella"});
+  expect(s.speech[0].text).toBe("请注意排队");
+  e.alerts.records.get("test")!.ring=.8;
+  expect(s.alerts[0].ring).toBe(.4);
+  e.world.t=5;
+  expect(captureScene(e).speech).toHaveLength(0);
+  expect(JSON.stringify(e.observe())).not.toContain('"ring"');
+});
 test("NPC collision reversals and arrival transitions have bounded visual turns", () => {
   const engine = new Engine(1);
   engine.world.persons.clear();

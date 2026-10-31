@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { World } from "../src/sim/world";
 import { GuardSystem } from "../src/sim/guards";
-import { CreativeSystem } from "../src/sim/creative";
+import { CreativeSystem } from "../src/sim/actions/legacy";
 import { queueSlot } from "../src/sim/layout";
 import { prepareCutIn } from "../src/sim/negotiation";
 
@@ -33,7 +33,7 @@ test("negotiation identifies a nearby NPC and retains utterance and private pers
 });
 
 test("out-of-reach, behind, empty utterance and fourth round are rejected without moving", () => {
-  const { w, f, p, people } = setup();
+  const { w, f, p, people, c } = setup();
   const before = structuredClone({ pos: p.pos, activity: p.activity, queue: f.queue });
   expect(prepareCutIn(w, people[0].id, "可以吗", []).ok).toBe(false);
   expect(prepareCutIn(w, people[2].id, " ", []).ok).toBe(false);
@@ -42,6 +42,9 @@ test("out-of-reach, behind, empty utterance and fourth round are rejected withou
   expect({ pos: p.pos, activity: p.activity, queue: f.queue }).toEqual(before);
   f.queue = [p.id, ...people.map((n) => n.id)];
   expect(prepareCutIn(w, people[3].id, "可以吗", []).ok).toBe(false);
+  p.activity = { kind: "service", facility: "S2" };
+  expect(c.startConsentedCutIn(p, people[2].id).ok).toBe(false);
+  expect(p.activity.kind).toBe("service");
 });
 
 test("consent inserts immediately before that NPC, without violation or complaint", () => {

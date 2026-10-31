@@ -6,6 +6,7 @@ import { DT, RULES } from "../src/sim/scenario";
 
 function atGate(y = 15) {
   const engine = new Engine(1);
+  engine.guards.guards.splice(2); // Isolate the two gate patrols.
   // Isolate the unobstructed patrol clock; crowd collision/yielding is tested separately.
   for (const id of engine.world.persons.keys()) if (id !== "player") engine.world.persons.delete(id);
   for (const f of engine.world.facilities.values()) { f.queue = []; f.serving = null; }

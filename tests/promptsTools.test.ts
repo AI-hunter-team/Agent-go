@@ -34,19 +34,22 @@ describe("shared prompts and tools", () => {
     expect(p.rules).not.toContain("你已经有票了");
   });
 
-  test("public negotiation and stair tools are explained without listing hidden jump mechanics", () => {
+  test("public interaction tools explain routes and dialogue without exposing hidden mechanics", () => {
     const { rules } = buildSystemPrompt("", null);
-    expect(rules).not.toMatch(/翻越|jump_gate|cut_in_line/);
-    expect(rules).toContain("request_cut_in");
-    expect(rules).toContain("descend_stairs");
-    expect(rules).toContain("STAIRS_TOP");
+    expect(rules).not.toMatch(/jump_gate|cut_in_line/);
+    expect(rules).toContain("talk(goal: yield)");
+    expect(rules).toContain("traverse(route: stairs/escalator");
+    expect(rules).toContain("STAIRS_TOP（61,9）");
+    expect(rules).toContain("ESCALATOR_TOP（61,22）");
+    expect(rules).not.toMatch(/descend_stairs|take_escalator|request_cut_in/);
   });
 
-  test("dialogue and stair tools validate concrete requests", () => {
-    expect(parseToolUse("request_cut_in", { npcId: "p2", message: "能让我先过吗？", reason: "赶车" })).toEqual({ action: { type: "request_cut_in", npcId: "p2", message: "能让我先过吗？", reason: "赶车" } });
-    expect(parseToolUse("request_cut_in", { npcId: "p2", message: "x".repeat(201) })).toHaveProperty("error");
-    expect(parseToolUse("request_cut_in", { npcId: "", message: "可以吗" })).toHaveProperty("error");
-    expect(parseToolUse("descend_stairs", { reason: "到站台" })).toEqual({ action: { type: "descend_stairs", reason: "到站台" } });
+  test("dialogue and traverse tools validate concrete requests and reject retired tools", () => {
+    expect(parseToolUse("talk", { npcId: "p2", message: "能让我先过吗？", goal:"yield",offerItemId:null, reason: "赶车" })).toEqual({ action: { type: "talk", npcId: "p2", message: "能让我先过吗？",goal:"yield", reason: "赶车" } });
+    expect(parseToolUse("talk", { npcId: "p2", message: "x".repeat(201),goal:"yield" })).toHaveProperty("error");
+    expect(parseToolUse("talk", { npcId: "", message: "可以吗",goal:"yield" })).toHaveProperty("error");
+    expect(parseToolUse("traverse", {route:"stairs",walking:false, reason: "到站台" })).toEqual({ action: { type: "traverse",route:"stairs",walking:false, reason: "到站台" } });
+    for (const name of ["request_cut_in","descend_stairs","take_escalator","attempt_creative"]) expect(parseToolUse(name,{})).toHaveProperty("error");
   });
 
   test("a turn renders triggers, last result and observation", () => {

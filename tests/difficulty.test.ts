@@ -38,7 +38,7 @@ test("settings are validated and copied so later UI changes cannot alter a runni
   const e = new Engine(1, input); input.timeLimitSeconds = 180; input.extraQueuePeople = 0;
   expect(e.settings).toEqual({ timeLimitSeconds: 90, extraQueuePeople: 2 });
   expect(Object.isFrozen(e.settings)).toBe(true);
-  expect(resolveGameSettings()).toEqual({ timeLimitSeconds: 120, extraQueuePeople: 3 });
+  expect(resolveGameSettings()).toEqual({ timeLimitSeconds: 150, extraQueuePeople: 3 });
 });
 
 test.each([

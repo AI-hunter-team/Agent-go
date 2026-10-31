@@ -1,0 +1,480 @@
+{
+  "testedAt": "2026-10-31",
+  "main": "331bdecca2265aa4c9931fd32db16149f932bf6e",
+  "scope": "local integration working tree; no paid model calls",
+  "software": {
+    "node": "24.8.0",
+    "npm": "11.6.0",
+    "testFiles": 81,
+    "tests": 642,
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "offline": {
+    "settings": {
+      "timeLimitSeconds": 150,
+      "extraQueuePeople": 3
+    },
+    "successes": 21,
+    "rows": [
+      {
+        "seed": 1,
+        "status": "success",
+        "score": 130.8,
+        "elapsed": 130.8,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 2,
+        "status": "success",
+        "score": 146.4,
+        "elapsed": 146.4,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 3,
+        "status": "success",
+        "score": 138,
+        "elapsed": 138,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 4,
+        "status": "success",
+        "score": 132.2,
+        "elapsed": 132.2,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 5,
+        "status": "success",
+        "score": 130,
+        "elapsed": 130,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 6,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 7,
+        "status": "success",
+        "score": 128,
+        "elapsed": 128,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 8,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 9,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 10,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 11,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 12,
+        "status": "success",
+        "score": 129.7,
+        "elapsed": 129.7,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 13,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 14,
+        "status": "success",
+        "score": 130,
+        "elapsed": 130,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 15,
+        "status": "success",
+        "score": 145.2,
+        "elapsed": 145.2,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 16,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 17,
+        "status": "success",
+        "score": 146.8,
+        "elapsed": 146.8,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 18,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 19,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 20,
+        "status": "success",
+        "score": 128.5,
+        "elapsed": 128.5,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 21,
+        "status": "success",
+        "score": 138.6,
+        "elapsed": 138.6,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 22,
+        "status": "success",
+        "score": 119.7,
+        "elapsed": 119.7,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 23,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 24,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 25,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 26,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 27,
+        "status": "success",
+        "score": 149.8,
+        "elapsed": 149.8,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 28,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 29,
+        "status": "success",
+        "score": 129.9,
+        "elapsed": 129.9,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 30,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 31,
+        "status": "success",
+        "score": 140,
+        "elapsed": 140,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 32,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 33,
+        "status": "success",
+        "score": 137.4,
+        "elapsed": 137.4,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 34,
+        "status": "success",
+        "score": 130.1,
+        "elapsed": 130.1,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 35,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 36,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 37,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 38,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 39,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 40,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 41,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 42,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 43,
+        "status": "success",
+        "score": 144.2,
+        "elapsed": 144.2,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 44,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 45,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 46,
+        "status": "success",
+        "score": 137.4,
+        "elapsed": 137.4,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 47,
+        "status": "success",
+        "score": 120.8,
+        "elapsed": 120.8,
+        "reason": null,
+        "budget": false
+      },
+      {
+        "seed": 48,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 49,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      },
+      {
+        "seed": 50,
+        "status": "failed",
+        "score": null,
+        "elapsed": 150,
+        "reason": "超时：150 秒内未下行到达站台",
+        "budget": false
+      }
+    ]
+  },
+  "browser": {
+    "status": "passed",
+    "environment": "Chrome 156, SwiftShader, 1440x1000, economy preset",
+    "seed": 1,
+    "report": {
+      "stage": "report",
+      "status": "success",
+      "elapsed": 131,
+      "settings": {
+        "timeLimitSeconds": 150,
+        "extraQueuePeople": 3
+      },
+      "loadout": {
+        "backpack": false
+      },
+      "fields": [
+        "alerts",
+        "items",
+        "worldEvents",
+        "personas",
+        "boss",
+        "interactionDialogues",
+        "calls",
+        "operationUsage",
+        "worldSnapshots"
+      ]
+    },
+    "pauseUnchanged": true,
+    "retry": {
+      "seed": 1,
+      "timeLimitSeconds": 150,
+      "backpack": false,
+      "started": true
+    },
+    "replay": {
+      "seekSeconds": 40,
+      "resetToStart": true
+    },
+    "fixture": {
+      "overviewVisible": true,
+      "darkVsLightInspected": true,
+      "white": 1,
+      "yellow": 1,
+      "red": 1,
+      "speech": 1
+    },
+    "pageErrors": []
+  },
+  "paidModel": "not rerun; IV2-18 belongs to the previous protocol/map",
+  "merged": false,
+  "implementationCommit": "2d8c1fef10c71454668408f686084f9e24fe698c",
+  "pullRequest": {
+    "number": 32,
+    "url": "https://github.com/AI-hunter-team/Agent-go/pull/32",
+    "state": "OPEN",
+    "autoMergeEnabled": false,
+    "ci": "see live PR checks"
+  }
+}

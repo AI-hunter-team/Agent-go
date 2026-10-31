@@ -18,13 +18,14 @@ export class NpcDirector {
   constructor(
     private world: World,
     scenario: Scenario,
+    backgroundCrowd = true,
   ) {
     this.spawns = [...scenario.spawns].sort((a, b) => a.t - b.t);
     this.events = [...scenario.events].sort((a, b) => a.t - b.t);
     for (const [id, status] of Object.entries(scenario.initialStatus)) world.setStatus(id, status, "故障");
     this.placeStartingCrowd();
     const localCrowd = new Rng(scenario.seed ^ 0x3e17591);
-    for (const attraction of ATTRACTIONS.filter(a => a.kind !== "information")) {
+    for (const attraction of (backgroundCrowd ? ATTRACTIONS : []).filter(a => a.kind !== "information")) {
       const p = world.addPerson("normal", { x: attraction.approach.x + 1.3, y: attraction.approach.y }, { hasTicket: true });
       p.screened = true;
       p.activity = { kind: "waiting", remaining: localCrowd.range(20, 60) };
@@ -68,13 +69,15 @@ export class NpcDirector {
 
     for (const p of [...w.persons.values()]) {
       if (!p.isPlayer && p.activity.kind === "to_queue" && w.facility(p.activity.facility)?.status !== "open") p.activity = { kind: "idle" };
-      if (p.isPlayer || p.activity.kind !== "idle") continue;
+      if (p.isPlayer || p.incapacitated || p.activity.kind !== "idle") continue;
       this.decide(p);
     }
   }
 
   private apply(e: ScriptedEvent) {
     const w = this.world;
+    if (e.type === "power") { w.powerOut(e.zone, e.duration); return; }
+    if (e.type === "damage") { w.damageFacility(e.facility); return; }
     if (e.type === "recheck") {
       const f = w.facility(e.facility)!;
       f.pendingRecheck = w.rng.range(e.extra[0], e.extra[1]);

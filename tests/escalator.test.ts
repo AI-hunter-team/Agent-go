@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Engine } from "../src/sim/engine";
-import { ESCALATOR_APPROACH, ESCALATOR_TOP } from "../src/sim/layout";
+import { ESCALATOR_APPROACH, ESCALATOR_TOP, ESCALATOR_SECONDS } from "../src/sim/layout";
 
 const advance = (e: Engine, seconds: number) => { for (let i = 0; i < seconds * 10; i++) e.step(); };
 function atEntrance() {
@@ -9,7 +9,8 @@ function atEntrance() {
   e.world.transit.queue.splice(0);
   for (const [id, p] of e.world.persons) if (!p.isPlayer) e.world.persons.delete(id);
   e.world.transit.nextCrowdAt = Infinity;
-  Object.assign(e.player, { screened: true, hasTicket: true, passedGate: true, pos: { ...ESCALATOR_TOP } });
+  e.world.items.spawn("ticket", {type:"held",personId:"player",slot:"pocket"},"player");
+  Object.assign(e.player, { screened: true, passedGate: true, pos: { ...ESCALATOR_TOP } });
   e.takeTriggers();
   return e;
 }
@@ -17,7 +18,8 @@ function atEntrance() {
 describe("escalator admission", () => {
   test.each([5, 8])("seed %i advances a side entrant behind its actual predecessor and drains the queue", seed => {
     const e = new Engine(seed);
-    Object.assign(e.player, { hasTicket: true, screened: true, passedGate: true, pos: { ...ESCALATOR_APPROACH } });
+    e.world.items.spawn("ticket", {type:"held",personId:"player",slot:"pocket"},"player");
+  Object.assign(e.player, { screened: true, passedGate: true, pos: { ...ESCALATOR_APPROACH } });
     expect(e.applyAction({ type: "take_escalator", reason: "" }).ok).toBe(true);
     advance(e, 60);
     expect(e.player.onPlatform).toBe(true);
@@ -45,19 +47,19 @@ describe("escalator admission", () => {
     e.player.pos = { x: 45.4, y: 22 };
     expect(e.applyAction({ type: "take_escalator", reason: "" }).ok).toBe(false);
   });
-  test("empty admission takes four seconds of travel; riding cannot be interrupted", () => {
+  test("empty admission takes ten seconds of travel; riding cannot be interrupted", () => {
     const e = atEntrance();
     expect(e.applyAction({ type: "take_escalator", reason: "" }).ok).toBe(true);
     e.step();
     expect(e.player.activity.kind).toBe("escalator");
     expect(e.applyAction({ type: "move_to", target: "STAIRS_TOP", reason: "" }).ok).toBe(false);
     expect(e.applyAction({ type: "descend_stairs", reason: "" }).ok).toBe(false);
-    advance(e, 3.9);
+    advance(e, ESCALATOR_SECONDS - .1);
     expect(e.player.onPlatform).toBe(false);
     advance(e, .1);
     expect(e.player.onPlatform).toBe(true);
     expect(e.status).toBe("success");
-    expect(e.timeBreakdown.escalator).toBeCloseTo(4);
+    expect(e.timeBreakdown.escalator).toBeCloseTo(ESCALATOR_SECONDS);
   });
   test("FIFO admits one person per second; queueing can be cancelled and loses the place", () => {
     const e = atEntrance();

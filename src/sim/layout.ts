@@ -1,4 +1,4 @@
-import type { FacilityKind, Vec } from "../shared/types";
+import type { FacilityKind, ItemSpot, Vec } from "../shared/types";
 import type { Rect } from "./geometry";
 
 // Station layout, in metres. See docs/MVP技术方案.md §5.2.
@@ -20,13 +20,23 @@ export const ESCALATOR_APPROACH: Vec = { x: 61, y: 20.8 };
 export const ESCALATOR_REACH = 1.4;
 export const ESCALATOR_BOTTOM: Vec = { x: 73, y: 22 };
 export const STAIRS_SECONDS = 6;
-export const ESCALATOR_SECONDS = 4;
+export const ESCALATOR_SECONDS = 10;
+export const ESCALATOR_WALK_SECONDS = 5;
 export const BOARDING_INTERVAL = 1;
 export const ESCALATOR_CAPACITY = 14;
+export const RAILING_X = SECURITY_X;
+export const RAILING_SEGMENTS = [{ minY: 8, maxY: 12 }, { minY: 18, maxY: 21 }];
 export const STAIRS_REACH = 0.8;
 export const QUEUE_SPACING = 0.8;
 
 export const ENTRANCE: Vec = { x: 2, y: 15 };
+
+export const ITEM_SPOTS: ItemSpot[] = [
+  ...[6,15,24].map((y,i) => ({id:`confiscated-S${i+1}`,label:`${i+1}号安检保管处`,pos:{x:26,y:y+.7},stock:[],takeSeconds:1.5})),
+  { id: "convenience", label: "售票厅便利架", pos: { x: 7, y: 3 }, stock: ["newspaper", "snack", "water_bottle"], takeSeconds: 1.5 },
+  { id: "vending", label: "安检后饮水架", pos: { x: 30, y: 27 }, stock: ["water_bottle"], takeSeconds: 1.5 },
+  { id: "lost-property", label: "长椅旁失物", pos: { x: 8, y: 27 }, stock: ["umbrella"], takeSeconds: 1.5 },
+];
 
 export interface FacilityDef {
   id: string;

@@ -6,7 +6,8 @@ import { STAIRS_BOTTOM, STAIRS_TOP } from "../src/sim/layout";
 
 function atStairs() {
   const engine = new Engine(1);
-  Object.assign(engine.player, { hasTicket: true, screened: true, passedGate: true, pos: { ...STAIRS_TOP } });
+  engine.world.items.spawn("ticket", {type:"held",personId:"player",slot:"pocket"},"player");
+  Object.assign(engine.player, { screened: true, passedGate: true, pos: { ...STAIRS_TOP } });
   engine.takeTriggers();
   return engine;
 }
@@ -14,7 +15,8 @@ function atStairs() {
 describe("stairs after the gate", () => {
   test("gate service stops on the upper landing without ending the run", () => {
     const e = new Engine(1);
-    Object.assign(e.player, { hasTicket: true, screened: true, pos: { x: 43.4, y: 15 } });
+    e.world.items.spawn("ticket", { type: "held", personId: e.player.id, slot: "pocket" }, e.player.id);
+    Object.assign(e.player, { screened: true, pos: { x: 43.4, y: 15 } });
     const gate = e.world.facility("G3")!;
     e.world.setStatus("G3", "open", null);
     gate.serving = { personId: "player", remaining: 0.1, recheck: false };

@@ -5,9 +5,12 @@ export interface ReplayFrame {
   position: Vec | null;
   trail: Vec[];
   decision: DecisionRecord | null;
+  events?: GameReport["worldEvents"];
+  alerts?: GameReport["alerts"];
+  items?: GameReport["items"];
 }
 
-export function getReplayFrame(report: Pick<GameReport, "elapsed" | "trail" | "decisions">, time: number): ReplayFrame {
+export function getReplayFrame(report: Pick<GameReport, "elapsed" | "trail" | "decisions" | "worldEvents" | "alerts" | "items">, time: number): ReplayFrame {
   const t = Math.min(Math.max(0, report.elapsed), Math.max(0, Number.isFinite(time) ? time : 0));
   const samples = report.trail.map((point, index) => ({ ...point, t: point.t ?? index * 0.5 }));
   let position: Vec | null = null;
@@ -25,5 +28,5 @@ export function getReplayFrame(report: Pick<GameReport, "elapsed" | "trail" | "d
   }
   let decision: DecisionRecord | null = null;
   for (const record of report.decisions) if (record.t <= t) decision = record;
-  return { t, position, trail, decision };
+  return { t, position, trail, decision, ...(report.worldEvents ? {events: report.worldEvents.filter(e => e.t <= t)} : {}), ...(report.alerts ? {alerts: report.alerts.filter(e => e.t <= t)} : {}), ...(report.items ? {items: report.items.filter(e => e.t <= t)} : {}) };
 }

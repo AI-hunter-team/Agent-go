@@ -7,7 +7,6 @@ import { Engine } from "../src/sim/engine";
 import { queueSlot } from "../src/sim/layout";
 import type { NpcReply, CutInDialogueRequest, DecisionResult } from "../src/shared/types";
 import { DecisionLog } from "../src/ui/DecisionLog";
-import { remoteNpcNegotiator } from "../src/agent/remoteAgent";
 
 function fixture(negotiate: (r: CutInDialogueRequest) => Promise<NpcReply>, message = "我赶火车，能让我先办理吗？") {
   const e = new Engine(1); const w = e.world; const p = e.player;
@@ -81,12 +80,12 @@ test("NPC service errors never grant consent", async () => {
   expect(r.decisions[0].result?.ok).toBe(false);
 });
 
-test("HTTP model failure preserves paid NPC usage and raw output in the run report", async () => {
+test("Legacy dialogue failure preserves paid NPC usage and raw output in the run report", async () => {
   const originalFetch = globalThis.fetch;
   const failure: NpcReply = { ...reply(false), source: "error", output: { id: "failed-call", stopReason: "max_tokens", content: [{ type: "text", text: "部分返回" }] } };
   globalThis.fetch = async () => new Response(JSON.stringify(failure), { status: 502 });
   try {
-    const { r, p } = fixture(remoteNpcNegotiator); r.start(); await r.pending;
+    const { r, p } = fixture(async()=>failure); r.start(); await r.pending;
     const report = r.report();
     expect(p.activity.kind).toBe("queued");
     expect(report.npcTotals?.outputTokens).toBe(30);

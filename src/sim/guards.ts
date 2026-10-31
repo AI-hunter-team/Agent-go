@@ -1,10 +1,20 @@
-import type { Vec } from "../shared/types";
+import type { Percept, Vec } from "../shared/types";
+import type { AlertSystem } from "./alert";
+import type { EventBus } from "./events";
+import { findPath } from "./nav";
 import { angleTo, dist, inViewCone, lineOfSight } from "./geometry";
 import { SIGHT_OCCLUDERS } from "./layout";
 import { DT, GUARDS, RULES, type GuardDef } from "./scenario";
 import { personRadius, steer, type MovingBody } from "./movement";
 
 export interface Guard {
+  role: "guard" | "security_staff";
+  mode: "patrol" | "investigate" | "watch" | "return";
+  incapacitated: number;
+  wakeAt: number;
+  investigation: { point: Vec; priority: number; remaining: number; arrived: boolean } | null;
+  watching: { subjectId: string; lastKnown: Vec } | null;
+  path: Vec[];
   def: GuardDef;
   pos: Vec;
   facing: number;
@@ -17,9 +27,12 @@ export interface Guard {
 
 export class GuardSystem {
   readonly guards: Guard[];
+  private clock = 0;
+  lightAt: (pos: Vec) => number = () => 1;
 
   constructor(definitions: readonly GuardDef[] = GUARDS) {
     this.guards = definitions.map((def) => ({
+      role: def.role ?? "guard", mode: "patrol", incapacitated: 0, wakeAt: 0, investigation: null, watching: null, path: [],
       def,
       pos: { ...def.route[0] },
       facing: def.facing,
@@ -29,8 +42,37 @@ export class GuardSystem {
     }));
   }
 
-  step(people: readonly MovingBody[] = []) {
+  step(people: readonly MovingBody[] = [], subject: (id: string) => { pos: Vec } | undefined = () => undefined, now = this.clock + DT) {
+    this.clock = now;
     for (const g of this.guards) {
+      if (g.incapacitated > 0) {
+        g.incapacitated = Math.max(0, g.wakeAt - now);
+        if (g.incapacitated > 1e-9) continue;
+        g.incapacitated = 0;
+        this.investigate(g, g.pos, 1);
+      }
+      if (g.mode === "watch" && g.watching) {
+        const target = subject(g.watching.subjectId);
+        if (target && this.canSee(g, target.pos)) g.watching.lastKnown = { ...target.pos };
+        g.facing = angleTo(g.pos, g.watching.lastKnown);
+        if (dist(g.pos, g.watching.lastKnown) > 3) this.walk(g, g.watching.lastKnown, people);
+        continue;
+      }
+      if (g.mode === "investigate" && g.investigation) {
+        const info = g.investigation;
+        if (!info.arrived) {
+          info.arrived = this.walk(g, info.point, people) || !g.path.length;
+        } else {
+          g.facing += DT * Math.PI / 2;
+          info.remaining -= DT;
+          if (info.remaining <= 1e-9) this.returnToPatrol(g);
+        }
+        continue;
+      }
+      if (g.mode === "return") {
+        if (this.walk(g, g.def.route[g.target], people)) { g.mode = "patrol"; g.path = []; }
+        continue;
+      }
       if (g.lookAt) {
         g.facing = angleTo(g.pos, g.lookAt.point);
         g.lookAt.remaining -= DT;
@@ -60,7 +102,51 @@ export class GuardSystem {
   }
 
   canSee(g: Guard, p: Vec): boolean {
-    return inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange, p) && lineOfSight(g.pos, p, SIGHT_OCCLUDERS);
+    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange * Math.min(this.lightAt(g.pos), this.lightAt(p)), p) && lineOfSight(g.pos, p, SIGHT_OCCLUDERS);
+  }
+
+  investigate(g: Guard, point: Vec, priority: number) {
+    if (g.incapacitated > 0 || (g.investigation && g.investigation.priority > priority) || (g.mode === "watch" && priority < 3)) return;
+    g.mode = "investigate"; g.watching = null; g.lookAt = null;
+    g.investigation = { point: { ...point }, priority, remaining: 4, arrived: dist(g.pos, point) < 0.3 };
+    g.path = findPath(g.pos, point, personRadius("guard")) ?? [];
+  }
+  watch(g: Guard, subjectId: string, point: Vec) {
+    if (g.incapacitated > 0) return;
+    g.mode = "watch"; g.investigation = null; g.lookAt = null;
+    g.watching = { subjectId, lastKnown: { ...point } }; g.path = [];
+  }
+  knockOut(id: string, seconds: number, now = this.clock) {
+    const g = this.guards.find((entry) => entry.def.id === id);
+    if (!g) return;
+    g.incapacitated = seconds; g.wakeAt = now + seconds; g.lookAt = null; g.investigation = null; g.watching = null; g.mode = "patrol"; g.path = [];
+  }
+  respond(percepts: readonly Percept[], alerts: AlertSystem, bus: EventBus) {
+    for (const percept of percepts) {
+      const g = this.guards.find((entry) => entry.def.id === percept.observerId);
+      if (!g || g.incapacitated > 0) continue;
+      const event = bus.get(percept.eventId)!;
+      if (percept.channel === "report") this.investigate(g, event.aboutPos ?? event.pos, 3);
+      else if (percept.attributedTo && alerts.get(g.def.id, percept.attributedTo)) this.watch(g, percept.attributedTo, percept.pos);
+      else if (!percept.attributedTo) this.investigate(g, percept.pos, percept.channel === "hearing" ? 1 : 2);
+    }
+    for (const g of this.guards) {
+      if (g.watching && !alerts.get(g.def.id, g.watching.subjectId)) this.returnToPatrol(g);
+    }
+  }
+  private returnToPatrol(g: Guard) {
+    g.mode = "return"; g.investigation = null; g.watching = null;
+    g.path = findPath(g.pos, g.def.route[g.target], personRadius("guard")) ?? [];
+  }
+  private walk(g: Guard, point: Vec, people: readonly MovingBody[]): boolean {
+    if (dist(g.pos, point) < 0.2) return true;
+    if (!g.path.length || dist(g.path.at(-1)!, point) > 0.5) g.path = findPath(g.pos, point, personRadius("guard")) ?? [];
+    const next = g.path[0];
+    if (!next) return false;
+    g.facing = angleTo(g.pos, next);
+    g.pos = steer(g.pos, next, g.def.speed * DT, personRadius("guard"), people);
+    if (dist(g.pos, next) < 1e-6) g.path.shift();
+    return dist(g.pos, point) < 0.2;
   }
 
   /** First guard who can currently see point p, if any. */
@@ -70,7 +156,7 @@ export class GuardSystem {
 
   /** Guards within earshot turn to look at a noise for a few seconds. Returns who reacted. */
   attract(point: Vec): Guard[] {
-    const reacted = this.guards.filter((g) => dist(g.pos, point) <= RULES.complaintRadius);
+    const reacted = this.guards.filter((g) => g.incapacitated <= 0 && dist(g.pos, point) <= RULES.complaintRadius);
     for (const g of reacted) {
       g.lookAt = {
         point: { ...point }, remaining: RULES.attentionSeconds,

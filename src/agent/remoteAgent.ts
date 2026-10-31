@@ -1,11 +1,7 @@
 import type {
   AgentTurn,
-  CreativeClassification,
   DecisionResult,
   NormalizedGuidance,
-  Observation,
-  NpcReply,
-  CutInDialogueRequest,
   GameReport,
 } from "../shared/types";
 import type { OperationDebug } from "../shared/debug";
@@ -14,7 +10,7 @@ import type { ReasoningEffort } from "../shared/modelConfig";
 import type { DraftResult, ReviewInput, ReviewResult, ReviewStrategy } from "../shared/review";
 import { ReviewFailure } from "../shared/review";
 import { classifyByKeywords } from "../sim/intent";
-import type { Agent, Classifier, NpcNegotiator } from "./agent";
+import type { Agent, Classifier, Interpreter, NpcResponder } from "./agent";
 
 let activeModelToken: string | null = null;
 const sessionTokens = new Map<string, string | null>();
@@ -62,7 +58,7 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
   try { data = text ? JSON.parse(text) : null; }
   catch { throw new Error("API 服务返回格式异常，请检查服务是否已启动"); }
   // NPC failures also carry their raw model response and paid usage for the run log.
-  if (!res.ok && !(path === "/api/npc/negotiate" && data?.source === "error" && data?.accepted === false)) {
+  if (!res.ok && !((path === "/api/npc/negotiate" || path === "/api/npc/respond") && data?.source === "error")) {
     if (path.startsWith("/api/review")) throw new ReviewFailure(data?.error ?? `HTTP ${res.status}`, data?.attempt ?? null);
     throw new Error(data?.error ?? `HTTP ${res.status}`);
   }
@@ -95,43 +91,34 @@ export const Api = {
   health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
   /** 以当前配置整理开局指导。 */
   normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
-  /** 创建会话前就引用凭据，避免并发换模型使正在创建的对局失效。 */
-  createSession: async (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings) => {
+  createSession: async (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout) => {
     const token = activeModelToken;
     if (token) tokenUsers.set(token, (tokenUsers.get(token) ?? 0) + 1);
     try {
-      const result = await api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings }, configToken: token });
+      const result = await api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings, loadout }, configToken: token });
       sessionTokens.set(result.sessionId, token);
       return result;
     } catch (error) { await releaseToken(token); throw error; }
   },
-  /** 使用本局固定配置请求下一个动作。 */
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn }, configToken: sessionToken(sessionId) }),
-  /** 使用本局配置分类创意，赛外调用使用当前配置。 */
-  classify: (intent: string, observation: Observation, sessionId?: string, runId?: string) =>
-    api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId }, configToken: sessionToken(sessionId) }),
-  /** 将报告保存到创建它的会话。 */
-  saveReport: (sessionId: string, report: GameReport) => api<void>("/api/session/" + sessionId + "/report", { body: { report }, configToken: sessionToken(sessionId) }),
-  /** 结束会话并释放对应凭据引用。 */
+  interpret: (sessionId: string, instruction: string, context: import("../shared/types").BossContext) => api<import("../shared/types").ActionPlan>("/api/boss/interpret", { body: {sessionId,instruction,context}, configToken: sessionToken(sessionId) }),
+  respond: (sessionId: string, request: import("../shared/types").NpcDialogueRequest) => api<import("../shared/types").NpcResponse>("/api/npc/respond", {body:{sessionId,request}, configToken: sessionToken(sessionId)}),
+  saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report }, configToken: sessionToken(sessionId) }),
   deleteSession: async (sessionId: string) => {
     const token = sessionToken(sessionId);
-    try { return await api<null>("/api/session/" + sessionId, { method: "DELETE", configToken: token }); }
+    try { return await api<null>(`/api/session/${sessionId}`, { method: "DELETE", configToken: token }); }
     finally { sessionTokens.delete(sessionId); await releaseToken(token ?? null); }
   },
-  /** NPC 对话沿用本局固定的模型配置。 */
-  negotiate: (request: CutInDialogueRequest, sessionId?: string) => api<NpcReply>("/api/npc/negotiate", { body: { ...request, sessionId }, configToken: sessionToken(sessionId) }),
 };
 
 /** Model-driven agent: each decision is a call to the API server, which holds in-run memory. */
 export class RemoteAgent implements Agent {
   readonly kind = "llm" as const;
-  /** 持有服务端会话 ID 与报告关联 ID。 */
-  private constructor(private sessionId: string, private runId?: string) {}
+  private constructor(private sessionId: string) {}
 
-  /** 创建局内远程 Agent。 */
-  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings): Promise<RemoteAgent> {
-    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings);
-    return new RemoteAgent(sessionId, runId);
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout): Promise<RemoteAgent> {
+    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings, loadout);
+    return new RemoteAgent(sessionId);
   }
 
   /** 转发单次观察，不在浏览器保存供应商协议历史。 */
@@ -139,11 +126,10 @@ export class RemoteAgent implements Agent {
     return Api.decide(this.sessionId, turn);
   }
 
-  /** 归类当前对局的创意请求。 */
-  readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId, this.runId);
+  readonly interpret: Interpreter = (instruction, context) => Api.interpret(this.sessionId, instruction, context);
+  readonly respond: NpcResponder = request => Api.respond(this.sessionId, request);
 
-  /** 请求本局 NPC 答复。 */
-  readonly negotiate: NpcNegotiator = (request) => Api.negotiate(request, this.sessionId);
+
 
   /** 上传报告并结束局内记忆。 */
   async dispose(report?: GameReport) {
@@ -152,12 +138,4 @@ export class RemoteAgent implements Agent {
   }
 }
 
-/** Standalone server classifier; the runner records transport errors and applies keyword fallback. */
-export const remoteClassifier: Classifier = (intent, observation) =>
-  Api.classify(intent, observation);
-
-/** 离线模式仅使用本地关键词规则。 */
 export const offlineClassifier: Classifier = async (intent) => classifyByKeywords(intent);
-
-/** 赛外 NPC 请求使用当前页面模型配置。 */
-export const remoteNpcNegotiator: NpcNegotiator = (request) => Api.negotiate(request);

@@ -48,7 +48,7 @@ docker compose logs -f app
 
 模型启用会发起一次真实工具调用，可能消耗少量供应商额度；失败时显示原因，不会启用该模型。Key 不写入浏览器存储或镜像，只在临时内存中持有。刷新页面需重新填写；容器重启会清空临时配置和对局。
 
-## 4. 服务端默认 Agent、独立 NPC 模型与端口
+## 4. 服务端默认模型与端口
 
 没有 `.env` 也可以使用上一节的页面配置。如果希望提供服务端默认模型，在 `Agent-go-docker` 目录创建 `.env`，按自己的接口替换示例值：
 
@@ -60,18 +60,12 @@ AGENT_MODEL=deepseek-flash
 OPENAI_REASONING_EFFORT=none
 OPENAI_STREAM=1
 DECISION_MAX_TOKENS=4096
-NPC_PROVIDER=responses
-NPC_MODEL=your-npc-model-id
-NPC_OPENAI_BASE_URL=https://api.example.com/v1
-NPC_OPENAI_API_KEY=your-npc-api-key
 APP_PORT=8080
 ```
 
 Compose 会读取 `.env` 并把明确列出的模型变量传给容器；文件不进入构建上下文或镜像，也不要提交到 Git。模型 Key 应填写在 `OPENAI_API_KEY`，不要使用任何 `VITE_*` 变量。
 
-`AGENT_*` 和不带 `NPC_` 前缀的供应商变量只用于默认 Agent，用户也可以通过页面自定义 Agent。NPC 始终由开发者的 `NPC_*` 配置驱动；`NPC_MODEL` 与对应 NPC 密钥必须单独设置，用户的页面配置不会覆盖它。没有 NPC 配置时仍可运行 Agent，但 NPC 无法答复插队请求，不回退到 Agent 模型。只提供页面 Agent 时可省略示例中的默认 Agent 变量，保留 NPC 变量。
-
-NPC 也统一使用 Responses，默认关闭思考并沿用总输出预算；旧原生 Anthropic 的 NPC 地址和凭据需要显式迁移到支持 Responses 的服务，不自动改用 Agent 的配置。
+角色决策、Boss 行动解释和 NPC 对话沿用对局创建时绑定的同一 Responses 模型；用户可在页面验证并启用模型，新配置只影响新局。独立 `NPC_*` 环境变量已停用，升级后不需要补充 NPC 凭据。没有可用模型时仍可使用离线规则 Agent。
 
 配置修改后重建容器使环境变量生效：
 

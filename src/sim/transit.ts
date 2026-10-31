@@ -1,5 +1,5 @@
 import type { Person, World } from "./world";
-import { BOARDING_INTERVAL, ESCALATOR_BOTTOM, ESCALATOR_CAPACITY, ESCALATOR_REACH, ESCALATOR_SECONDS, ESCALATOR_TOP, QUEUE_SPACING, STAIRS_REACH, STAIRS_TOP } from "./layout";
+import { BOARDING_INTERVAL, ESCALATOR_BOTTOM, ESCALATOR_CAPACITY, ESCALATOR_REACH, ESCALATOR_SECONDS, ESCALATOR_WALK_SECONDS, ESCALATOR_TOP, QUEUE_SPACING, STAIRS_REACH, STAIRS_TOP } from "./layout";
 import { dist } from "./geometry";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
@@ -55,6 +55,7 @@ export class TransitSystem {
     const path = findPath(p.pos, this.slot(this.queue.length));
     if (!path) return "无法到达扶梯队尾";
     const atSlot = dist(p.pos, this.slot(this.queue.length)) <= .05;
+    this.world.finishAttention(p, "选择扶梯");
     this.queue.push(p.id);
     if (atSlot) {
       p.activity = { kind: "escalator_queue", joinedAt: this.world.t };
@@ -108,8 +109,9 @@ export class TransitSystem {
     const waited = p.activity.kind === "escalator_queue" ? w.t - p.activity.joinedAt : 0;
     this.queue.shift();
     this.nextAdmissionAt = w.t + BOARDING_INTERVAL;
-    p.activity = { kind: "escalator", remaining: ESCALATOR_SECONDS };
-    if (p.isPlayer) w.notifyPlayer("service_done", `进入扶梯，实际候梯 ${Math.round(waited * 10) / 10} 秒；乘坐需 ${ESCALATOR_SECONDS} 秒`);
+    const duration = p.escalatorWalking ? ESCALATOR_WALK_SECONDS : ESCALATOR_SECONDS;
+    p.activity = { kind: "escalator", remaining: duration, duration };
+    if (p.isPlayer) w.notifyPlayer("service_done", `进入扶梯，实际候梯 ${Math.round(waited * 10) / 10} 秒；乘坐需 ${duration} 秒`);
   }
 
   stepPerson(p: Person, stride: number): boolean {
@@ -132,7 +134,8 @@ export class TransitSystem {
     }
     if (a.kind === "escalator") {
       const remaining = Math.max(0, a.remaining - DT);
-      const progress = (ESCALATOR_SECONDS - remaining) / ESCALATOR_SECONDS;
+      const duration = a.duration ?? ESCALATOR_SECONDS;
+      const progress = (duration - remaining) / duration;
       const next = { x: ESCALATOR_TOP.x + (ESCALATOR_BOTTOM.x - ESCALATOR_TOP.x) * progress, y: ESCALATOR_TOP.y };
       if (!clearOfPeople(p.pos, next, personRadius(p.kind), this.world.collisionBodies(p.id))) return true;
       a.remaining = remaining;

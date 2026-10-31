@@ -1,3 +1,4 @@
+import { InteractionPanel } from "./InteractionPanel";
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { HeuristicAgent } from "../agent/heuristicAgent";
 import { Api, RemoteAgent, offlineClassifier } from "../agent/remoteAgent";
@@ -5,7 +6,7 @@ import type { OperationDebug } from "../shared/debug";
 import { ModelConfigPanel } from "./ModelConfigPanel";
 import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
-import { DECISION_LIMITS } from "../sim/scenario";
+import { BUDGETS } from "../agent/runner";
 import { resolveGameSettings } from "../shared/gameSettings";
 import { guidanceError } from "../shared/guidance";
 import { GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
@@ -59,6 +60,8 @@ export function App() {
   const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
   const [seed, setSeed] = useState(session.engine.seed);
   const [settings, setSettings] = useState(session.engine.settings);
+  const [backpack,setBackpack]=useState(true);
+  const loadout={backpack};
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
   const [intent, setIntent] = useState<Stage>("setup");
@@ -126,11 +129,10 @@ export function App() {
     const preparation = preparationRef.current;
     const runId = preparation?.runId ?? crypto.randomUUID();
     try {
-      const agent = agentKind === "llm" ? await RemoteAgent.create(guidance, normalized, runId, settings) : new HeuristicAgent();
+      const agent = agentKind === "llm" ? await RemoteAgent.create(guidance, normalized, runId, settings, loadout) : new HeuristicAgent();
       if (request !== requests.current) { await agent.dispose(); return; }
-      session.start(agent, agent instanceof RemoteAgent ? agent.classify : offlineClassifier, {
+      session.start(agent, offlineClassifier, {
         runId,
-        negotiate: agent instanceof RemoteAgent ? agent.negotiate : undefined,
         preparation: agentKind === "llm" && preparation ? { durationMs: preparation.durationMs, server: preparation.server } : undefined,
         guidance: agentKind === "llm" ? guidance : "",
         normalizedGuidance: agentKind === "llm" ? normalized : null,
@@ -210,14 +212,15 @@ export function App() {
             preparationRef.current = null;
             setError(null);
           }} />}
-          {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} settings={settings} onTimeLimit={changeTimeLimit} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
+          {intent === "setup" && !showModelConfig && <SetupPanel backpack={backpack} onBackpack={value=>{setBackpack(value);session.preview(seed,settings,{backpack:value});}} llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} settings={settings} onTimeLimit={changeTimeLimit} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
           {intent === "confirm" && <section className="card" aria-busy={busy !== null}><h2>确认这次出发</h2><p className="muted">{agentKind === "llm" ? "角色将依据以下指导自主行动。" : "离线规则 Agent 按默认守序方案行动。"}</p><p className="small">时限 {settings.timeLimitSeconds} 秒 · 每条开放队列额外 {settings.extraQueuePeople} 人</p><GuidanceCard guidance={agentKind === "llm" ? guidance : ""} normalized={normalized} /><div className="row"><button className="primary" disabled={busy !== null} onClick={start}>{busy ?? "出发"} <Icon name="arrow" /></button><button className="ghost" disabled={busy !== null} onClick={() => setIntent("setup")}>返回修改</button></div></section>}
           {intent === "playing" && runner && <>
             <section className={styles.runHeading}>{playing && <><p className={styles.runLabel}>世界时间 · {agentKind === "llm" ? "大模型" : "离线规则"}</p><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {session.engine.settings.timeLimitSeconds}s</span></div></>}<JourneyProgress player={player} status={session.engine.status} /></section>
+            <InteractionPanel engine={session.engine}/>
             {playing && <>
-              <section className={styles.actionCard} aria-label="当前行动"><h2>{describeActivity(session.engine.world, player)}</h2><p>{latest?.action?.reason ?? "角色正在观察环境，准备作出选择。"}</p><div className={styles.decisionCount}><span>决策 {runner.decisions.length} / {DECISION_LIMITS.maxDecisions}</span><span>{latest ? describeAction(latest.action) : "准备中"}</span></div></section>
+              <section className={styles.actionCard} aria-label="当前行动"><h2>{describeActivity(session.engine.world, player)}</h2><p>{latest?.action?.reason ?? "角色正在观察环境，准备作出选择。"}</p><div className={styles.decisionCount}><span>决策 {runner.decisions.length} / {BUDGETS.decisions}</span><span>{latest ? describeAction(latest.action) : "准备中"}</span></div></section>
               <div className={styles.playControls}><button onClick={() => session.setPaused(!session.paused)}>{session.paused ? "继续" : "暂停"}</button><div className="segmented" role="group" aria-label="播放速度">{[1, 2, 4].map((value) => <button key={value} aria-pressed={session.speed === value} className={session.speed === value ? "on" : ""} onClick={() => session.setSpeed(value)}>{value}×</button>)}</div></div>
-              {runner.budgetExhausted && <p className="badge brick">决策次数已用完，世界继续运行。</p>}
+              {runner.budgetExhausted && <p className="badge brick">模型决策次数已用完，离线策略继续行动。</p>}
               <button className="ghost full-width" onClick={() => session.stop()}>结束本局</button>
             </>}
             {ended && <><ReportSummary key={session.generation} report={runner.report()} onRetry={start} onEdit={edit} onAdopt={adoptGuidance} modelAvailable={health.llm} onConfigureModel={() => setShowModelConfig(true)} /><Modal title="轨迹回放" description="回看角色位置、路线与当时决策；NPC 和设施显示终局状态。" wide trigger={<button className="full-width">查看轨迹回放</button>}><TrajectoryReplayView key={session.generation} report={runner.report()} engine={session.engine} /></Modal></>}

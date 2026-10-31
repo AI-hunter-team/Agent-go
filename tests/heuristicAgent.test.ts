@@ -37,16 +37,16 @@ describe("offline heuristic agent", () => {
     expect(engine.status).toBe("success");
   });
 
-  test("the dense default can time out while a supported longer deadline allows orderly play", async () => {
-    const difficult = await play(1);
+  test("new fixed crowd can time out orderly play while retaining a legal route on other seeds", async () => {
+    const difficult = await play(6);
     expect(difficult.engine.status).toBe("failed");
-    expect(difficult.engine.t).toBe(120);
+    expect(difficult.engine.t).toBe(150);
     expect(difficult.engine.failReason).toContain("超时");
     expect(difficult.engine.creative.violations).toHaveLength(0);
     // The integrated map includes physical crowd avoidance; this checks the supported 3-minute deadline.
     const possible = await play(1, { timeLimitSeconds: 180, extraQueuePeople: 3 });
     expect(possible.engine.status).toBe("success");
-    expect(possible.engine.t).toBeLessThan(180);
+    expect(possible.engine.t).toBeLessThan(150);
     expect(possible.engine.creative.violations).toHaveLength(0);
   });
 
@@ -58,7 +58,7 @@ describe("offline heuristic agent", () => {
     expect(action).toMatchObject({ type: "move_to", target: "LANDING_C" });
     observation.self.position = { ...STAIRS_TOP };
     const atEntrance = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
-    expect(atEntrance.action).toMatchObject({ type: "descend_stairs" });
+    expect(atEntrance.action).toMatchObject({ type: "traverse", route: "stairs" });
     observation.self.activity = "正在下楼梯（剩余 3 秒）";
     observation.self.position = { x: 52.5, y: 15 };
     const descending = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });

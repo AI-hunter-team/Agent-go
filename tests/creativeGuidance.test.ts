@@ -34,8 +34,8 @@ describe("creative strategy boundaries", () => {
     "先观察再试试挖地道，不行就调整",
   ])("accepts game goals and conditional attempts without granting success: %s", (text) => {
     expect(() => assertSafeText(text)).not.toThrow();
-    const parsed = parseToolUse("attempt_creative", { intent: text, reason: "按玩家策略尝试" });
-    expect(parsed).toEqual({ action: { type: "attempt_creative", intent: text, reason: "按玩家策略尝试" } });
+    const parsed = parseToolUse("act", { instruction: text, reason: "按玩家策略尝试" });
+    expect(parsed).toEqual({ action: { type: "act", instruction: text, reason: "按玩家策略尝试" } });
     expect(() => new SessionStore().create(text, preserved)).not.toThrow();
   });
 
@@ -84,8 +84,9 @@ describe("creative strategy boundaries", () => {
     let instructions = "";
     const fetcher: typeof fetch = async (_url, init) => {
       const body = JSON.parse(init!.body as string);
-      messages = body.input; instructions = body.instructions;
-      return Response.json(response({ model: cfg.model, output: [toolCall(JSON.stringify({ intent: "不买票，翻越闸机进入闸机内", reason: "按原始指导尝试" }), "try-original", "attempt_creative")] }));
+      messages = body.input;
+      instructions = body.instructions;
+      return Response.json(response({model:cfg.model, output:[toolCall(JSON.stringify({instruction:"不买票，翻越闸机进入闸机内",reason:"按原始指导尝试"}),"try-original","act")]}));
     };
     const service = new ResponsesLlmService(new ResponsesClient("https://example.test/v1", "test-secret", fetcher), cfg);
     const session = new SessionStore().create(guidance, mistaken);
@@ -99,10 +100,10 @@ describe("creative strategy boundaries", () => {
     await runner.pending;
     expect(instructions).toContain("以原始指导为准");
     expect(JSON.parse(messages[0].content.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken });
-    expect(runner.decisions[0]).toMatchObject({ action: { type: "attempt_creative" }, classification: { mechanic: "jump_gate" }, result: { ok: true } });
+    expect(runner.decisions[0]).toMatchObject({ action: { type: "act" }, result: { ok: true } });
     expect(engine.player.hasTicket).toBe(false);
-    expect(engine.player.activity).toMatchObject({ kind: "creative", mechanic: "jump_gate" });
-    expect(engine.creative.violations).toHaveLength(1);
+    expect(engine.player.activity).toMatchObject({ kind: "acting", op: "vault" });
+    expect(engine.events.events.some(e => e.kind === "vault")).toBe(true);
     runner.stop();
   });
 

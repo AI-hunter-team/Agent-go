@@ -1,0 +1,1315 @@
+{
+  "date": "2026-10-31",
+  "implementationCommit": "fd27e6d",
+  "environment": {
+    "node": "v24.8.0",
+    "npm": "11.6.0"
+  },
+  "software": {
+    "testFiles": 63,
+    "testsPassed": 541,
+    "typecheck": "passed",
+    "build": "passed",
+    "diffCheck": "passed"
+  },
+  "offline": [
+    {
+      "settings": {
+        "timeLimitSeconds": 120,
+        "extraQueuePeople": 3
+      },
+      "total": 50,
+      "successes": 6,
+      "successRate": 0.12,
+      "meanSuccessSeconds": 97,
+      "meanElapsedSeconds": 117.24
+    },
+    {
+      "settings": {
+        "timeLimitSeconds": 150,
+        "extraQueuePeople": 3
+      },
+      "total": 50,
+      "successes": 21,
+      "successRate": 0.42,
+      "meanSuccessSeconds": 125.8,
+      "meanElapsedSeconds": 139.836
+    },
+    {
+      "settings": {
+        "timeLimitSeconds": 180,
+        "extraQueuePeople": 3
+      },
+      "total": 50,
+      "successes": 32,
+      "successRate": 0.64,
+      "meanSuccessSeconds": 139.234,
+      "meanElapsedSeconds": 153.91
+    },
+    {
+      "settings": {
+        "timeLimitSeconds": 150,
+        "extraQueuePeople": 3
+      },
+      "total": 50,
+      "successes": 21,
+      "successRate": 0.42,
+      "meanSuccessSeconds": 125.8,
+      "meanElapsedSeconds": 139.836
+    }
+  ],
+  "real": [
+    {
+      "evidenceId": "iv2-model-acceptance",
+      "sha256": "123f541a67c66050a25029f20cc66da49778c2d73ee7f7fa7efd6dc6f278ce3a",
+      "model": "gpt-6-luna",
+      "cases": [
+        {
+          "case": "orderly-50",
+          "settings": {
+            "timeLimitSeconds": 120,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 120,
+          "score": null,
+          "failReason": "超时：120 秒内未下楼梯到达站台",
+          "calls": {
+            "decisions": 8,
+            "boss": 0,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 8,
+              "inputTokens": 74226,
+              "outputTokens": 279,
+              "unknownUsage": 0,
+              "realSeconds": 24.341713249
+            }
+          },
+          "serverLatencyMs": {
+            "count": 8,
+            "mean": 3038.03,
+            "max": 6666.41
+          },
+          "decisionErrors": 0,
+          "bossSources": {},
+          "npcSources": {},
+          "eventKinds": {
+            "power_out": 1,
+            "power_restored": 1
+          }
+        },
+        {
+          "case": "social-28",
+          "settings": {
+            "timeLimitSeconds": 120,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 10.2,
+          "score": null,
+          "failReason": "连续 3 次决策失败，模型不可用",
+          "calls": {
+            "decisions": 7,
+            "boss": 0,
+            "npc": 1
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 4,
+              "inputTokens": 4812,
+              "outputTokens": 72,
+              "unknownUsage": 3,
+              "realSeconds": 3.2873448339999998
+            },
+            "npc_respond": {
+              "calls": 1,
+              "inputTokens": 1172,
+              "outputTokens": 55,
+              "unknownUsage": 0,
+              "realSeconds": 2.729088208000001
+            },
+            "retry": {
+              "calls": 3,
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "unknownUsage": 3,
+              "realSeconds": 0.9676599170000009
+            }
+          },
+          "serverLatencyMs": {
+            "count": 8,
+            "mean": 870.3,
+            "max": 2726.03
+          },
+          "decisionErrors": 0,
+          "bossSources": {},
+          "npcSources": {
+            "llm": 1
+          },
+          "eventKinds": {
+            "odd_behaviour": 1
+          }
+        },
+        {
+          "case": "risk-1",
+          "settings": {
+            "timeLimitSeconds": 120,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 4,
+          "score": null,
+          "failReason": "连续 3 次决策失败，模型不可用",
+          "calls": {
+            "decisions": 6,
+            "boss": 0,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 3,
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "unknownUsage": 3,
+              "realSeconds": 0.6921109999999971
+            },
+            "retry": {
+              "calls": 3,
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "unknownUsage": 3,
+              "realSeconds": 0.5312510000000038
+            }
+          },
+          "serverLatencyMs": {
+            "count": 6,
+            "mean": 202.12,
+            "max": 351.48
+          },
+          "decisionErrors": 0,
+          "bossSources": {},
+          "npcSources": {},
+          "eventKinds": {}
+        }
+      ],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "keywords",
+          "status": "plan",
+          "steps": [
+            {
+              "op": "strike",
+              "facilityId": "TVM-2",
+              "aim": "hurt"
+            }
+          ],
+          "decision": null,
+          "usage": null,
+          "harnessLatencyMs": 167.57,
+          "serverLatencyMs": 165.95
+        },
+        {
+          "kind": "boss",
+          "source": "keywords",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": null,
+          "harnessLatencyMs": 319.31,
+          "serverLatencyMs": 318.0
+        }
+      ],
+      "errors": [
+        "Error: HTTP 502: 模型对话不可用"
+      ]
+    },
+    {
+      "evidenceId": "iv2-model-retry",
+      "sha256": "f55c444863136dc771091fada69835883d2f0038429761ebedc34e9549895266",
+      "model": "gpt-6-luna",
+      "cases": [
+        {
+          "case": "orderly-43",
+          "settings": {
+            "timeLimitSeconds": 120,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 120,
+          "score": null,
+          "failReason": "超时：120 秒内未下楼梯到达站台",
+          "calls": {
+            "decisions": 14,
+            "boss": 0,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 14,
+              "inputTokens": 205105,
+              "outputTokens": 481,
+              "unknownUsage": 0,
+              "realSeconds": 43.86938475
+            }
+          },
+          "serverLatencyMs": {
+            "count": 14,
+            "mean": 3129.27,
+            "max": 4897.7
+          },
+          "decisionErrors": 0,
+          "bossSources": {},
+          "npcSources": {},
+          "eventKinds": {
+            "power_out": 1,
+            "force_cut_in": 2,
+            "argument": 1133,
+            "power_restored": 1,
+            "report": 9
+          }
+        }
+      ],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "needs_precondition",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 2278,
+            "outputTokens": 75,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 3334.35,
+          "serverLatencyMs": 3329.3
+        },
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 2282,
+            "outputTokens": 58,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 1863.85,
+          "serverLatencyMs": 1859.66
+        },
+        {
+          "kind": "npc",
+          "source": "llm",
+          "status": null,
+          "steps": null,
+          "decision": "refuse",
+          "usage": {
+            "inputTokens": 1161,
+            "outputTokens": 60,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 2804.01,
+          "serverLatencyMs": 2801.46
+        }
+      ],
+      "errors": []
+    },
+    {
+      "evidenceId": "iv2-model-risk",
+      "sha256": "8c01f0e9ada5636f77b0990c9ba1d5107528bd24022a7c319df2d1db150b4d4b",
+      "model": "gpt-6-luna",
+      "cases": [
+        {
+          "case": "risk-11",
+          "settings": {
+            "timeLimitSeconds": 120,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 118.1,
+          "score": null,
+          "failReason": "被闸机南侧保安确认翻越闸机或安检栏杆，判负",
+          "calls": {
+            "decisions": 17,
+            "boss": 5,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 15,
+              "inputTokens": 176089,
+              "outputTokens": 569,
+              "unknownUsage": 2,
+              "realSeconds": 40.087301877
+            },
+            "interpret": {
+              "calls": 5,
+              "inputTokens": 7674,
+              "outputTokens": 314,
+              "unknownUsage": 1,
+              "realSeconds": 13.096264167999994
+            },
+            "retry": {
+              "calls": 2,
+              "inputTokens": 20679,
+              "outputTokens": 60,
+              "unknownUsage": 1,
+              "realSeconds": 3.4814267919999984
+            }
+          },
+          "serverLatencyMs": {
+            "count": 22,
+            "mean": 2570.91,
+            "max": 4115.73
+          },
+          "decisionErrors": 0,
+          "bossSources": {
+            "llm": 3,
+            "keywords": 2
+          },
+          "npcSources": {},
+          "eventKinds": {
+            "force_cut_in": 1,
+            "argument": 1350,
+            "power_out": 1,
+            "report": 17,
+            "power_restored": 1,
+            "vault": 1
+          }
+        }
+      ],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "keywords",
+          "status": "plan",
+          "steps": [
+            {
+              "op": "strike",
+              "facilityId": "TVM-2",
+              "aim": "hurt"
+            }
+          ],
+          "decision": null,
+          "usage": null,
+          "harnessLatencyMs": 160.19,
+          "serverLatencyMs": 159.03
+        },
+        {
+          "kind": "boss",
+          "source": "keywords",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": null,
+          "harnessLatencyMs": 161.77,
+          "serverLatencyMs": 160.23
+        }
+      ],
+      "errors": [
+        "Error: HTTP 502: 模型对话不可用"
+      ]
+    },
+    {
+      "evidenceId": "iv2-model-150",
+      "sha256": "d4d45cb26e978971e99653873a2c3e10d25b810f0dc8cbf6f539e2c685dacd89",
+      "model": "gpt-6-luna",
+      "cases": [
+        {
+          "case": "risk-11",
+          "settings": {
+            "timeLimitSeconds": 150,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 150,
+          "score": null,
+          "failReason": "超时：150 秒内未下楼梯到达站台",
+          "calls": {
+            "decisions": 27,
+            "boss": 9,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 23,
+              "inputTokens": 461616,
+              "outputTokens": 906,
+              "unknownUsage": 4,
+              "realSeconds": 205.50135095800007
+            },
+            "retry": {
+              "calls": 4,
+              "inputTokens": 51980,
+              "outputTokens": 124,
+              "unknownUsage": 0,
+              "realSeconds": 49.88940266600004
+            },
+            "interpret": {
+              "calls": 9,
+              "inputTokens": 20736,
+              "outputTokens": 1025,
+              "unknownUsage": 0,
+              "realSeconds": 96.56242812400005
+            }
+          },
+          "serverLatencyMs": {
+            "count": 36,
+            "mean": 3574.64,
+            "max": 5992.22
+          },
+          "decisionErrors": 0,
+          "bossSources": {
+            "llm": 7,
+            "keywords": 2
+          },
+          "npcSources": {},
+          "eventKinds": {
+            "force_cut_in": 1,
+            "argument": 1754,
+            "power_out": 1,
+            "report": 17,
+            "power_restored": 1
+          }
+        },
+        {
+          "case": "orderly-43",
+          "settings": {
+            "timeLimitSeconds": 150,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 150,
+          "score": null,
+          "failReason": "超时：150 秒内未下楼梯到达站台",
+          "calls": {
+            "decisions": 18,
+            "boss": 1,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 15,
+              "inputTokens": 222685,
+              "outputTokens": 419,
+              "unknownUsage": 3,
+              "realSeconds": 139.51731441800007
+            },
+            "retry": {
+              "calls": 3,
+              "inputTokens": 45331,
+              "outputTokens": 64,
+              "unknownUsage": 1,
+              "realSeconds": 35.501812084000036
+            },
+            "interpret": {
+              "calls": 1,
+              "inputTokens": 2987,
+              "outputTokens": 78,
+              "unknownUsage": 0,
+              "realSeconds": 16.85642395800003
+            }
+          },
+          "serverLatencyMs": {
+            "count": 19,
+            "mean": 3485.44,
+            "max": 12695.98
+          },
+          "decisionErrors": 0,
+          "bossSources": {
+            "llm": 1
+          },
+          "npcSources": {},
+          "eventKinds": {
+            "power_out": 1,
+            "force_cut_in": 1,
+            "argument": 1942,
+            "power_restored": 1,
+            "report": 8
+          }
+        },
+        {
+          "case": "social-28",
+          "settings": {
+            "timeLimitSeconds": 150,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 150,
+          "score": null,
+          "failReason": "超时：150 秒内未下楼梯到达站台",
+          "calls": {
+            "decisions": 1,
+            "boss": 0,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 1,
+              "inputTokens": 4812,
+              "outputTokens": 37,
+              "unknownUsage": 0,
+              "realSeconds": 8.35159245899995
+            }
+          },
+          "serverLatencyMs": {
+            "count": 1,
+            "mean": 3530.75,
+            "max": 3530.75
+          },
+          "decisionErrors": 0,
+          "bossSources": {},
+          "npcSources": {},
+          "eventKinds": {
+            "power_out": 1,
+            "power_restored": 1
+          }
+        }
+      ],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 2740,
+            "outputTokens": 129,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 10416.08,
+          "serverLatencyMs": 5246.5
+        },
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 2731,
+            "outputTokens": 62,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 7892.8,
+          "serverLatencyMs": 3188.98
+        },
+        {
+          "kind": "npc",
+          "source": "llm",
+          "status": null,
+          "steps": null,
+          "decision": "refuse",
+          "usage": {
+            "inputTokens": 1161,
+            "outputTokens": 59,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 8929.39,
+          "serverLatencyMs": 2194.94
+        }
+      ],
+      "errors": []
+    },
+    {
+      "evidenceId": "iv2-model-final",
+      "sha256": "e7586899197064eb18f302e13d94487dba87c7a209f95112b6246a1ecccd465e",
+      "model": "gpt-6-luna",
+      "cases": [
+        {
+          "case": "orderly-50",
+          "settings": {
+            "timeLimitSeconds": 150,
+            "extraQueuePeople": 3
+          },
+          "status": "success",
+          "elapsed": 146.5,
+          "score": 146.5,
+          "failReason": null,
+          "calls": {
+            "decisions": 18,
+            "boss": 0,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 18,
+              "inputTokens": 307894,
+              "outputTokens": 628,
+              "unknownUsage": 0,
+              "realSeconds": 342.687136163
+            }
+          },
+          "serverLatencyMs": {
+            "count": 18,
+            "mean": 3426.98,
+            "max": 6252.77
+          },
+          "decisionErrors": 0,
+          "bossSources": {},
+          "npcSources": {},
+          "eventKinds": {
+            "power_out": 1,
+            "power_restored": 1
+          }
+        },
+        {
+          "case": "social-28",
+          "settings": {
+            "timeLimitSeconds": 150,
+            "extraQueuePeople": 3
+          },
+          "status": "failed",
+          "elapsed": 150,
+          "score": null,
+          "failReason": "超时：150 秒内未下楼梯到达站台",
+          "calls": {
+            "decisions": 15,
+            "boss": 1,
+            "npc": 0
+          },
+          "operationUsage": {
+            "decision": {
+              "calls": 13,
+              "inputTokens": 172067,
+              "outputTokens": 409,
+              "unknownUsage": 2,
+              "realSeconds": 252.40087046000005
+            },
+            "retry": {
+              "calls": 2,
+              "inputTokens": 35445,
+              "outputTokens": 68,
+              "unknownUsage": 0,
+              "realSeconds": 45.640377042000125
+            },
+            "interpret": {
+              "calls": 1,
+              "inputTokens": 3636,
+              "outputTokens": 99,
+              "unknownUsage": 0,
+              "realSeconds": 19.81472595900006
+            }
+          },
+          "serverLatencyMs": {
+            "count": 16,
+            "mean": 3034.45,
+            "max": 4668.44
+          },
+          "decisionErrors": 0,
+          "bossSources": {
+            "keywords": 1
+          },
+          "npcSources": {},
+          "eventKinds": {
+            "power_out": 1,
+            "power_restored": 1
+          }
+        }
+      ],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "TVM-2",
+                "kind": "facility"
+              }
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3839,
+            "outputTokens": 127,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 19992.8,
+          "serverLatencyMs": 3514.78
+        },
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3830,
+            "outputTokens": 58,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 20837.09,
+          "serverLatencyMs": 4364.17
+        },
+        {
+          "kind": "boss_route",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "op": "approach",
+              "target": {
+                "id": "G3",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "GATE_C",
+                "kind": "node"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "G3",
+                "kind": "facility"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "GATE_C",
+                "kind": "node"
+              }
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3733,
+            "outputTokens": 144,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 21239.04,
+          "serverLatencyMs": 5564.21,
+          "simulation": {
+            "start": {
+              "ok": true,
+              "text": "已规划接近3号闸机；当前接口限制每次仅可请求一个行动，无法在同一计划中直接执行翻越。"
+            },
+            "outcomes": [
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              },
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              },
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              },
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              }
+            ],
+            "events": [],
+            "passedGate": false,
+            "status": "running"
+          }
+        },
+        {
+          "kind": "boss_route",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "op": "approach",
+              "target": {
+                "id": "p51",
+                "kind": "person"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "p51",
+                "kind": "person"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "p51",
+                "kind": "person"
+              }
+            },
+            {
+              "op": "approach",
+              "target": {
+                "id": "p51",
+                "kind": "person"
+              }
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3859,
+            "outputTokens": 124,
+            "thinkingTokens": null,
+            "cacheReadTokens": 2816
+          },
+          "harnessLatencyMs": 17452.59,
+          "serverLatencyMs": 3073.14,
+          "simulation": {
+            "start": {
+              "ok": true,
+              "text": "接近 p51 并尝试抢夺其车票。"
+            },
+            "outcomes": [
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              },
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              },
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              },
+              {
+                "ok": true,
+                "text": "已接近目标",
+                "eventIds": []
+              }
+            ],
+            "events": [],
+            "passedGate": false,
+            "status": "running"
+          }
+        },
+        {
+          "kind": "npc",
+          "source": "llm",
+          "status": null,
+          "steps": null,
+          "decision": "refuse",
+          "usage": {
+            "inputTokens": 1161,
+            "outputTokens": 60,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 20927.28,
+          "serverLatencyMs": 4017.49
+        }
+      ],
+      "errors": []
+    },
+    {
+      "evidenceId": "iv2-model-wire",
+      "sha256": "7c96096ac6dbda4b1aca01f448e5f2933fad37a96574fb5fa7002681306cc0da",
+      "model": "gpt-6-luna",
+      "cases": [],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "aim": "hurt",
+              "facilityId": "TVM-2",
+              "op": "strike"
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3399,
+            "outputTokens": 131,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 2981.89,
+          "serverLatencyMs": 2976.81
+        },
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3390,
+            "outputTokens": 57,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 20882.76,
+          "serverLatencyMs": 3859.17
+        },
+        {
+          "kind": "boss_route",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "obstacle": "gate",
+              "op": "vault"
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3293,
+            "outputTokens": 120,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 21221.44,
+          "serverLatencyMs": 5055.15,
+          "simulation": {
+            "start": {
+              "ok": true,
+              "text": "尝试翻越闸机"
+            },
+            "outcomes": [
+              {
+                "ok": false,
+                "text": "落地点被占用",
+                "eventIds": [
+                  "e1"
+                ]
+              }
+            ],
+            "events": [
+              {
+                "t": 0,
+                "actorId": "player",
+                "pos": {
+                  "x": 43,
+                  "y": 15
+                },
+                "kind": "vault",
+                "severity": "violation",
+                "loudness": 0,
+                "id": "e1"
+              }
+            ],
+            "passedGate": false,
+            "status": "running"
+          }
+        },
+        {
+          "kind": "boss_route",
+          "source": "llm",
+          "status": "needs_precondition",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3291,
+            "outputTokens": 66,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 18533.43,
+          "serverLatencyMs": 3606.52,
+          "simulation": {
+            "start": {
+              "ok": false,
+              "text": "目标乘客 p51 可见，但其车票未作为可见物品列出，无法指定可抢夺的物品。"
+            },
+            "outcomes": [
+              {
+                "ok": false,
+                "text": "目标乘客 p51 可见，但其车票未作为可见物品列出，无法指定可抢夺的物品。"
+              }
+            ],
+            "events": [],
+            "passedGate": false,
+            "status": "running"
+          }
+        },
+        {
+          "kind": "npc",
+          "source": "llm",
+          "status": null,
+          "steps": null,
+          "decision": "refuse",
+          "usage": {
+            "inputTokens": 1161,
+            "outputTokens": 65,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 21498.25,
+          "serverLatencyMs": 5109.16
+        }
+      ],
+      "errors": []
+    },
+    {
+      "evidenceId": "iv2-model-wire-final",
+      "sha256": "d30afbb0fb5bba76d8504357c3df43b218d2aadd9ed0fee926d1b309d48b0eaa",
+      "model": "gpt-6-luna",
+      "cases": [],
+      "probes": [
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "aim": "hurt",
+              "facilityId": "TVM-2",
+              "op": "strike"
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3485,
+            "outputTokens": 126,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 3516.74,
+          "serverLatencyMs": 3511.16
+        },
+        {
+          "kind": "boss",
+          "source": "llm",
+          "status": "unsupported",
+          "steps": [],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3476,
+            "outputTokens": 53,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 19563.3,
+          "serverLatencyMs": 3074.13
+        },
+        {
+          "kind": "boss_route",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "obstacle": "gate",
+              "op": "vault"
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3378,
+            "outputTokens": 123,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 21385.63,
+          "serverLatencyMs": 4446.79,
+          "simulation": {
+            "start": {
+              "ok": true,
+              "text": "尝试翻越闸机"
+            },
+            "outcomes": [
+              {
+                "ok": false,
+                "text": "落地点被占用",
+                "eventIds": [
+                  "e1"
+                ]
+              }
+            ],
+            "events": [
+              {
+                "t": 0,
+                "actorId": "player",
+                "pos": {
+                  "x": 43,
+                  "y": 15
+                },
+                "kind": "vault",
+                "severity": "violation",
+                "loudness": 0,
+                "id": "e1"
+              }
+            ],
+            "passedGate": false,
+            "status": "running"
+          }
+        },
+        {
+          "kind": "boss_route",
+          "source": "llm",
+          "status": "plan",
+          "steps": [
+            {
+              "itemKind": "ticket",
+              "npcId": "p51",
+              "op": "snatch"
+            }
+          ],
+          "decision": null,
+          "usage": {
+            "inputTokens": 3376,
+            "outputTokens": 125,
+            "thinkingTokens": null,
+            "cacheReadTokens": 2432
+          },
+          "harnessLatencyMs": 20017.23,
+          "serverLatencyMs": 4472.51,
+          "simulation": {
+            "start": {
+              "ok": true,
+              "text": "尝试抢夺乘客 p51 的车票"
+            },
+            "outcomes": [
+              {
+                "ok": false,
+                "text": "本局结束，行动中断",
+                "eventIds": [
+                  "e2"
+                ]
+              }
+            ],
+            "events": [
+              {
+                "t": 0.1,
+                "actorId": "player",
+                "pos": {
+                  "x": 43,
+                  "y": 15
+                },
+                "kind": "snatch",
+                "severity": "violation",
+                "loudness": 4,
+                "targetId": "p51",
+                "id": "e2"
+              }
+            ],
+            "passedGate": false,
+            "status": "failed"
+          }
+        },
+        {
+          "kind": "npc",
+          "source": "llm",
+          "status": null,
+          "steps": null,
+          "decision": "refuse",
+          "usage": {
+            "inputTokens": 1161,
+            "outputTokens": 65,
+            "thinkingTokens": null,
+            "cacheReadTokens": 0
+          },
+          "harnessLatencyMs": 19215.89,
+          "serverLatencyMs": 3689.13
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "tmp/iv2-browser/iv2-interactions.png",
+      "sha256": "f5c2d8baa9c7c78a26a86b0a2df7286225fd9c8f01f690fad8e424fc7c8ab0b7"
+    },
+    {
+      "path": "tmp/iv2-browser/iv2-setup.png",
+      "sha256": "8d78a23d1ac51d56885afefb78339e0245dde26e9a22dfbee9da8ab41f3a6be8"
+    },
+    {
+      "path": "tmp/iv2-browser/iv2-playing.png",
+      "sha256": "67a379bdfaa3ac397de76a4bed321b1d3a113b08f4f39a2e724bab1cf0d0a7bf"
+    },
+    {
+      "path": "tmp/iv2-browser/iv2-report.png",
+      "sha256": "1da804e0bef74d3700bd8f0aede95f8e0303deae0595ca93be705abf1447b422"
+    },
+    {
+      "path": "tmp/iv2-browser/iv2-light.png",
+      "sha256": "3fde70b9b3c541dab5f2f9f320d2da489f226a3562adf502065547656e671e90"
+    },
+    {
+      "path": "tmp/iv2-browser/iv2-dark.png",
+      "sha256": "fdd491cafe16234b2a1e513183d168581e68b62c7e19c3c558515f2ca5404de9"
+    },
+    {
+      "path": "tmp/iv2-browser/iv2-expanded-report.png",
+      "sha256": "a6d17c8c358d581d245d5404fb4e4aedf5cf0194676be2bc4fb8a8a9f16a34f6"
+    }
+  ]
+}

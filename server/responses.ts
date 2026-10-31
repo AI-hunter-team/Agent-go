@@ -1,3 +1,5 @@
+import { interpret, type Structured } from "./boss";
+import { respond } from "./npcDialogue";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
 import type { LlmService } from "./app";
 import { normalizeBaseUrl, type ModelSettings } from "./modelSettings";
@@ -159,6 +161,16 @@ export class ResponsesLlmService implements LlmService {
       throw new ReviewFailure("模型未返回有效的复盘或草稿，请重试", { ...metadata, latencyMs: Date.now() - started, operation, status: "error" });
     }
   }
+
+  private readonly interactionCall: Structured = async (system,user,schema,name) => {
+    let metadata: import("../src/shared/interaction").ModelMetadata={model:this.model,usage:null};
+    try {
+      const value=await this.structured(system,user,schema,name,response=>{metadata={model:response.model??this.model,usage:responseUsage(response)};});
+      return {value,metadata};
+    } catch(error) { throw Object.assign(error instanceof Error?error:new Error("结构化调用失败"),{modelMetadata:metadata}); }
+  };
+  interpret(instruction: string, context: import("../src/shared/types").BossContext) { return interpret(this.interactionCall,instruction,context); }
+  respond(request: import("../src/shared/types").NpcDialogueRequest) { return respond(this.interactionCall,request); }
 
   /** 基于已结束对局的观察、全局历史与结果生成可核对的复盘。 */
   async review(input: ReviewInput): Promise<ReviewResult> {

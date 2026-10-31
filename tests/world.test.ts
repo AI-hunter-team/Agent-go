@@ -11,8 +11,9 @@ function run(world: World, seconds: number, until?: () => boolean) {
 }
 
 function playerAt(world: World, x: number, y: number, opts: Partial<Person> = {}) {
-  const p = world.addPerson("player", { x, y }, { isPlayer: true });
-  Object.assign(p, opts);
+  const { hasTicket, ...state } = opts;
+  const p = world.addPerson("player", { x, y }, { isPlayer: true, hasTicket });
+  Object.assign(p, state);
   return p;
 }
 

@@ -15,7 +15,7 @@ test("seeded failures vary across all gates, ticket machines and times while kee
     expect(Object.entries(scenario.initialStatus)).toEqual([[gate, "broken"]]);
     expect(FACILITIES.find((f) => f.id === gate)?.kind).toBe("gate");
     gates.add(gate);
-    const failures = scenario.events.filter((e) => e.type === "status" && e.status === "broken");
+    const failures = scenario.events.filter((e): e is Extract<typeof e, { type: "status" }> => e.type === "status" && e.status === "broken");
     expect(failures).toHaveLength(1);
     const failure = failures[0];
     expect(FACILITIES.find((f) => f.id === failure.facility)?.kind).toBe("tvm");
