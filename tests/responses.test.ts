@@ -1,3 +1,4 @@
+import { generateWorld, publicMap } from "../src/sim/worldDefinition";
 import { describe, expect, test } from "vitest";
 import { configFromEnv } from "../server/modelSettings";
 import { createLlm } from "../server/llm";
@@ -145,4 +146,16 @@ test("configuration defaults, legacy aliases and removed protocols are explicit"
   expect(() => configFromEnv({ DECISION_MAX_TOKENS: "NaN" })).toThrow("DECISION_MAX_TOKENS");
   expect(() => configFromEnv({ OPENAI_REASONING_EFFORT: "medium" })).toThrow("OPENAI_REASONING_EFFORT");
   for (const effort of ["none", "low", "high", "max"]) expect(configFromEnv({ OPENAI_REASONING_EFFORT: effort }).reasoningEffort).toBe(effort);
+});
+
+test("generated sessions expose and accept all actual gates, including G8",async()=>{
+  const definition=generateWorld(3),map=publicMap(definition),session=new SessionStore().create("",null);
+  session.publicMap=map;
+  const {service,requests}=fake([response({output:[toolCall('{"facility":"G8","reason":"选择本局实际闸机"}')]})]);
+  const engine=new Engine(3,{},undefined,undefined,definition);
+  const result=await service.decide(session,{triggers:[],lastResult:null,observation:engine.observe()});
+  expect(result.action).toMatchObject({type:"join_queue",facility:"G8"});
+  const join=requests[0].body.tools.find((t:any)=>t.name==="join_queue");
+  expect(join.parameters.properties.facility.enum).toEqual(map.facilities.map(f=>f.id));
+  expect(requests[0].body.instructions).toContain(map.layoutHash);
 });

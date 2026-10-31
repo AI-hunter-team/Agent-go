@@ -22,6 +22,30 @@ async function loadPlayerRig(name = "dafeiyu") {
   return new GLTFLoader().parseAsync(new Uint8Array(glb).buffer, "");
 }
 
+// 真实豆包静止时双臂下垂且不迈步，行走仍由原始片段驱动。
+it("豆包Idle保持自然站姿，双脚稳定且原行走动作仍有效", async () => {
+  const { scene: model, animations } = await loadPlayerRig("doubao");
+  const idle = animations.find(clip => clip.name === "Idle")!, walk = animations.find(clip => clip.name === "walk.001")!;
+  expect(idle.duration).toBe(2); expect(walk.duration).toBeCloseTo(2.375);
+  const mixer = new AnimationMixer(model); mixer.clipAction(idle).play(); mixer.setTime(0); model.updateMatrixWorld(true);
+  const foot = model.getObjectByName("mixamorigLeftFoot")!, anchor = foot.getWorldPosition(new Vector3());
+  for (const side of ["Left", "Right"]) {
+    const arm = model.getObjectByName(`mixamorig${side}Arm`)!, elbow = model.getObjectByName(`mixamorig${side}ForeArm`)!;
+    const direction = elbow.getWorldPosition(new Vector3()).sub(arm.getWorldPosition(new Vector3())).normalize();
+    expect(direction.y).toBeLessThan(-0.95);
+  }
+  const bones: Object3D[] = []; model.traverse(node => { if ("isBone" in node) bones.push(node); });
+  const poses = bones.map(bone => [...bone.position.toArray(), ...bone.quaternion.toArray()]);
+  mixer.setTime(1.3); model.updateMatrixWorld(true);
+  expect(foot.getWorldPosition(new Vector3()).distanceTo(anchor)).toBeLessThan(0.00001);
+  expect(bones.map(bone => [...bone.position.toArray(), ...bone.quaternion.toArray()])).toEqual(poses);
+  mixer.stopAllAction(); mixer.clipAction(walk).play(); mixer.setTime(0.2); model.updateMatrixWorld(true);
+  const stepping = foot.getWorldPosition(new Vector3());
+  mixer.setTime(0.7); model.updateMatrixWorld(true);
+  expect(foot.getWorldPosition(new Vector3()).distanceTo(stepping)).toBeGreaterThan(0.03);
+  mixer.stopAllAction(); mixer.uncacheRoot(model);
+});
+
 it("为真实大肥鱼骨架生成闭合步态，驱动脚和手臂且不产生世界位移", async () => {
   const { scene: model } = await loadPlayerRig();
   const bones = new Map<string, Object3D>();

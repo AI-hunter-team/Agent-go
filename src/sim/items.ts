@@ -1,7 +1,9 @@
+import * as legacyLayout from "./layout";
+import type { StationLayout } from "../shared/world";
 import type { ActionResult, Item, ItemKind, ItemLocation, ItemObservation, ItemTransfer, Vec } from "../shared/types";
 import { BAG_CAPACITY, ITEM_DEFS } from "./content/items";
 import { dist, lineOfSight } from "./geometry";
-import { ITEM_SPOTS, SIGHT_OCCLUDERS } from "./layout";
+
 import { RULES } from "./scenario";
 
 /** Possession and legal ownership are separate; all movement is recorded here. */
@@ -9,7 +11,7 @@ export class ItemSystem {
   readonly items = new Map<string, Item>();
   readonly transfers: ItemTransfer[] = [];
   private nextId = 1;
-  constructor(private person: (id: string) => { pos: Vec } | undefined, private now: () => number) {}
+  constructor(private person: (id: string) => { pos: Vec } | undefined, private now: () => number, private layout:StationLayout=legacyLayout) {}
 
   spawn(kind: ItemKind, location: ItemLocation, ownerId: string | null): Item {
     const item: Item = { id: `i${this.nextId}`, kind, location: structuredClone(location), ownerId };
@@ -37,7 +39,7 @@ export class ItemSystem {
   /** Roll back both possession and audit records if any part of a trade fails. */
   moveMany(moves: { itemId: string; to: ItemLocation }[], how = "trade"): ActionResult {
     if (new Set(moves.map((m) => m.itemId)).size !== moves.length) return { ok: false, text: "重复物品" };
-    const shadow = new ItemSystem(this.person,this.now);
+    const shadow = new ItemSystem(this.person,this.now,this.layout);
     for (const item of this.items.values()) shadow.items.set(item.id,structuredClone(item));
     // Stage outgoing items in the shadow only, freeing both parties' slots before
     // checking incoming goods. Backpack children stay attached through move().
@@ -93,20 +95,20 @@ export class ItemSystem {
     const loc = item.location;
     if (loc.type === "ground") return loc.pos;
     if (loc.type === "held") return this.person(loc.personId)?.pos ?? null;
-    if (loc.type === "spot") return ITEM_SPOTS.find((s) => s.id === loc.spotId)?.pos ?? null;
+    if (loc.type === "spot") return this.layout.ITEM_SPOTS.find((s) => s.id === loc.spotId)?.pos ?? null;
     const bag = this.items.get(loc.containerId);
     return bag && bag.location.type !== "container" ? this.position(bag) : null;
   }
   visibleItems(from: Vec, lightAt: (pos: Vec) => number = () => 1): ItemObservation[] {
     return [...this.items.values()].filter((i) => i.location.type === "ground" || i.location.type === "spot").flatMap((i) => {
       const pos = this.position(i);
-      return pos && dist(from, pos) <= RULES.visionRange * Math.min(lightAt(from),lightAt(pos)) && lineOfSight(from, pos, SIGHT_OCCLUDERS)
+      return pos && dist(from, pos) <= RULES.visionRange * Math.min(lightAt(from),lightAt(pos)) && lineOfSight(from, pos, this.layout.SIGHT_OCCLUDERS)
         ? [{ id: i.id, kind: i.kind, where: this.where(i.location), distance: Math.round(dist(from, pos) * 10) / 10 }] : [];
     });
   }
   private validate(item: Item, to: ItemLocation): string | null {
     if (to.type === "ground") return Number.isFinite(to.pos.x) && Number.isFinite(to.pos.y) ? null : "无效位置";
-    if (to.type === "spot") return ITEM_SPOTS.some((s) => s.id === to.spotId) ? null : "未知取物点";
+    if (to.type === "spot") return this.layout.ITEM_SPOTS.some((s) => s.id === to.spotId) ? null : "未知取物点";
     const def = ITEM_DEFS[item.kind];
     if (to.type === "container") {
       const bag = this.items.get(to.containerId);

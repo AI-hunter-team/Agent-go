@@ -21,6 +21,8 @@
 | 既有 MVP 验收证据 | [验收记录](验收记录.md) | 历史快照；其中测试数和浏览器成绩不是本次重跑结果 |
 | PR 交付信息 | [GitHub PR 模板](../.github/pull_request_template.md) | 负责人、范围、接口、验证、风险、回退和交接均可从 PR 找到 |
 
+世界生成器的数据、分层、事件与兼容入口见 [WORLDGEN-001 实现说明](world-generation/README.md)，实际结果见对应验证记录；入站通道与连续乘客来源增量见[WORLDGEN-002](tasks/WORLDGEN-002.md)，正式列车/楼扶梯及表面材质见[WORLDGEN-003](tasks/WORLDGEN-003.md)与[素材说明](../design/world-generation/README.md)，站内设施及 `metro-v2` 见[站内资产说明](../design/station-detail/README.md)与[整合验证](validation/STATION-DETAIL-PR-001.md)。休息室、03品牌、独立创建界面和连续入场见[CONTROLROOM-004](tasks/CONTROLROOM-004.md)及[实现说明](world-generation/README.md#休息室与创建世界controlroom-004)。小地图、当前路线和多层视图见[MINIMAP-001](tasks/MINIMAP-001.md)。独立资产展厅入口为 `/showroom.html`，范围和使用方式见[SHOWROOM-001](tasks/SHOWROOM-001.md)。
+
 ## 架构与接口入口
 
 当前终点见[技术方案 §21](MVP技术方案.md#21-登车终点与车厢庆祝onboard-victory-001)：到站台后仍需实际登上地铁才获胜，已经 PR #60 合入。它覆盖历史“到站台即成功”说明；软件/浏览器证据见对应任务与验证记录。

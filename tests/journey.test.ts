@@ -1,3 +1,5 @@
+import { createdWorld } from "../src/ui/worldCreation";
+import { generateWorld, descriptor } from "../src/sim/worldDefinition";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -163,7 +165,7 @@ test("a session creation failure does not consume a valid preparation", async ()
   expect((await call("/api/session", request)).status).toBe(409);
 });
 test("navigation and changed dependencies discard stale planning responses", () => {
-  const planning = journeyReducer(initialFlow, {
+  const planning = journeyReducer({...initialFlow,createdWorld:createdWorld(generateWorld(1),{mode:"custom",value:"1"})}, {
     type: "navigate",
     stage: "planning",
   });
@@ -283,6 +285,30 @@ test("changing enabled model under the same token invalidates the old preparatio
     (await call("/api/session", { ...input, preparationId: prepared.body.id }))
       .status,
   ).toBe(409);
+});
+
+test("generated layouts are validated and bound to prepared sessions",async()=>{
+ const {call,sessions,prepareJourney}=await start();const world=descriptor(generateWorld(input.seed));
+ expect((await call("/api/journey/prepare",{...input,world:{...world,layoutHash:"wrong"}})).status).toBe(409);expect(prepareJourney).not.toHaveBeenCalled();
+ const result=await call("/api/journey/prepare",{...input,world});expect(result.status).toBe(200);
+ const body={...input,world,preparationId:result.body.id};
+ expect((await call("/api/session",{...body,world:descriptor(generateWorld(input.seed+1))})).status).toBe(409);
+ const created=await call("/api/session",body);expect(created.status).toBe(200);expect(sessions.get(created.body.sessionId)?.publicMap?.layoutHash).toBe(world.layoutHash);
+});
+
+test("historical v1 worlds remain consistent from planning to session creation",async()=>{
+ const {call,sessions}=await start();
+ const worlds=[{generatorVersion:"metro-v1" as const,layoutHash:"50e78bc1"},descriptor(generateWorld(1,{version:"metro-v1"}))];
+ for(const world of worlds){
+  const body={...input,seed:1,world};
+  const prepared=await call("/api/journey/prepare",body);expect(prepared.status).toBe(200);
+  const created=await call("/api/session",{...body,preparationId:prepared.body.id});expect(created.status).toBe(200);
+  expect(sessions.get(created.body.sessionId)?.publicMap).toMatchObject(world);
+ }
+ const {service,requests}=fake([jsonResponse(plan)]);
+ await service.prepareJourney({...input,seed:1,world:worlds[0]});
+ const payload=JSON.stringify(requests[0].body);
+ expect(payload).toContain("50e78bc1");expect(payload).toContain("metro-v1");expect(payload).not.toContain("metro-v2");
 });
 
 test("expired preparation requires replanning", async () => {

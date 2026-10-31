@@ -24,7 +24,7 @@ export class CreativeSystem {
   private check: () => AlertSignals["guardRed"];
   constructor(private world: World, private guards: GuardSystem, private bus = new EventBus(), check?: () => AlertSignals["guardRed"], executor?: ActionExecutor) {
     const alerts = new AlertSystem(bus, id => guards.guards.find(g => g.def.id === id)?.role, () => world.t);
-    const perception = new PerceptionSystem(bus, id => world.persons.get(id));
+    const perception = new PerceptionSystem(bus, id => world.persons.get(id), world.lightAt, world.layout);
     const brain = new NpcBrain(world, guards, bus, alerts),
       dialogue = new DialogueSystem(world, bus, alerts, brain);
     this.executor = executor ?? new ActionExecutor({

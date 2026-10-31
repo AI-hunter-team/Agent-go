@@ -1,4 +1,6 @@
-import { Component, Suspense, memo, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { controlRoomState } from "./controlRoomLayout";
+import { displayFloor } from "../../sim/entranceGeometry";
+import { Component, Suspense, memo, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei/core/Gltf";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -25,8 +27,8 @@ export class ModelBoundary extends Component<{ children: ReactNode; fallback: Re
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-/** 加载并适配带骨骼的角色，将游戏动作映射为模型动画。 */
-function ImportedModel({ url, session, actorId, reducedMotion, onLoaded }: { url: string; session: GameSession; actorId: string; reducedMotion: boolean; onLoaded?: (url: string) => void }) {
+/** 适配角色与动作；首页采样迎宾姿态并按脚尖基准贴地，对局仍用原动画状态。 */
+function ImportedModel({ url, session, actorId, reducedMotion, onLoaded, greetingRequest }: { url: string; session: GameSession; actorId: string; reducedMotion: boolean; onLoaded?: (url: string) => void; greetingRequest?: string }) {
   // Local uncompressed GLB/glTF needs no external Draco or font CDN.
   const { scene, animations } = useGLTF(url, false, false);
   const model = useMemo(() => {
@@ -49,22 +51,34 @@ function ImportedModel({ url, session, actorId, reducedMotion, onLoaded }: { url
   const performance = getScenePerformance(session);
   const constrainRootMotion = useMemo(() => createAvatarRootMotionGuard(model), [model]);
   const root = useRef<Group>(null);
+  // 保存模型局部脚底基准，迎宾姿态不会把人物悬在地面上。
+  const standing = useMemo(() => {
+    const feet:Object3D[]=[];model.traverse(node=>{if(/(?:Left|Right)ToeBase$/.test(node.name))feet.push(node);});
+    const point=new Vector3();
+    /** 在模型局部坐标采样最低脚尖，避免父级旋转和缩放影响贴地修正。 */
+    const height=()=>Math.min(...feet.map(bone=>model.worldToLocal(bone.getWorldPosition(point)).y));
+    return {feet,height,base:feet.length?height():0};
+  },[model]);
   useEffect(() => { onLoaded?.(url); }, [onLoaded, url]);
-  // 仅主角登记舞蹈和问候；保安的普通播放仍服从世界冻结。
-  useEffect(() => {
+  // 仅主角登记展示动作；保安的普通播放仍服从世界冻结。
+  useLayoutEffect(() => {
     if (actorId !== "player") return;
-    performance.setClips(animator.performances.danceClips, animator.performances.greeting?.duration ?? 0, url);
-  }, [actorId, animator, performance, url]);
+    performance.setClips(animator.performances.danceClips, animator.performances.greeting?.duration ?? 0, url, animator.performances.defeat?.duration ?? 0);
+    performance.greetSelection(greetingRequest, reducedMotion);
+  }, [actorId, animator, performance, url, greetingRequest, reducedMotion]);
   useFrame(() => {
-    const motion = session.presentation.current.actors.get(actorId)?.motion ?? "idle";
+    const control=controlRoomState(session),inRoom=actorId==="player"&&control.active;
+    const motion = inRoom?(control.walking?"walk":"idle"):session.presentation.current.actors.get(actorId)?.motion ?? "idle";
     const player = actorId === "player";
-    animator.update({ motion, delta: performance.delta, speed: session.speed, frozen: session.frozen,
+    animator.update({ motion, delta: inRoom?control.delta:performance.delta, speed: inRoom?1:session.speed, frozen: inRoom?false:session.frozen,
       reducedMotion, dance: player ? performance.dance : "", victoryTime: performance.victoryTime,
       danceTime: performance.danceTime, previousDance: player ? performance.previousDance : "", previousDanceTime: performance.previousDanceTime,
-      greetingTime: player ? performance.greetingTime : null });
+      greetingTime: player ? inRoom&&control.stage==="lobby" ? .95 : performance.greetingTime : null,
+      greetingImmediate: player && performance.greetingImmediate, defeatTime: player&&!inRoom ? performance.defeatTime : null });
     // 模型 Y 才是竖直方向；骨架父节点可旋转，不能直接冻结骨骼局部 X/Z。
     constrainRootMotion();
-    if (root.current) root.current.position.y = generated.length > 0 && motion === "walk" && !reducedMotion && !(player && performance.dance) ? Math.abs(Math.sin(session.visualTime * Math.PI * 2)) * 0.025 : 0;
+    if (root.current) root.current.position.y = generated.length > 0 && motion === "walk" && !reducedMotion && !(player && (performance.dance || !inRoom&&performance.defeatAt!==null)) ? Math.abs(Math.sin((inRoom?control.time:session.visualTime) * Math.PI * 2)) * 0.025 : 0;
+    if(root.current&&inRoom&&control.stage==="lobby"&&standing.feet.length&&animator.performances.greeting){model.updateMatrixWorld(true);root.current.position.y=(standing.base-standing.height())*fitting.scale;}
   });
   useEffect(() => {
     const cached = blobModels.get(url) ?? { users: 0, scene };
@@ -93,8 +107,9 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
   const color = kind === "player" ? materials.blue : kind === "guard" ? materials.ink : kind === "elderly" ? materials.ochre : kind === "luggage" ? materials.sage : kind === "hurried" ? materials.brick : materials.grey;
   useFrame(() => {
     const actor = session.presentation.current.actors.get(actorId);
-    const t = session.visualTime;
-    const walk = !reducedMotion && actor?.motion === "walk" ? Math.sin(t * (kind === "hurried" ? 12 : 9)) * 0.42 : 0;
+    const control=controlRoomState(session),inRoom=actorId==="player"&&control.active;
+    const t = inRoom?control.time:session.visualTime;
+    const walk = !reducedMotion && (inRoom?control.walking:actor?.motion === "walk") ? Math.sin(t * (kind === "hurried" ? 12 : 9)) * 0.42 : 0;
     for (let i = 0; i < 2; i++) {
       if (legs[i].current) legs[i].current!.rotation.x = walk * (i ? -1 : 1);
       if (arms[i].current) arms[i].current!.rotation.x = actor?.motion === "interact" ? -0.65 : -walk * (i ? -1 : 1) * 0.7;
@@ -123,7 +138,7 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
 }
 
 /** 插值角色位置与方向，为主角和保安应用各自的模型及额外朝向。 */
-export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, onModelLoadStart, onModelLoaded, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string, url?: string) => void; onModelLoadStart?: (url: string) => void; onModelLoaded?: (url: string) => void; reducedMotion: boolean }) {
+export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, onModelLoadStart, onModelLoaded, reducedMotion, onSelect, greetingRequest }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string, url?: string) => void; onModelLoadStart?: (url: string) => void; onModelLoaded?: (url: string) => void; reducedMotion: boolean; onSelect?: () => void; greetingRequest?: string }) {
   const root = useRef<Group>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const ring = useRef<MeshBasicMaterial>(null);
@@ -153,16 +168,19 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
   }
   /** 只在短距离点击结束时问候；胜利和重复点击由展示状态统一拒绝。 */
   function up(event: ThreeEvent<PointerEvent>) {
-    if (pointer.current.up(event)) performance.greet(reducedMotion);
+    if (pointer.current.up(event)) {if(onSelect)onSelect();else performance.greet(reducedMotion);}
   }
   useFrame(() => {
     if (!root.current) return;
     const actor = sampleActor(session.presentation, id, session.alpha, pose.current);
-    root.current.visible = !!actor;
+    root.current.visible = !!actor && (session.engine.world.definition.generatorVersion==="legacy-v0" || id==="player" || displayFloor(actor.floorId)===displayFloor(session.engine.player.pos.floorId));
     if (!actor) return;
+    const control=controlRoomState(session);if(id==="player"&&control.active)Object.assign(pose.current,control.pose);
     root.current.position.set(pose.current.x, pose.current.y, pose.current.z);
     root.current.rotation.y = pose.current.yaw;
-    if (ring.current) { ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
+    // 休息室构图采用较小人物比例，沿连续入站平滑恢复对局尺寸。
+    root.current.scale.setScalar(id==="player"&&control.active ? .94+.06*Math.min(1,control.elapsed/8) : 1);
+    if (ring.current) { ring.current.visible=!(id==="player"&&control.active); ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
   });
   const placeholder = kind === "player" || kind === "guard"
     ? <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />
@@ -172,7 +190,7 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
       <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial ref={ring} color="#315c65" transparent opacity={0.65} depthWrite={false} />
     </mesh>}
     {(kind === "player" || kind === "guard") && assetUrl ? <ModelBoundary key={assetUrl} fallback={placeholder} onError={(message) => onAssetError(message, kind === "player" ? assetUrl : undefined)}>
-      <Suspense fallback={placeholder}><group rotation={[0, assetRotation * Math.PI / 180, 0]}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} onLoaded={onModelLoaded} /></group></Suspense>
+      <Suspense fallback={placeholder}><group rotation={[0, assetRotation * Math.PI / 180, 0]}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} onLoaded={onModelLoaded} greetingRequest={greetingRequest} /></group></Suspense>
     </ModelBoundary> : placeholder}
   </group>;
 });

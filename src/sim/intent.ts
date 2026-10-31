@@ -1,3 +1,4 @@
+import { publicMap } from "./worldDefinition";
 import type { CreativeClassification } from "../shared/types";
 import type { ActionPlan, ItemKind, PlanStep } from "../shared/types";
 import type { GuardSystem } from "./guards";
@@ -9,6 +10,7 @@ export type IntentContext = import("../shared/interaction").BossContext;
 export function buildIntentContext(world: World, guards: GuardSystem): IntentContext {
   const p = world.player!;
   return {
+    ...(world.definition.generatorVersion!=="legacy-v0"?{publicMap:publicMap(world.definition)}:{}),
     self: {
       position: {
         ...p.pos
@@ -18,7 +20,7 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
         kind: i.kind
       }))
     },
-    people: [...[...world.persons.values()].filter(n => !n.isPlayer && playerCanSee(p.pos, n.pos, world.lightAt)).map(n => ({
+    people: [...[...world.persons.values()].filter(n => !n.isPlayer && playerCanSee(p.pos, n.pos, world.lightAt, world.layout)).map(n => ({
       id: n.id,
       look: n.persona?.look.outfit ?? n.kind,
       position: {
@@ -26,7 +28,7 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
       },
       holding: world.items.holdings(n.id).filter(i => world.items.slot(i) === "hand").map(i => i.kind),
       queue: world.queuePosition(n)?.facility.def.id ?? null
-    })), ...guards.guards.filter(g => playerCanSee(p.pos, g.pos, world.lightAt)).map(g => ({
+    })), ...guards.guards.filter(g => playerCanSee(p.pos, g.pos, world.lightAt, world.layout)).map(g => ({
       id: g.def.id,
       look: g.def.label,
       position: {
@@ -41,7 +43,7 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
         ...world.items.position(world.items.items.get(i.id)!)!
       }
     })),
-    facilities: [...world.facilities.values()].filter(f => playerCanSee(p.pos, f.def.pos, world.lightAt)).map(f => ({
+    facilities: [...world.facilities.values()].filter(f => playerCanSee(p.pos, f.def.pos, world.lightAt, world.layout)).map(f => ({
       id: f.def.id,
       label: f.def.label
     }))
@@ -52,6 +54,7 @@ const hasId = (text: string, id: string) => new RegExp(`(^|[^A-Za-z0-9_-])${id.r
 
 /** Keyword fallback resolves references only against the supplied visible context. */
 export function parsePlan(instruction: string, context: IntentContext): ActionPlan {
+  const nodes=context.publicMap?.nodes??NAV_NODES;
   const result = (status: ActionPlan["status"], steps: PlanStep[], reason = ""): ActionPlan => ({
     status,
     steps,
@@ -159,7 +162,7 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
         op: "drop",
         itemId: item.id,
         mode: /扔|throw/i.test(text) ? "throw" : /放下/.test(text) ? "place" : "drop",
-        ...(NAV_NODES.find(n=>hasId(text,n.id)) ? {at:{kind:"node",id:NAV_NODES.find(n=>hasId(text,n.id))!.id} as const} : npcId && /向|给|at/i.test(text) ? {
+        ...(nodes.find(n=>hasId(text,n.id)) ? {at:{kind:"node",id:nodes.find(n=>hasId(text,n.id))!.id} as const} : npcId && /向|给|at/i.test(text) ? {
           at: {
             kind: "person",
             id: npcId
@@ -184,7 +187,7 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
         previousKind = item.kind;
       }
     } else if (/靠近|走向|approach/i.test(text)) {
-      const node = NAV_NODES.find(n => text.includes(n.id)),
+      const node = nodes.find(n => hasId(text,n.id)),
         f = context.facilities.find(f => text.includes(f.id) || text.includes(f.label));
       if (npcId) step = {
         op: "approach",

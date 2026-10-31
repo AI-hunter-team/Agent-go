@@ -1,23 +1,28 @@
 import type { Vec } from "../shared/types";
 import { dist } from "./geometry";
-import { NAV_NODES, type NavNode } from "./layout";
-import { clearOfScenery, personRadius, SCENERY_OBSTACLES } from "./movement";
+import * as legacyLayout from "./layout";
+import type { NavNode } from "./layout";
+import type { StationLayout } from "../shared/world";
+import { createMovement, personRadius } from "./movement";
 
+
+export function createNavigation(layout:StationLayout=legacyLayout,movement=createMovement(layout)) {
+const {NAV_NODES}=layout; const {clearOfScenery,SCENERY_OBSTACLES}=movement;
 const walkable = (a: Vec, b: Vec, radius = personRadius("normal")) => clearOfScenery(a, b, radius);
-const graphs = new Map<number, { points: Vec[]; costs: number[][] }>();
+const graphs = new Map<string, { points: Vec[]; costs: number[][] }>();
 
-function sceneryGraph(radius: number) {
-  const cached = graphs.get(radius);
+function sceneryGraph(radius: number, floorId="concourse") {
+  const cached = graphs.get(`${floorId}:${radius}`);
   if (cached) return cached;
   // Store fixture corners in the activity's route. A walker must finish going
   // around the conveyor instead of choosing an opposing local turn each tick.
   const margin = radius + 0.03;
-  const points = [...NAV_NODES.map((node) => node.pos), ...SCENERY_OBSTACLES.flatMap((r) => [
-    { x: r.x - margin, y: r.y - margin }, { x: r.x + r.w + margin, y: r.y - margin },
-    { x: r.x - margin, y: r.y + r.h + margin }, { x: r.x + r.w + margin, y: r.y + r.h + margin },
+  const points = [...NAV_NODES.filter(n=>(n.pos.floorId??"concourse")===floorId).map((node) => node.pos), ...SCENERY_OBSTACLES.filter(r=>(r.floorId??"concourse")===floorId).flatMap((r) => [
+    { floorId, x: r.x - margin, y: r.y - margin }, { floorId, x: r.x + r.w + margin, y: r.y - margin },
+    { floorId, x: r.x - margin, y: r.y + r.h + margin }, { floorId, x: r.x + r.w + margin, y: r.y + r.h + margin },
   ])].filter((point) => walkable(point, point, radius));
   const graph = { points, costs: points.map((a) => points.map((b) => walkable(a, b, radius) ? dist(a, b) : Infinity)) };
-  graphs.set(radius, graph);
+  graphs.set(`${floorId}:${radius}`, graph);
   return graph;
 }
 
@@ -27,10 +32,11 @@ function sceneryGraph(radius: number) {
  * (ending at `to`), or null when `to`
  * cannot be reached on foot (e.g. it lies past the security or gate line).
  */
-export function findPath(from: Vec, to: Vec, radius = personRadius("normal")): Vec[] | null {
+function findPath(from: Vec, to: Vec, radius = personRadius("normal")): Vec[] | null {
+  if ((from.floorId??"concourse") !== (to.floorId??"concourse")) return null;
   if (walkable(from, to, radius)) return [to];
 
-  const graph = sceneryGraph(radius);
+  const graph = sceneryGraph(radius, from.floorId);
   const points: Vec[] = [from, ...graph.points, to];
   const n = points.length;
   const target = n - 1;
@@ -62,7 +68,7 @@ export function findPath(from: Vec, to: Vec, radius = personRadius("normal")): V
   return path;
 }
 
-export function pathLength(from: Vec, path: Vec[]): number {
+function pathLength(from: Vec, path: Vec[]): number {
   let total = 0;
   let cur = from;
   for (const p of path) {
@@ -73,7 +79,7 @@ export function pathLength(from: Vec, path: Vec[]): number {
 }
 
 /** Nearest nav node reachable in a straight line, for describing where someone is. */
-export function nearestNode(p: Vec): NavNode | null {
+function nearestNode(p: Vec): NavNode | null {
   let best: NavNode | null = null;
   for (const node of NAV_NODES) {
     if (!walkable(p, node.pos)) continue;
@@ -82,6 +88,10 @@ export function nearestNode(p: Vec): NavNode | null {
   return best;
 }
 
-export function nodeById(id: string): NavNode | undefined {
+function nodeById(id: string): NavNode | undefined {
   return NAV_NODES.find((n) => n.id === id);
 }
+
+return {findPath,pathLength,nearestNode,nodeById};
+}
+export const {findPath,pathLength,nearestNode,nodeById}=createNavigation();

@@ -4,7 +4,7 @@ import { randomSeed } from "./seed";
 
 /** 独立推进模拟；静止时停止页面帧循环，阶段变化立即刷新，常规 HUD 可降频。 */
 export function useGameSession(uiIntervalMs = 120) {
-  const [session] = useState(() => new GameSession(randomSeed()));
+  const [session] = useState(() => new GameSession(randomSeed(), {}, undefined, true));
   const [, refresh] = useReducer((value: number) => value + 1, 0);
   const interval = useRef(uiIntervalMs);
   interval.current = uiIntervalMs;
