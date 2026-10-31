@@ -69,7 +69,7 @@ export class NpcDirector {
 
     for (const p of [...w.persons.values()]) {
       if (!p.isPlayer && p.activity.kind === "to_queue" && w.facility(p.activity.facility)?.status !== "open") p.activity = { kind: "idle" };
-      if (p.isPlayer || p.incapacitated || p.activity.kind !== "idle") continue;
+      if (p.isPlayer || p.incapacitated || (p.activity.kind !== "idle" && !p.onPlatform)) continue;
       this.decide(p);
     }
   }

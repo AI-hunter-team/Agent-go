@@ -9,7 +9,7 @@ import { MapCanvas } from "./MapCanvas";
 import type { RenderOptions } from "./render";
 
 /** 控制历史轨迹的播放、倍速及决策跳转，不推进实时世界。 */
-export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; optionsRef: MutableRefObject<RenderOptions> }) {
+export function TrajectoryReplay({ report, optionsRef, seekRequest, onInspectDecision }: { report: GameReport; optionsRef: MutableRefObject<RenderOptions>; seekRequest?: { t: number; key: number }; onInspectDecision?: (index: number) => void }) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -18,6 +18,13 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
   const canPlay = duration > 0 && report.trail.length > 0;
   const previous = [...report.decisions].reverse().find((d) => d.t < frame.t - 1e-6);
   const next = report.decisions.find((d) => d.t > frame.t + 1e-6);
+
+  useEffect(() => {
+    if (seekRequest) {
+      setPlaying(false);
+      setTime(Math.max(0, Math.min(duration, seekRequest.t)));
+    }
+  }, [seekRequest, duration]);
 
   // App mounts a fresh controller for each ended run. Late request records may
   // refresh this run's report, and must not reset the user's replay position.
@@ -94,16 +101,16 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
         {!!frame.events?.length && <details open><summary>截至此时的交互事件</summary>{frame.events.slice(-12).map(e => <p key={e.id}>{e.t.toFixed(1)}s {EVENT_LABEL[e.kind]} · {e.actorId ?? "环境"} → {e.targetId ?? "周围"}</p>)}</details>}
         <p className="muted">警戒变化 {frame.alerts?.length ?? 0} 条 · 物品转移 {frame.items?.length ?? 0} 条。地图中的乘客与设施为终局位置；角色轨迹和上述记录按回放时间展示。</p>
         <h3>当时的决策</h3>
-        {frame.decision ? <DecisionLog decisions={[frame.decision]} /> : <p className="muted">此时还没有决策记录。</p>}
+        {frame.decision ? onInspectDecision ? <div className="replay-decision"><p>{frame.decision.action?.reason ?? frame.decision.error ?? "未形成有效行动"}</p><p className="muted">{frame.decision.result?.text ?? "未执行"}</p><button onClick={() => onInspectDecision(frame.decision!.index)}>分析这次决策 →</button></div> : <DecisionLog decisions={[frame.decision]} /> : <p className="muted">此时还没有决策记录。</p>}
       </div>
     </section>
   );
 }
 
 /** 组合历史地图与回放控制器，共享只读回放帧。 */
-export function TrajectoryReplayView({ report, engine }: { report: GameReport; engine: Engine }) {
+export function TrajectoryReplayView({ report, engine, seekRequest, onInspectDecision }: { report: GameReport; engine: Engine; seekRequest?: { t: number; key: number }; onInspectDecision?: (index: number) => void }) {
   const engineRef = useRef<Engine | null>(engine);
   const optionsRef = useRef<RenderOptions>({ showVision: false, showTrail: true, thinking: false });
   engineRef.current = engine;
-  return <><MapCanvas engineRef={engineRef} optionsRef={optionsRef} /><TrajectoryReplay report={report} optionsRef={optionsRef} /></>;
+  return <><MapCanvas engineRef={engineRef} optionsRef={optionsRef} /><TrajectoryReplay report={report} optionsRef={optionsRef} seekRequest={seekRequest} onInspectDecision={onInspectDecision} /></>;
 }
