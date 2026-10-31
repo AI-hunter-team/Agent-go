@@ -1,5 +1,6 @@
 .app { position: relative; height: 100dvh; min-height: 560px; overflow: hidden; background: #f2f4f6; color: #142033; }
 .scene { position: absolute; inset: 0; }
+.sceneLayer { position: absolute; inset: 0; animation: scene-layer-in .72s cubic-bezier(.2,.8,.25,1) both; }
 .scene canvas { display: block; touch-action: none; }
 .scene canvas:focus-visible { outline: 2px solid var(--ochre); outline-offset: -3px; }
 .scene :global(.station-map) { height: 100%; overflow: auto; }
@@ -17,7 +18,7 @@
 .app[data-stage=lobby] .settingsTrigger { z-index: 2; top: 28px; left: clamp(24px, 3.2vw, 48px); background: #fff; border-color: #ffffff; }
 .lobby { position: absolute; inset: 0; pointer-events: none; }
 .lobby::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 55% 52% at 10% 95%, #f8f7f2ef 0%, #f8f7f2bf 45%, #f8f7f200 100%), linear-gradient(0deg, #f8f7f2b8 0%, #f8f7f244 24%, #f8f7f200 53%); }
-.lobbyCopy { position: absolute; left: clamp(28px, 3.8vw, 64px); bottom: clamp(34px, 6vh, 60px); width: min(500px, 44vw); pointer-events: auto; }
+.lobbyCopy { position: absolute; left: clamp(28px, 3.8vw, 64px); bottom: clamp(34px, 6vh, 60px); width: min(500px, 44vw); pointer-events: auto; animation: caption-up .68s cubic-bezier(.22,.8,.26,1) both; }
 .lobbyKicker { display: flex; align-items: center; gap: 10px; color: #43505a; font-size: 12px; font-weight: 800; letter-spacing: .13em; }
 .lobbyKicker i { width: 22px; height: 2px; background: #e8bd2f; }
 .lobby h1 { margin: 10px 0 14px; color: #17202c; font-size: clamp(42px, 5.4vw, 74px); font-weight: 900; letter-spacing: -.055em; line-height: 1.12; }
@@ -29,7 +30,7 @@
 .enterScene span { font-size: 25px; font-weight: 400; line-height: 1; }
 .carousel { position: absolute; left: 57%; bottom: clamp(34px, 6vh, 60px); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; pointer-events: auto; }
 .carouselArrow { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 4px 18px #17243a24; font-size: 29px; line-height: 1; }
-.sceneCards { display: flex; gap: 5px; padding: 6px; border: 1px solid #ffffffd9; border-radius: 18px; background: #fffffff0; box-shadow: 0 8px 28px #17243a22; }
+.sceneCards { display: flex; gap: 5px; padding: 6px; border: 1px solid #ffffffd9; border-radius: 18px; background: #fffffff0; box-shadow: 0 8px 28px #17243a22; animation: panel-in .5s cubic-bezier(.22,.8,.26,1) both; }
 .sceneCard { display: flex; align-items: center; gap: 10px; width: 188px; min-height: 66px; padding: 5px; border: 2px solid transparent; border-radius: 13px; background: transparent; text-align: left; }
 .sceneCard[aria-pressed=true] { border-color: #efc52c; background: #fff; }
 .sceneCard:hover:not(:disabled) { background: #f5f3eb; border-color: #e1d4a5; }
@@ -42,7 +43,8 @@
 .sceneCardLabel { min-width: 0; display: grid; gap: 2px; }
 .sceneCardLabel strong { color: #26313d; font-size: 13px; white-space: nowrap; }
 .sceneCardLabel small { color: #78828a; font-size: 9px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
-.preparation { position: absolute; right: 5%; top: 50%; transform: translateY(-50%); width: min(480px, 41vw); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 32px; animation: enter .22s ease-out; }
+.preparation { position: absolute; right: 5%; top: 50%; transform: translateY(-50%); width: min(480px, 41vw); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 32px; animation: panel-in .55s cubic-bezier(.22,.8,.26,1) both; isolation: isolate; }
+.preparation::after { content: ''; position: absolute; z-index: -1; inset: -18px -24px; pointer-events: none; background: linear-gradient(100deg, transparent 0%, #fff8df00 34%, #fff8df90 48%, transparent 63%); transform: translateX(-70%); animation: panel-trail .72s cubic-bezier(.2,.8,.25,1) both; }
 .preparation h1 { font-size: clamp(26px, 2.7vw, 39px); line-height: 1.3; letter-spacing: -.045em; margin: 12px 0; }
 .preparation h2 { font-size: 26px; margin-top: 26px; }
 .preparation > button { margin-top: 10px; }
@@ -62,7 +64,7 @@
 .launch { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); display: grid; gap: 12px; text-align: center; padding: 24px 40px; background: #fffffff2; border-radius: 24px; }
 .launch strong { font-size: 32px; font-weight: 900; }
 .launch span { font-size: 14px; }
-.action { position: absolute; z-index: 30; left: 24px; top: 28px; width: min(310px, 24vw); padding: 22px; max-height: calc(100dvh - 160px); overflow: auto; }
+.action { position: absolute; z-index: 30; left: 24px; top: 28px; width: min(310px, 24vw); padding: 22px; max-height: calc(100dvh - 160px); overflow: auto; animation: panel-in .55s cubic-bezier(.22,.8,.26,1) both; }
 .actionCollapsed { width: auto; max-width: calc(100% - 244px); padding: 6px; }
 .recordToggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; margin-bottom: 12px; text-align: left; font-weight: 700; }
 .recordToggle svg { width: 18px; height: 18px; flex-shrink: 0; }
@@ -72,7 +74,7 @@
 .action h3 { margin: 16px 0 4px; }
 .action p { font-size: 13px; }
 .phase { font-weight: 700; border-block: 1px solid #edf0f4; padding: 12px 0; }
-.broadcast { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); width: min(460px, 36vw); background: #fffffff5; border-radius: 18px; padding: 14px 22px; box-shadow: 0 8px 30px #14203314; font-weight: 700; font-size: 13px; }
+.broadcast { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); width: min(460px, 36vw); background: #fffffff5; border-radius: 18px; padding: 14px 22px; box-shadow: 10px 0 0 #ffffff50, 18px 0 0 #ffffff22, 0 8px 30px #14203314; font-weight: 700; font-size: 13px; animation: broadcast-in .48s cubic-bezier(.22,.8,.26,1) both; }
 .timer { position: absolute; top: 28px; right: 24px; width: 196px; padding: 16px 22px; display: grid; text-align: center; gap: 8px; }
 .timer .eyebrow { justify-self: center; border-radius: 20px; background: #ffd000; padding: 3px 14px; color: #142033; }
 .timer strong { font-size: 40px; font-variant-numeric: tabular-nums; letter-spacing: -.035em; line-height: 1.2; }
@@ -93,7 +95,7 @@
 .reviewGrid > div { min-width: 0; }
 .reviewGrid :global(.verdict strong) { font-size: 42px; font-weight: 800; }
 .reviewGrid :global(.verdict .reason-text) { font-size: 22px; line-height: 1.6; }
-.review { background: #fff; }
+.review { background: #fff; animation: review-in .52s cubic-bezier(.22,.8,.26,1) both; }
 .endActions { position: absolute; z-index: 41; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 24px; width: min(420px, calc(100% - 32px)); }
 .endActions button { flex: 1; min-width: 0; min-height: 52px; border-radius: 18px; box-shadow: 0 8px 24px #14203324; font-weight: 700; }
 .victoryControls { position: absolute; left: 24px; top: 24px; display: flex; gap: 6px; padding: 6px; background: #ffffffd9; border-radius: 18px; }
@@ -107,6 +109,12 @@
 .debug { position: absolute; bottom: 90px; left: 24px; z-index: 30; background: white; padding: 8px; max-width: 400px; max-height: 40vh; overflow: auto; border-radius: 14px; }
 .debug pre { font-size: 10px; white-space: pre-wrap; }
 @keyframes enter { from { opacity: 0; margin-top: 12px; } to { opacity: 1; margin-top: 0; } }
+@keyframes scene-layer-in { from { opacity: .35; transform: scale(1.025) translateY(10px); filter: blur(2px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
+@keyframes panel-in { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes panel-trail { from { opacity: 0; transform: translateX(-70%); } 30% { opacity: .8; } to { opacity: 0; transform: translateX(70%); } }
+@keyframes broadcast-in { from { opacity: 0; transform: translate(-50%, -14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes caption-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes review-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 900px) {
   .preparation { right: 24px; width: 45vw; padding: 24px; }
   .action { width: 250px; padding: 16px; }
