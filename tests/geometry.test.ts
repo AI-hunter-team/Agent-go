@@ -34,6 +34,18 @@ describe("geometry", () => {
     expect(segmentIntersectsRect({ x: 0, y: 5 }, { x: 3.9, y: 5 }, pillar)).toBe(false);
   });
 
+  test.each([
+    [{ x: 0, y: 0 }, { x: 4, y: 4 }, true],
+    [{ x: 4, y: 2 }, { x: 4, y: 8 }, true],
+    [{ x: 6, y: 6 }, { x: 9, y: 6 }, true],
+    [{ x: 5, y: 5 }, { x: 5, y: 5 }, true],
+    [{ x: 3, y: 5 }, { x: 3, y: 5 }, false],
+    [{ x: 0, y: 4 }, { x: 4, y: 0 }, false],
+  ] as const)("clipping retains boundary and stationary semantics in either direction: %j → %j", (a, b, expected) => {
+    expect(segmentIntersectsRect(a, b, pillar)).toBe(expected);
+    expect(segmentIntersectsRect(b, a, pillar)).toBe(expected);
+  });
+
   test("line of sight is blocked by any occluder", () => {
     expect(lineOfSight({ x: 0, y: 5 }, { x: 10, y: 5 }, [pillar])).toBe(false);
     expect(lineOfSight({ x: 0, y: 0 }, { x: 10, y: 0 }, [pillar])).toBe(true);

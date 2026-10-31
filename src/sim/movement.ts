@@ -37,6 +37,12 @@ export function clearOfPeople(from: Vec, to: Vec, radius: number, others: readon
   return others.every((other) => {
     const start = other.from ?? other.pos;
     const gap = radius + other.radius + 0.02;
+    // A separated swept envelope cannot collide; keep the exact distance and
+    // recovery checks below for every nearby or touching pair.
+    if (Math.min(from.x, to.x) > Math.max(start.x, other.pos.x) + gap
+      || Math.max(from.x, to.x) < Math.min(start.x, other.pos.x) - gap
+      || Math.min(from.y, to.y) > Math.max(start.y, other.pos.y) + gap
+      || Math.max(from.y, to.y) < Math.min(start.y, other.pos.y) - gap) return true;
     const initial = dist(from, start);
     // Imported/test positions may already touch: permit only an outward recovery.
     return initial < gap - 1e-6
@@ -45,10 +51,19 @@ export function clearOfPeople(from: Vec, to: Vec, radius: number, others: readon
   });
 }
 
+const inflatedScenery = new Map<number, readonly Rect[]>();
+function sceneryForRadius(radius: number): readonly Rect[] {
+  let cached = inflatedScenery.get(radius);
+  if (!cached) {
+    cached = SCENERY_OBSTACLES.map(obstacle => ({ x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + radius * 2, h: obstacle.h + radius * 2 }));
+    inflatedScenery.set(radius, cached);
+  }
+  return cached;
+}
+
 export function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
   if (to.x < radius || to.x > WIDTH - radius || to.y < radius || to.y > HEIGHT - radius) return false;
-  return SCENERY_OBSTACLES.every((obstacle) => {
-    const r = { x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + radius * 2, h: obstacle.h + radius * 2 };
+  return sceneryForRadius(radius).every((r) => {
     // Keep existing point-nav corner/fixture positions recoverable, but never cross a wall.
     if (contains(r, from)) return !contains(r, to) || dist(to, { x: r.x + r.w / 2, y: r.y + r.h / 2 }) > dist(from, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
     return !segmentIntersectsRect(from, to, r);
