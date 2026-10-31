@@ -262,9 +262,9 @@ html:has([data-reduced-motion=true]) *, html:has([data-reduced-motion=true]) *::
   .replay-jump button { flex: 1; }
   .replay-controls > .segmented { flex: 1 0 144px; }
 }
-.scene-message { position: absolute; bottom: 30px; left: 0; transform: translateX(-50%); align-items: flex-start; gap: 8px; width: max-content; max-width: min(280px, 65vw); padding: 12px; border: 1px solid #d8ddd5; border-radius: 16px; background: #fffef8f5; color: #26342e; box-shadow: 0 4px 18px #17243a24; font-size: 13px; line-height: 1.5; pointer-events: auto; }
+.scene-message { position: absolute; bottom: 30px; left: 0; transform: translateX(-50%); align-items: flex-start; gap: 8px; width: max-content; max-width: min(280px, calc(100vw - 24px), var(--scene-message-max-width, 280px)); padding: 12px; border: 1px solid #d8ddd5; border-radius: 16px; background: #fffef8f5; color: #26342e; box-shadow: 0 4px 18px #17243a24; font-size: 13px; line-height: 1.5; pointer-events: auto; }
 .scene-message svg { width: 22px; height: 22px; flex-shrink: 0; }
-.scene-message span { max-height: 160px; overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
+.scene-message span { max-height: min(160px, var(--scene-message-max-text-height, 160px)); overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; overscroll-behavior: contain; }
 .scene-message span:empty { display: none; }
 .scene-message[data-mode=icons] { padding: 9px; border-radius: 50%; pointer-events: none; }
 .scene-message[data-kind=speech] .scene-message-thought, .scene-message[data-kind=thought] .scene-message-speech { display: none; }
