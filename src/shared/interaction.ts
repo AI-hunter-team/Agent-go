@@ -1,5 +1,7 @@
 // Interaction 2.0 contracts (docs/interaction-v2/design.md C1–C9).
 // Declaring a contract does not enable its tools; runtime integration is staged.
+import type { OperationDebug } from "./debug";
+import type { DecisionUsage } from "./types";
 import type { Vec } from "./types";
 
 export type AlertLevel = "none" | "white" | "yellow" | "red";
@@ -132,7 +134,9 @@ export type PlanStep =
   | { op: "make_noise"; level: "low" | "mid" | "high" }
   | { op: "wait"; seconds: number };
 
-export interface ActionPlan {
+export interface ModelMetadata { debug?: OperationDebug; model?: string | null; usage?: DecisionUsage | null }
+
+export interface ActionPlan extends ModelMetadata {
   status: "plan" | "unsupported" | "needs_precondition";
   /** Runtime validators enforce 1–4 steps for plan, zero otherwise. */
   steps: PlanStep[];
@@ -163,7 +167,7 @@ export interface NpcDialogueRequest {
 
 export type NpcDecision = "accept" | "refuse" | "counter" | "comply_under_threat" | "flee" | "call_guard";
 
-export interface NpcResponse {
+export interface NpcResponse extends ModelMetadata {
   reply: string;
   decision: NpcDecision;
   give: ItemKind | null;
@@ -207,3 +211,28 @@ export interface AlertChange {
 }
 export interface ItemTransfer { t: number; itemId: string; kind: ItemKind; from: string; to: string; how: string }
 export interface BossRecord { t: number; instruction: string; plan: ActionPlan; outcomes: StepOutcome[] }
+
+export interface BossContext {
+  self: {
+    position: Vec;
+    inventory: {
+      id: string;
+      kind: ItemKind;
+    }[];
+  };
+  people: {
+    id: string;
+    look: string;
+    position: Vec;
+    queue: string | null;
+  }[];
+  items: {
+    id: string;
+    kind: ItemKind;
+    position: Vec;
+  }[];
+  facilities: {
+    id: string;
+    label: string;
+  }[];
+}

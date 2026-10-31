@@ -149,3 +149,21 @@ describe("API with a model", () => {
     expect((await call("POST", "/api/creative/classify", { intent: "随便", observation: null })).body.source).toBe("llm");
   });
 });
+
+
+test("new interaction endpoints require sessions and preserve offline fallback", async () => {
+  const { call } = await start();
+  const engine = new Engine(1);
+  const { buildIntentContext } = await import("../src/sim/intent");
+  const { generatePersona } = await import("../src/sim/persona");
+  const { Rng } = await import("../src/sim/rng");
+  const context = buildIntentContext(engine.world, engine.guards);
+  expect((await call("POST", "/api/boss/interpret", {instruction:"等1秒",context})).status).toBe(404);
+  const { body } = await call("POST", "/api/session", {});
+  const sessionId = body.sessionId;
+  const interpreted = await call("POST", "/api/boss/interpret", {sessionId,instruction:"等1秒",context});
+  expect(interpreted.body).toMatchObject({status:"plan",source:"keywords"});
+  expect((await call("POST", "/api/boss/interpret", {sessionId,instruction:"等",context:{}})).status).toBe(400);
+  const request = {npc:{id:"n1",...generatePersona(new Rng(1),"normal"),alert:{level:"none",cause:null},memory:[],holdings:[],queue:null},speaker:{look:"乘客",holding:[]},goal:"chat",message:"你好",offer:null,history:[]};
+  expect((await call("POST", "/api/npc/respond", {sessionId,request})).status).toBe(503);
+});

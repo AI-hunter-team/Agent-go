@@ -4,7 +4,7 @@ import { baseParams, type ClaudeConfig } from "./claude";
 import { assertSafeText, SAFETY_SYSTEM_PROMPT, untrustedData, validateNormalized } from "./security";
 import { GAME_OBJECTIVE } from "./objective";
 
-async function structuredCall<T>(
+export async function structuredCall<T>(
   client: Anthropic,
   cfg: ClaudeConfig,
   opts: {

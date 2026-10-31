@@ -42,7 +42,7 @@ export interface OperationDebug {
   id: string;
   runId: string | null;
   sessionId: string | null;
-  operation: "normalize" | "decide" | "classify" | "negotiate";
+  operation: "normalize" | "decide" | "classify" | "negotiate" | "interpret" | "npc_respond";
   startedAt: string;
   durationMs: number;
   calls: ModelCallDebug[];

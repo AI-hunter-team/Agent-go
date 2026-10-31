@@ -1,3 +1,6 @@
+import type { BossContext, NpcDialogueRequest } from "../src/shared/types";
+import { interpret } from "./boss";
+import { respond } from "./npcDialogue";
 import { readChatStream } from "./chatStream";
 import { modelHttpError } from "./modelError";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
@@ -206,6 +209,13 @@ export class OpenAILlmService implements LlmService {
     }
     result.latencyMs = Date.now() - started;
     return result;
+  }
+
+  async interpret(instruction: string, context: BossContext) {
+    return interpret((...args) => this.structured(...args), instruction, context);
+  }
+  async respond(request: NpcDialogueRequest) {
+    return respond((...args) => this.structured(...args), request);
   }
 
   async negotiate(request: CutInDialogueRequest): Promise<NpcReply> {

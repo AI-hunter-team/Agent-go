@@ -536,3 +536,7 @@ GameReport.boss?: { t: number; instruction: string; plan: ActionPlan; outcomes: 
 | `/api/creative/classify`、`/api/npc/negotiate` | 不变 | 不变 | 保留到 IV2-19 再移除 |
 
 `BossContext`：角色位置与持有物、视野内人物（含 id、外观、位置、持有可见物品）、可见物品与取物点、设施状态、玩家原始指令。Boss 只需要能把指令中的指代（“那位穿红衣服的乘客”）解析到 id；隐藏性格不提供给 Boss，以免 Boss 依据性格替角色挑软柿子。
+
+### IV2-09 接口补充（实现同步）
+
+BossContext 共享可见位置、人物外观/队列、物品 id 与设施；导航节点是公开固定知识。模型不得补造 id。严格 JSON Schema 的可选字段以 null 返回，服务端转为省略后校验。ActionPlan / NpcResponse 可附 debug、model、usage 元数据，不影响模拟器结算。新接口必须使用 session 绑定的同一角色模型配置；旧协商接口留待 IV2-19 清理。错误计划降级关键词；不可用的在线 NPC 答复不授予许可。

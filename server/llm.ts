@@ -1,8 +1,10 @@
+import { interpret, type Structured } from "./boss";
+import { respond } from "./npcDialogue";
 import Anthropic from "@anthropic-ai/sdk";
 import type { LlmService, NpcService } from "./app";
 import { ClaudeDecider, configFromEnv } from "./claude";
 import { OpenAIClient, OpenAILlmService } from "./openai";
-import { classifyIntent, negotiateNpc, normalizeGuidance } from "./structured";
+import { classifyIntent, negotiateNpc, normalizeGuidance, structuredCall } from "./structured";
 import { debugFetch } from "./debug";
 
 /** Map only developer NPC settings; do not inherit any Agent configuration. */
@@ -41,7 +43,10 @@ export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | nu
   });
   const cfg = configFromEnv(env);
   const decider = new ClaudeDecider(client, cfg);
+  const call: Structured = (system, user, schema, _name, maxTokens) => structuredCall(client, cfg, { system, user, schema, maxTokens, validate: (value): value is unknown => value !== undefined });
   return {
+    interpret: (instruction, context) => interpret(call, instruction, context),
+    respond: (request) => respond(call, request),
     model: cfg.model,
     decide: (session, turn) => decider.decide(session, turn),
     normalize: (text) => normalizeGuidance(client, cfg, text),

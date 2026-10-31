@@ -1,3 +1,6 @@
+import type { ActionPlan, BossContext, NpcDialogueRequest, NpcResponse } from "../src/shared/types";
+import { bossContextValid, validatePlan } from "./boss";
+import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDialogue";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { extname, resolve } from "node:path";
 import { configFromEnv } from "./claude";
@@ -12,7 +15,7 @@ import type {
   NormalizedGuidance,
   Observation,
 } from "../src/shared/types";
-import { classifyByKeywords } from "../src/sim/intent";
+import { classifyByKeywords, parsePlan } from "../src/sim/intent";
 import type { Session, SessionStore } from "./sessions";
 import { DebugLogger, traceOperation } from "./debug";
 import { ModelConfigError, ModelConfigStore } from "./modelConfig";
@@ -24,6 +27,8 @@ export interface LlmService {
   decide(session: Session, turn: AgentTurn): Promise<DecisionResult>;
   normalize(text: string): Promise<NormalizedGuidance>;
   classify(intent: string, observation: Observation): Promise<CreativeClassification>;
+  interpret?(instruction: string, context: BossContext): Promise<ActionPlan>;
+  respond?(request: NpcDialogueRequest): Promise<NpcResponse>;
   negotiate?(request: CutInDialogueRequest): Promise<NpcReply>;
 }
 
@@ -167,6 +172,42 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
       res.json({ ...value, debug });
     }),
   );
+
+  app.post("/api/boss/interpret", wrap(async (req, res) => {
+    const session = sessions.get(req.body?.sessionId);
+    if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
+    const binding = forSession(req, session);
+    const { instruction, context } = req.body;
+    if (!boundedText(instruction, 200) || !bossContextValid(context)) return void res.status(400).json({ error: "行动或可见上下文无效" });
+    assertSafeText(JSON.stringify({ instruction, context }));
+    const { value, debug } = await traceOperation({ operation: "interpret", runId: session.runId, sessionId: session.id }, { instruction, context, modelParameters: binding.parameters }, debugLogger, async () => {
+      try {
+        const plan = await binding.llm?.interpret?.(instruction, context);
+        if (plan) {
+          const valid = validatePlan(plan, context);
+          if (valid) return { ...valid, source: plan.source, usage: plan.usage, model: plan.model };
+        }
+      } catch (error) { if (error instanceof SafetyError) throw error; }
+      return parsePlan(instruction, context);
+    });
+    res.json({ ...value, debug });
+  }));
+  app.post("/api/npc/respond", wrap(async (req, res) => {
+    const session = sessions.get(req.body?.sessionId);
+    if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
+    const binding = forSession(req, session);
+    const request = req.body?.request;
+    if (!dialogueRequestValid(request)) return void res.status(400).json({ error: "NPC 对话资料无效" });
+    assertSafeText(JSON.stringify(request));
+    if (!binding.llm?.respond) return void res.status(503).json(responseFailure());
+    const { value, debug } = await traceOperation({ operation: "npc_respond", runId: session.runId, sessionId: session.id }, { request, modelParameters: binding.parameters }, debugLogger, async () => {
+      try {
+        const response = await binding.llm!.respond!(request);
+        return { ...(validateResponse(response, request) ?? responseFailure()), source: response.source, usage: response.usage, model: response.model };
+      } catch { return responseFailure(); }
+    });
+    res.status(value.source === "error" ? 502 : 200).json({ ...value, debug });
+  }));
 
   app.post(
     "/api/npc/negotiate",

@@ -1,34 +1,11 @@
 import type { CreativeClassification } from "../shared/types";
-import type { ActionPlan, ItemKind, PlanStep, Vec } from "../shared/types";
+import type { ActionPlan, ItemKind, PlanStep } from "../shared/types";
 import type { GuardSystem } from "./guards";
 import type { World } from "./world";
 import { playerCanSee } from "./observation";
 import { dist } from "./geometry";
 import { NAV_NODES } from "./layout";
-export interface IntentContext {
-  self: {
-    position: Vec;
-    inventory: {
-      id: string;
-      kind: ItemKind;
-    }[];
-  };
-  people: {
-    id: string;
-    look: string;
-    position: Vec;
-    queue: string | null;
-  }[];
-  items: {
-    id: string;
-    kind: ItemKind;
-    position: Vec;
-  }[];
-  facilities: {
-    id: string;
-    label: string;
-  }[];
-}
+export type IntentContext = import("../shared/interaction").BossContext;
 export function buildIntentContext(world: World, guards: GuardSystem): IntentContext {
   const p = world.player!;
   return {
