@@ -1,15 +1,16 @@
 import { Component, Suspense, memo, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei/core/Gltf";
-import { useAnimations } from "@react-three/drei/core/useAnimations";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { Box3, Vector3, type Group, type Object3D, type SkinnedMesh } from "three";
+import { Box3, Vector3, type Group, type MeshBasicMaterial, type Object3D, type SkinnedMesh } from "three";
 import type { GameSession } from "../gameSession";
 import { sampleActor, type ActorFrame, type Motion } from "../presentation";
 import { box, coat, cylinder, materials, sphere } from "./resources";
 import { disposeAvatar, findAvatarClip } from "../avatarModel";
 import { createAvatarRootMotionGuard } from "./avatarRootMotion";
 import { createProceduralLocomotion } from "./proceduralLocomotion";
+import { AvatarAnimator } from "./avatarAnimator";
+import { getScenePerformance } from "./scenePerformance";
 
 const blobModels = new Map<string, { users: number; scene: Object3D }>();
 export class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
@@ -42,39 +43,30 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
   }, [model]);
   const generated = useMemo(() => !findAvatarClip(animations, "walk") ? createProceduralLocomotion(model).filter((clip) => !findAvatarClip(animations, clip.name.toLowerCase() as Motion)) : [], [animations, model]);
   const availableAnimations = useMemo(() => [...animations, ...generated], [animations, generated]);
-  const { actions, mixer } = useAnimations(availableAnimations, model);
-  const clips = useMemo(() => Object.fromEntries((["idle", "walk", "interact", "jump"] as Motion[]).map((motion) => [motion, findAvatarClip(availableAnimations, motion)])) as Record<Motion, string>, [availableAnimations]);
+  const animator = useMemo(() => new AvatarAnimator(model, availableAnimations), [model, availableAnimations]);
+  const performance = getScenePerformance(session);
   const constrainRootMotion = useMemo(() => createAvatarRootMotionGuard(model), [model]);
-  const last = useRef({ key: "", name: "" });
   const root = useRef<Group>(null);
+  // 仅主角登记舞蹈和问候；保安的普通播放仍服从世界冻结。
+  useEffect(() => {
+    if (actorId !== "player") return;
+    performance.setClips(animator.performances.dances, animator.performances.greeting?.duration ?? 0, url);
+  }, [actorId, animator, performance, url]);
   useFrame(() => {
-    mixer.timeScale = session.frozen || reducedMotion ? 0 : session.speed;
     const motion = session.presentation.current.actors.get(actorId)?.motion ?? "idle";
-    const name = clips[motion] || clips.idle || clips.walk || availableAnimations[0]?.name || "";
-    const animated = !!clips[motion] || !!clips.idle;
-    const key = `${motion}:${name}`;
-    if (key !== last.current.key) {
-      if (last.current.name && last.current.name !== name) actions[last.current.name]?.fadeOut(0.16);
-      if (name) {
-        const action = actions[name];
-        action?.reset().setEffectiveWeight(1).play();
-        if (action) {
-          if (last.current.name && !session.frozen && !reducedMotion) action.fadeIn(0.16);
-          else action.stopFading();
-          action.paused = !animated;
-        }
-      }
-      last.current = { key, name };
-    }
+    const player = actorId === "player";
+    animator.update({ motion, delta: performance.delta, speed: session.speed, frozen: session.frozen,
+      reducedMotion, dance: player ? performance.dance : "", victoryTime: performance.victoryTime,
+      greetingTime: player ? performance.greetingTime : null });
     // 模型 Y 才是竖直方向；骨架父节点可旋转，不能直接冻结骨骼局部 X/Z。
     constrainRootMotion();
-    if (root.current) root.current.position.y = (!clips.walk || generated.length > 0) && motion === "walk" && !reducedMotion ? Math.abs(Math.sin(session.visualTime * Math.PI * 2)) * 0.025 : 0;
+    if (root.current) root.current.position.y = generated.length > 0 && motion === "walk" && !reducedMotion && !(player && performance.dance) ? Math.abs(Math.sin(session.visualTime * Math.PI * 2)) * 0.025 : 0;
   });
   useEffect(() => {
     const cached = blobModels.get(url) ?? { users: 0, scene };
     if (url.startsWith("blob:")) { cached.users++; blobModels.set(url, cached); }
     return () => {
-      mixer.stopAllAction(); mixer.uncacheRoot(model);
+      animator.dispose();
       model.traverse((object) => { if ("isSkinnedMesh" in object) (object as SkinnedMesh).skeleton.dispose(); });
       if (!url.startsWith("blob:")) return;
       cached.users--;
@@ -85,7 +77,7 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
         }
       });
     };
-  }, [mixer, model, scene, url]);
+  }, [animator, model, scene, url]);
   return <group ref={root}><group position={fitting.position} scale={fitting.scale}><primitive object={model} dispose={null} /></group></group>;
 }
 
@@ -130,6 +122,26 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
 export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string) => void; reducedMotion: boolean }) {
   const root = useRef<Group>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
+  const ring = useRef<MeshBasicMaterial>(null);
+  const pointer = useRef<{ x: number; y: number; id: number; dragged: boolean } | null>(null);
+  const performance = getScenePerformance(session);
+  // 更换主角资源时立即撤销旧动作能力，加载失败的模型不会保留旧舞蹈状态。
+  useEffect(() => { if (kind === "player") performance.setAsset(assetUrl); }, [kind, performance, assetUrl]);
+  /** 记录命中主角的按下位置，保持原有相机拖动传播。 */
+  function down(event: ThreeEvent<PointerEvent>) {
+    if (kind !== "player" || event.button !== 0) return;
+    pointer.current = { x: event.clientX, y: event.clientY, id: event.pointerId, dragged: false };
+  }
+  /** 拖动超过六像素即取消本次点选，回到起点也不会误触。 */
+  function move(event: ThreeEvent<PointerEvent>) {
+    const start = pointer.current;
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) start.dragged = true;
+  }
+  /** 只在短距离点击结束时问候；胜利和重复点击由展示状态统一拒绝。 */
+  function up(event: ThreeEvent<PointerEvent>) {
+    const start = pointer.current; pointer.current = null;
+    if (start && start.id === event.pointerId && !start.dragged && Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) performance.greet(reducedMotion);
+  }
   useFrame(() => {
     if (!root.current) return;
     const actor = sampleActor(session.presentation, id, session.alpha, pose.current);
@@ -137,11 +149,12 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
     if (!actor) return;
     root.current.position.set(pose.current.x, pose.current.y, pose.current.z);
     root.current.rotation.y = pose.current.yaw;
+    if (ring.current) { ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
   });
   const placeholder = <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />;
-  return <group ref={root}>
+  return <group ref={root} name={`actor-${id}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { pointer.current = null; }}>
     {kind === "player" && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
-      <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial color="#315c65" transparent opacity={0.65} depthWrite={false} />
+      <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial ref={ring} color="#315c65" transparent opacity={0.65} depthWrite={false} />
     </mesh>}
     {(kind === "player" || kind === "guard") && assetUrl ? <ModelBoundary key={assetUrl} fallback={placeholder} onError={onAssetError}>
       <Suspense fallback={placeholder}><group rotation={[0, assetRotation * Math.PI / 180, 0]}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} /></group></Suspense>

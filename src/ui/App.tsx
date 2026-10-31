@@ -27,6 +27,7 @@ import { PerformanceSettingsPanel } from "./PerformanceSettingsPanel";
 import { useAvatarModel } from "./useAvatarModel";
 import { AvatarSettings } from "./AvatarSettings";
 import styles from "./App.module.css";
+import { getScenePerformance } from "./scene/scenePerformance";
 
 const GameScene = lazy(() => import("./scene/GameScene"));
 type Stage = "setup" | "confirm" | "playing";
@@ -64,7 +65,7 @@ export function App() {
   const [intent, setIntent] = useState<Stage>("setup");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [camera, setCamera] = useState<{ mode: "follow" | "overview"; reset: number }>({ mode: "follow", reset: 0 });
+  const [camera, setCamera] = useState<{ mode: "follow" | "overview"; reset: number; command: number }>({ mode: "follow", reset: 0, command: 0 });
   const [renderer, setRenderer] = useState<"3d" | "2d">("3d");
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [sceneFailure, setSceneFailure] = useState<string | null>(null);
@@ -95,6 +96,10 @@ export function App() {
   const latest = runner?.decisions.at(-1);
   const recent = session.engine.world.events.filter((event) => event.playerVisible && event.t <= session.engine.t).slice(-3).reverse();
   const broadcast = recent.find((event) => event.kind === "broadcast");
+  const won = ended && session.engine.status === "success";
+  const performanceState = getScenePerformance(session);
+  // 胜利自动采用透视相机；只增加用户操作序号的按钮才会取消电影运镜。
+  useEffect(() => { if (won) setCamera((value) => ({ ...value, mode: "follow" })); }, [won, session.generation]);
 
   useEffect(() => {
     let active = true;
@@ -136,7 +141,7 @@ export function App() {
         normalizedGuidance: agentKind === "llm" ? normalized : null,
       });
       preparationRef.current = null;
-      setIntent("playing"); setCamera((value) => ({ mode: "follow", reset: value.reset + 1 }));
+      setIntent("playing"); setCamera((value) => ({ ...value, mode: "follow", reset: value.reset + 1 }));
     } catch (failure) { if (request === requests.current) setError(`开局失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
@@ -185,18 +190,18 @@ export function App() {
             </Suspense>
           </SceneBoundary>}
         </div>
-        <div className={styles.sceneTop}><span className={styles.stationName}>地铁站</span><span className={styles.sceneTag}>{renderer === "2d" ? "二维调试" : camera.mode === "follow" ? "跟随视角" : "站厅总览"}</span></div>
+        <div className={styles.sceneTop}><span className={styles.stationName}>地铁站</span><span className={styles.sceneTag}>{renderer === "2d" ? "二维调试" : performanceState.cinematic ? "胜利时刻" : camera.mode === "follow" ? "跟随视角" : "站厅总览"}</span></div>
         {broadcast && <div className={styles.broadcast} role="status">广播 <span>{broadcast.text}</span></div>}
         <div className={styles.cameraTools}>
-          <Hint text="切换第三人称跟随和站厅总览"><button aria-pressed={camera.mode === "overview"} onClick={() => setCamera((value) => ({ ...value, mode: value.mode === "follow" ? "overview" : "follow" }))}>{camera.mode === "follow" ? "总览" : "跟随"}</button></Hint>
-          <Hint text="恢复角色背后的默认镜头"><button onClick={() => setCamera((value) => ({ mode: "follow", reset: value.reset + 1 }))}>回正 <Icon name="reset" /></button></Hint>
+          <Hint text="切换第三人称跟随和站厅总览"><button aria-pressed={camera.mode === "overview"} onClick={() => setCamera((value) => ({ ...value, mode: value.mode === "follow" ? "overview" : "follow", command: value.command + 1 }))}>{camera.mode === "follow" ? "总览" : "跟随"}</button></Hint>
+          <Hint text="恢复角色背后的默认镜头"><button onClick={() => setCamera((value) => ({ mode: "follow", reset: value.reset + 1, command: value.command + 1 }))}>回正 <Icon name="reset" /></button></Hint>
         </div>
         {playing && <div className={styles.sceneBottom}>
           <div className={styles.events} aria-label="最近事件">{recent.map((event, index) => <div key={`${event.t}-${index}`}><time>{event.t.toFixed(1)}s</time><span>{event.text}</span></div>)}</div>
           <div className={`${styles.phaseChip} ${runner?.phase === "thinking" ? styles.thinking : ""}`} role="status"><i />{runner?.phase === "thinking" ? "角色思考中 · 世界暂停" : session.paused ? "已暂停" : "角色自主行动中"}</div>
         </div>}
         {!playing && !ended && <div className={styles.introCaption}><h1>你的指导，<br />它的下一程。</h1><p>买票、安检、过闸、下楼到站台。<br />把计划交给角色，观看它如何应对现场。</p></div>}
-        {ended && <div className={styles.endCaption}><h2>{session.engine.status === "success" ? "这一次，顺利抵达。" : "每次出发，都有新的答案。"}</h2><p>查看本次行程记录，再试一种思路。</p></div>}
+        {ended && <div className={`${styles.endCaption} ${won ? styles.victoryCaption : ""}`}><h2>{won ? "这一次，顺利抵达。" : "每次出发，都有新的答案。"}</h2>{!won && <p>查看本次行程记录，再试一种思路。</p>}</div>}
       </section>
       <aside className={styles.sidebar} aria-label="对局面板">
         <div className={styles.ticketHeading}><span>METRO / JOURNEY</span><span>NO. {String(seed).padStart(4, "0")}</span></div>
