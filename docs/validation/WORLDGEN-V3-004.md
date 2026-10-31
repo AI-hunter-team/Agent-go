@@ -64,4 +64,4 @@
 - flat-before.png、flat-after-fresh.png、flat-final.png及UI截图；main-mobile-live/result.jpg、main-boarding.mp4与源帧时间。
 - seeds-1000.json、offline-50.json、routes-before/after.json。
 
-当前修复仅本地，不推送、PR、合入、发布、部署或付费模型调用。界面继续新建默认V3，所有旧版本读取保留；回退按原新建开关执行，不删除用户数据。最终提交号和干净状态在交接补记。
+当前修复仅本地，不推送、PR、合入、发布、部署或付费模型调用。界面继续新建默认V3，所有旧版本读取保留；回退按原新建开关执行，不删除用户数据。实现提交4e8d3c3522368c1d84f482d2840f903b2c555bec；其后交接提交只补充提交指针。当前分支codex/worldgen-v3，交接检查工作区干净。浏览器临时尺寸已复位，正式页面恢复1699×854、WebGL接口正常。
