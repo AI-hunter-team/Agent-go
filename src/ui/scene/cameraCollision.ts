@@ -1,13 +1,14 @@
 import { GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, WIDTH } from "../../sim/layout";
 import { STATION_CEILING } from "./stationLayout";
+import { FRAME_HEIGHT } from "../../assets/station-kit/dimensions";
 
 export interface Point3 { x: number; y: number; z: number }
 interface CameraBox { low: Point3; high: Point3 }
 const bounds = (x: number, y: number, z: number, w: number, h: number, d: number): CameraBox => ({ low: { x, y, z }, high: { x: x + w, y: y + h, z: z + d } });
 const CAMERA_BOXES: CameraBox[] = [
-  ...PILLARS.map((r) => bounds(r.x, -0.15, r.y, r.w, 4.35, r.h)),
+  ...PILLARS.map((r) => bounds(r.x, -0.15, r.y, r.w, FRAME_HEIGHT + 0.15, r.h)),
   ...[...SECURITY_BARRIERS, ...GATE_BARRIERS].map((r) => bounds(r.x + r.w / 2 - 0.08, 0, r.y, 0.16, 1.1, r.h)),
-  bounds(0, -2.2, -0.41, WIDTH, 6.4, 0.4), bounds(0, -2.2, HEIGHT + 0.01, WIDTH, 6.4, 0.4),
+  bounds(0, -2.2, -0.41, WIDTH, STATION_CEILING + 2.2, 0.4), bounds(0, -2.2, HEIGHT + 0.01, WIDTH, STATION_CEILING + 2.2, 0.4),
   bounds(0, STATION_CEILING, 0, WIDTH, 0.12, HEIGHT),
   ...[13, 17].flatMap((z) => Array.from({ length: 9 }, (_, i) => bounds(48 + i, -2 * (i + 1) / 9, z - 0.08, 1, 1.1 + 2 / 9, 0.16))),
 ];

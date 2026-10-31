@@ -6,6 +6,7 @@ import { Box3, Mesh, Vector3 } from "three";
 import { ASSETS, createAsset, makeMaterials, type FacilityState } from "../../src/assets/station-kit/index";
 import { generateTextures } from "./textures";
 import { exportGlb } from "./glb";
+import { BASE_WALL_HEIGHT, FRAME_HEIGHT, STATION_CEILING } from "../../src/assets/station-kit/dimensions";
 
 const directory = fileURLToPath(new URL("../../public/assets/station-kit/", import.meta.url));
 const materialsDirectory = join(directory, "materials");
@@ -40,8 +41,8 @@ const manifest = {
   version: 2, title: "agent-go · Station Environment Kit V2", units: "metres", upAxis: "Y",
   rootConvention: "Footprint centre; floor top is Y=0. Ceiling/light assets use mounting-plane Y=0. Devices face +Z; approach +Z, exit -Z.",
   source: "Original procedural geometry and seeded textures; no third-party textures or character models included.",
-  gridMetres: 3, wallHeightMetres: 3.5, pillarFootprintMetres: [2, 2],
-  showroomCeilingMetres: 4.25, structuralFrameHeightMetres: 4.2,
+  gridMetres: 3, wallHeightMetres: BASE_WALL_HEIGHT, pillarFootprintMetres: [2, 2], pillarHeightMetres: FRAME_HEIGHT,
+  showroomCeilingMetres: STATION_CEILING, structuralFrameHeightMetres: FRAME_HEIGHT,
   railing: { heightMetres: 1.1, straightModuleMetres: 3, maximumBalusterSpacingMetres: 0.14, connectionAnchors: ["anchor_start", "anchor_end"], passage: "Blocks walking, permits sight; preserve post thickness when fitting spans." },
   gateAnimation: { nodeRoles: "gateHinge", property: "rotation.y", angleRadians: "sign * progress * PI * 0.48", progress: [0, 1] },
   currentGameMapping: "Rotate device roots -PI/2 about Y to face the existing -X station approach; simulation anchors remain authoritative.",
