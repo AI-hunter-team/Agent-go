@@ -388,7 +388,7 @@ PORT=8787
 
 ## 17. 固定栏杆与正式站厅资产（STATION-INTEGRATION-001）
 
-身份：2026-10-31 的本地实现核对，尚未合入。授权与边界见[任务简报](tasks/STATION-INTEGRATION-001.md)，验证及环境见[报告](validation/STATION-INTEGRATION-001.md)。
+身份：2026-10-31 的实现核对。提交与最终集成证据见 [PR #23](https://github.com/AI-hunter-team/Agent-go/pull/23)，授权与边界见[任务简报](tasks/STATION-INTEGRATION-001.md)，验证及环境见[报告](validation/STATION-INTEGRATION-001.md)。
 
 - 用户明确要求安检区和闸机区都使用通透固定栏杆。`SECURITY_BARRIERS` 与 `GATE_BARRIERS` 阻挡普通移动但允许视线通过；当前 `SIGHT_OCCLUDERS` 只含柱体。玩家观察与保安检测共用这一集合。§5–7 中“安检墙遮挡视线”的开发前描述不再代表当前实现；现有视距、视角、服务/违规和下楼结算规则不变。
 - 正式场景加载站厅 GLB，复用几何/材质并将重复静态部件批量绘制；设施快照独立驱动灯色、屏幕及双翼铰链。总览隐藏顶板和外围上部构件；跟随相机按栏杆实际高度、墙柱及顶板裁剪，支持下层站台。
