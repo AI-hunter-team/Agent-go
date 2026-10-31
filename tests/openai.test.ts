@@ -26,6 +26,16 @@ function fake(responses: unknown[]) {
   return { requests, service: new OpenAILlmService(client, cfg) };
 }
 
+test.each(["", "逃票", "向 NPC 求助", "和前面乘客商量"])("compatible model tool visibility and forged replies obey guidance: %j", async (guidance) => {
+  const permitted = guidance.includes("求助") || guidance.includes("商量");
+  const invented = { id: "npc", type: "function", function: { name: "request_cut_in", arguments: JSON.stringify({ npcId: "p2", message: "能让我先吗？", reason: "赶车" }) } };
+  const { service, requests } = fake([completion([invented])]);
+  const result = await service.decide(new SessionStore().create(guidance, null), turn());
+  expect(requests[0].body.tools.some((tool: any) => tool.function.name === "request_cut_in")).toBe(permitted);
+  expect(result.action?.type === "request_cut_in").toBe(permitted);
+  if (!permitted) expect(result.error).toContain("未开放");
+});
+
 describe("OpenAI-compatible model", () => {
   test("configured model receives the same custom deadline and crowd settings as the simulation", async () => {
     const settings = { timeLimitSeconds: 90, extraQueuePeople: 3 };

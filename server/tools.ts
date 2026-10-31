@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentAction } from "../src/shared/types";
 import { FACILITIES, NAV_NODES } from "../src/sim/layout";
 import { assertSafeText, SafetyError } from "./security";
+import { allowsCutIn, UNAVAILABLE_STRATEGY } from "../src/shared/strategyPermissions";
 
 const FACILITY_IDS = FACILITIES.map((f) => f.id);
 const TARGETS = [...NAV_NODES.map((n) => n.id), ...FACILITY_IDS];
@@ -49,8 +50,13 @@ export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
   ),
 ];
 
+export function agentToolsForGuidance(guidance: string): Anthropic.Beta.BetaTool[] {
+  return AGENT_TOOLS.filter((tool) => tool.name !== "request_cut_in" || allowsCutIn(guidance));
+}
+
 /** Convert a tool call into an action, rejecting anything malformed. */
-export function parseToolUse(name: string, input: unknown): { action: AgentAction } | { error: string } {
+export function parseToolUse(name: string, input: unknown, availableTools: readonly { name: string }[] = AGENT_TOOLS): { action: AgentAction } | { error: string } {
+  if (!availableTools.some((tool) => tool.name === name)) return { error: UNAVAILABLE_STRATEGY };
   if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "工具参数必须是对象" };
   const i = input as Record<string, unknown>;
   const allowed: Record<string, string[]> = {

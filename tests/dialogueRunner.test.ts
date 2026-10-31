@@ -9,7 +9,7 @@ import type { NpcReply, CutInDialogueRequest, DecisionResult } from "../src/shar
 import { DecisionLog } from "../src/ui/DecisionLog";
 import { remoteNpcNegotiator } from "../src/agent/remoteAgent";
 
-function fixture(negotiate: (r: CutInDialogueRequest) => Promise<NpcReply>, message = "我赶火车，能让我先办理吗？") {
+function fixture(negotiate: (r: CutInDialogueRequest) => Promise<NpcReply>, message = "我赶火车，能让我先办理吗？", guidance = "向 NPC 求助") {
   const e = new Engine(1); const w = e.world; const p = e.player;
   for (const [id] of w.persons) if (id !== "player") w.persons.delete(id);
   for (const f of w.facilities.values()) { f.queue = []; f.serving = null; }
@@ -22,10 +22,34 @@ function fixture(negotiate: (r: CutInDialogueRequest) => Promise<NpcReply>, mess
     action: { type: "request_cut_in", npcId: npc.id, message, reason: "节省时间" },
     thinking: null, usage: null, model: "test", latencyMs: 0, error: null,
   }) };
-  const r = new GameRunner(e, agent, async () => ({ mechanic: "unsupported", reason: "", source: "keywords" }), { negotiate });
+  const r = new GameRunner(e, agent, async () => ({ mechanic: "unsupported", reason: "", source: "keywords" }), { negotiate, guidance });
   return { r, e, f, p, npc };
 }
 const reply = (accepted: boolean): NpcReply => ({ accepted, reply: accepted ? "可以，你先吧。" : "我也赶时间，请排队。", reason: "自己的时间紧张", source: "llm", model: "test", usage: { inputTokens: 80, outputTokens: 30, thinkingTokens: null, cacheReadTokens: 0 } });
+
+test.each(["", "逃票", "尽快到站台", "不要插队"])("an invented tool call cannot start NPC dialogue without user intent: %j", async (guidance) => {
+  let calls = 0;
+  const { r, f, p } = fixture(async () => { calls++; return reply(true); }, undefined, guidance);
+  const before = structuredClone({ pos: p.pos, activity: p.activity, queue: f.queue });
+  r.start(); await r.pending;
+  expect(calls).toBe(0);
+  expect({ pos: p.pos, activity: p.activity, queue: f.queue }).toEqual(before);
+  expect(r.report().dialogues).toHaveLength(0);
+  expect(r.decisions[0].result?.ok).toBe(false);
+  expect(r.decisions[0].result?.text).not.toContain("request_cut_in");
+  expect(r.report().debug?.parameters.cutInEnabled).toBe(false);
+});
+
+test.each(["挤到队伍前面", "找个办法提前办理"])("creative actions cannot reveal or bypass a closed strategy: %j", async (intent) => {
+  let calls = 0;
+  const agent: Agent = { kind: "llm", dispose: async () => {}, decide: async () => ({ action: { type: "attempt_creative", intent, reason: "" }, thinking: null, usage: null, model: "fake", latencyMs: 0, error: null }) };
+  const r = new GameRunner(new Engine(1), agent, async () => { calls++; return { mechanic: "cut_in_line", reason: "", source: "llm" }; });
+  r.start(); await r.pending;
+  expect(r.decisions[0].result?.ok).toBe(false);
+  expect(r.decisions[0].result?.text).not.toContain("request_cut_in");
+  expect(r.report().dialogues).toHaveLength(0);
+  expect(calls).toBe(intent.startsWith("挤") ? 0 : 1);
+});
 
 test("NPC refusal preserves the queue and records speech, reply, result and separate usage", async () => {
   const { r, f, p } = fixture(async () => reply(false));
@@ -48,6 +72,7 @@ test("acceptance starts physical movement, but does not reorder instantly", asyn
   expect(p.activity.kind).toBe("creative");
   expect(f.queue).toEqual([npc.id]);
   expect(r.decisions[0].dialogue?.execution?.ok).toBe(true);
+  expect(r.report().debug?.parameters.cutInEnabled).toBe(true);
 });
 
 test("invalid utterance avoids the additional model call", async () => {

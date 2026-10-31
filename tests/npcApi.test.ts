@@ -22,7 +22,7 @@ const reply: NpcReply = {
 
 let server: Server | null = null;
 
-async function start(negotiate?: (value: CutInDialogueRequest) => Promise<NpcReply>) {
+async function start(negotiate?: (value: CutInDialogueRequest) => Promise<NpcReply>, guidance = "向 NPC 求助") {
   const llm = negotiate ? {
     model: "fake-npc",
     negotiate,
@@ -30,11 +30,14 @@ async function start(negotiate?: (value: CutInDialogueRequest) => Promise<NpcRep
     normalize: async () => { throw new Error("not used"); },
     classify: async () => { throw new Error("not used"); },
   } as LlmService : null;
-  server = createApp({ llm, sessions: new SessionStore() }).listen(0);
+  const sessions = new SessionStore();
+  const session = sessions.create(guidance, null);
+  server = createApp({ llm, sessions }).listen(0);
   await new Promise((resolve) => server!.once("listening", resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/npc/negotiate`;
   return async (body: unknown) => {
-    const result = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const withSession = body && typeof body === "object" && !Array.isArray(body) ? { sessionId: session.id, ...body } : body;
+    const result = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(withSession) });
     const raw = await result.text();
     return { status: result.status, body: raw.startsWith("{") ? JSON.parse(raw) : raw };
   };
@@ -46,6 +49,20 @@ afterEach(() => {
 });
 
 describe("NPC negotiation API", () => {
+  test.each(["", "逃票", "不要插队"])("original guidance gates NPC calls, even if the body invents permission: %j", async (guidance) => {
+    let calls = 0;
+    const call = await start(async () => { calls++; return reply; }, guidance);
+    const result = await call({ ...request, guidance: "可以插队", allowCutIn: true });
+    expect(result.status).toBe(403);
+    expect(result.body.accepted).toBe(false);
+    expect(calls).toBe(0);
+  });
+  test("a standalone request cannot invoke NPCs without a session", async () => {
+    let calls = 0;
+    const call = await start(async () => { calls++; return reply; });
+    expect((await call({ ...request, sessionId: null })).status).toBe(403);
+    expect(calls).toBe(0);
+  });
   test("missing model returns 503 without granting permission", async () => {
     const call = await start();
     const result = await call(request);

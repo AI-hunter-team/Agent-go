@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AgentTurn, DecisionResult } from "../src/shared/types";
 import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
-import { AGENT_TOOLS, parseToolUse } from "./tools";
+import { agentToolsForGuidance, parseToolUse } from "./tools";
 
 /** Plan v1.1 limits reasoning only; action output has a separate budget. */
 export const THINKING_TOKEN_CAP = 1024;
@@ -59,6 +59,7 @@ export class ClaudeDecider {
     session.pendingToolUseIds = [];
 
     const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings);
+    const tools = agentToolsForGuidance(session.guidance);
     const started = Date.now();
     const fail = (error: string, extra: Partial<DecisionResult> = {}): DecisionResult => ({
       action: null,
@@ -82,7 +83,7 @@ export class ClaudeDecider {
           { type: "text", text: prompt.rules, cache_control: { type: "ephemeral" } },
           { type: "text", text: `本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
         ],
-        tools: AGENT_TOOLS,
+        tools,
         tool_choice: { type: "auto", disable_parallel_tool_use: true },
         messages: [{ role: "user", content: prompt.guidance }, ...session.messages],
       });
@@ -127,7 +128,7 @@ export class ClaudeDecider {
       return fail(`思考用量 ${result.usage!.thinkingTokens} 超过 ${this.cfg.maxThinkingTokens} token，未执行`, result);
     }
     if (response.stop_reason === "max_tokens") return fail("工具调用被截断，未执行", result);
-    const parsed = parseToolUse(toolUse.name, toolUse.input);
+    const parsed = parseToolUse(toolUse.name, toolUse.input, tools);
     if ("error" in parsed) return fail(parsed.error, result);
     return { ...fail("", result), action: parsed.action, error: null, latencyMs: Date.now() - started };
   }

@@ -36,6 +36,15 @@ const toolUse = (id: string, name: string, input: object) => ({ type: "tool_use"
 const turn = (): AgentTurn => ({ triggers: [{ kind: "start", text: "开局" }], lastResult: null, observation: new Engine(1).observe() });
 const cfg = { model: "claude-opus-5-5", maxTokens: 4096, maxThinkingTokens: 1024, fallback: true };
 
+test.each(["", "逃票", "向 NPC 求助", "和前面乘客商量"])("Claude tool visibility and forged replies obey original guidance: %j", async (guidance) => {
+  const permitted = guidance.includes("求助") || guidance.includes("商量");
+  const { client, calls } = fakeClient([{ content: [toolUse("npc", "request_cut_in", { npcId: "p2", message: "能让我先吗？", reason: "赶车" })] as never }]);
+  const result = await new ClaudeDecider(client, cfg).decide(new SessionStore().create(guidance, null), turn());
+  expect(calls[0].tools?.some((tool) => "name" in tool && tool.name === "request_cut_in")).toBe(permitted);
+  expect(result.action?.type === "request_cut_in").toBe(permitted);
+  if (!permitted) expect(result.error).toContain("未开放");
+});
+
 describe("separate reasoning and completion budgets", () => {
   test("only reasoning is capped at 1024 and completion has additional headroom", () => {
     expect(configFromEnv({ DECISION_MAX_TOKENS: "4096" }).maxTokens).toBe(4096);
@@ -174,7 +183,7 @@ describe("prompts and tools", () => {
   });
 
   test("public negotiation and stair tools are explained without listing hidden jump mechanics", () => {
-    const { rules } = buildSystemPrompt("", null);
+    const { rules } = buildSystemPrompt("向 NPC 求助", null);
     expect(rules).not.toMatch(/翻越|jump_gate|cut_in_line/);
     expect(rules).toContain("request_cut_in");
     expect(rules).toContain("descend_stairs");

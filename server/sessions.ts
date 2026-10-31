@@ -4,6 +4,7 @@ import type { NormalizedGuidance } from "../src/shared/types";
 import type { ChatMessage } from "./openai";
 import { assertSafeText, validateNormalized } from "./security";
 import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettings";
+import { filterUnrequestedCutIn } from "../src/shared/strategyPermissions";
 
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
@@ -33,7 +34,7 @@ export class SessionStore {
       settings: resolveGameSettings(settings),
       runId: runId || randomUUID(),
       guidance,
-      normalized,
+      normalized: filterUnrequestedCutIn(guidance, normalized),
       messages: [],
       chatMessages: [],
       pendingToolUseIds: [],

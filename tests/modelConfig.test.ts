@@ -115,7 +115,7 @@ describe("browser model configuration", () => {
     expect((await call("/api/health")).body).toEqual({ llm: false, model: null });
     expect((await call("/api/health", undefined, token)).body.model).toBe("model-a");
     expect((await call("/api/guidance/normalize", { text: "稳妥过闸" }, token)).body.guidance.summary).toBe("自定义模型指导");
-    const session = await call("/api/session", { guidance: "", runId: "configured-debug-run" }, token);
+    const session = await call("/api/session", { guidance: "向 NPC 求助", runId: "configured-debug-run" }, token);
     await call("/api/model/enable", { model: "model-b" }, token);
     const turn = { triggers: [], lastResult: null, observation: new Engine(1).observe() };
     const body = { sessionId: session.body.sessionId, turn };

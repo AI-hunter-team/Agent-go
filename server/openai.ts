@@ -4,7 +4,7 @@ import type { ClaudeConfig } from "./claude";
 import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
 import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
-import { AGENT_TOOLS, parseToolUse } from "./tools";
+import { agentToolsForGuidance, parseToolUse } from "./tools";
 import { assertSafeText, untrustedData, validateNormalized } from "./security";
 
 interface ToolCall {
@@ -70,7 +70,7 @@ export class OpenAIClient {
   }
 }
 
-const CHAT_TOOLS = AGENT_TOOLS.map((tool) => ({
+const chatToolsForGuidance = (guidance: string) => agentToolsForGuidance(guidance).map((tool) => ({
   type: "function",
   function: { name: tool.name, description: tool.description, parameters: tool.input_schema, strict: true },
 }));
@@ -106,7 +106,7 @@ export class OpenAILlmService implements LlmService {
           { role: "user", content: prompt.guidance },
           ...session.chatMessages,
         ],
-        tools: CHAT_TOOLS,
+        tools: chatToolsForGuidance(session.guidance),
         tool_choice: "required",
         parallel_tool_calls: false,
       });
@@ -138,7 +138,7 @@ export class OpenAILlmService implements LlmService {
       let input: unknown;
       try { input = JSON.parse(calls[0].function.arguments); }
       catch { throw new Error("工具参数不是有效 JSON，未执行"); }
-      const parsed = parseToolUse(calls[0].function.name, input);
+      const parsed = parseToolUse(calls[0].function.name, input, agentToolsForGuidance(session.guidance));
       if ("error" in parsed) throw new Error(parsed.error);
       result.action = parsed.action;
     } catch (error) {

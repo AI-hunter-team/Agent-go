@@ -88,6 +88,16 @@ describe("API without a model", () => {
 });
 
 describe("API with a model", () => {
+  test("normalization and session memory cannot introduce an unrequested social strategy", async () => {
+    const invented = { summary: "请前面的乘客通融一下", priorities: ["尽快到达"], risk: "", rules: [], creativeIdeas: ["插队"], notExecutable: [], initialPlan: ["向NPC求助", "先买票"] };
+    const { call, sessions } = await start({ ...fakeLlm, normalize: async () => invented });
+    const normalized = await call("POST", "/api/guidance/normalize", { text: "尽快到站台" });
+    expect(normalized.body.guidance.summary).toBe("尽快到站台");
+    expect(normalized.body.guidance.creativeIdeas).toEqual([]);
+    expect(normalized.body.guidance.initialPlan).toEqual(["先买票"]);
+    const created = await call("POST", "/api/session", { guidance: "尽快到站台", normalized: invented });
+    expect(sessions.get(created.body.sessionId)?.normalized?.creativeIdeas).toEqual([]);
+  });
   test("session uses fixed difficulty and rejects player overrides before creating a game", async () => {
     const { call, sessions } = await start(fakeLlm);
     const settings = { timeLimitSeconds: 120, extraQueuePeople: 3 };

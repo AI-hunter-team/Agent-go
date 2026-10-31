@@ -3,6 +3,7 @@ import { extname, resolve } from "node:path";
 import { configFromEnv } from "./claude";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
+import { allowsCutIn, filterUnrequestedCutIn, UNAVAILABLE_STRATEGY } from "../src/shared/strategyPermissions";
 import type {
   AgentTurn,
   CreativeClassification,
@@ -118,7 +119,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       const { llm, parameters: modelParameters } = runtime(req);
       if (!requireLlm(llm, res)) return;
       const { value, debug } = await traceOperation({ operation: "normalize", runId: runId(req.body?.runId), sessionId: null }, { text, modelParameters }, debugLogger, () => llm!.normalize(text));
-      res.json({ guidance: value, debug });
+      validateNormalized(value);
+      res.json({ guidance: filterUnrequestedCutIn(text, value), debug });
     }),
   );
 
@@ -164,7 +166,9 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       const sessionId = req.body?.sessionId;
       const session = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
       if (sessionId && !session) return void res.status(404).json({ error: "会话不存在或已结束" });
+      if (!session) return void res.status(403).json(npcFailure(UNAVAILABLE_STRATEGY, null));
       const { llm, parameters } = session ? forSession(req, session) : runtime(req);
+      if (!allowsCutIn(session.guidance)) return void res.status(403).json(npcFailure(UNAVAILABLE_STRATEGY, null));
       if (!llm?.negotiate) return void res.status(503).json(npcFailure("未配置模型，NPC 未答复，未获得插队许可。", null));
       try {
         const request: CutInDialogueRequest = { npc: req.body.npc, message: req.body.message, history: req.body.history };

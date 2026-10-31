@@ -18,6 +18,7 @@ import { DECISION_LIMITS, RULES, DT } from "../sim/scenario";
 import type { Agent, Classifier, NpcNegotiator } from "./agent";
 import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
 import { prepareCutIn } from "../sim/negotiation";
+import { allowsCutIn, mentionsCutInIdea, UNAVAILABLE_STRATEGY } from "../shared/strategyPermissions";
 
 export type RunnerPhase = "ready" | "running" | "thinking" | "ended";
 
@@ -52,6 +53,7 @@ export class GameRunner {
   private consecutiveFailures = 0;
   private rejectStreak = 0;
   private readonly maxDecisions: number;
+  private readonly cutInAllowed: boolean;
   private readonly now: () => number;
   private readonly debug: RunDebug;
   private active: { record: DebugAttempt; start: number } | null = null;
@@ -63,10 +65,11 @@ export class GameRunner {
     private readonly opts: RunnerOptions = {},
   ) {
     this.maxDecisions = opts.maxDecisions ?? DECISION_LIMITS.maxDecisions;
+    this.cutInAllowed = allowsCutIn(opts.guidance ?? "");
     this.now = opts.now ?? (() => performance.now());
     this.debug = {
       version: 1, runId: opts.runId ?? crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: null,
-      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: engine.settings.timeLimitSeconds, extraQueuePeople: engine.settings.extraQueuePeople, stepSeconds: DT, simulationRules: { ...RULES, timeLimit: engine.settings.timeLimitSeconds }, decisionLimits: { ...DECISION_LIMITS } },
+      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: engine.settings.timeLimitSeconds, extraQueuePeople: engine.settings.extraQueuePeople, cutInEnabled: this.cutInAllowed, stepSeconds: DT, simulationRules: { ...RULES, timeLimit: engine.settings.timeLimitSeconds }, decisionLimits: { ...DECISION_LIMITS } },
       preparation: opts.preparation ?? { durationMs: 0, server: null }, attempts: [], summary: summarizeDebug([]),
     };
   }
@@ -152,7 +155,9 @@ export class GameRunner {
 
     if (action) {
       this.consecutiveFailures = 0;
-      if (action.type === "attempt_creative") {
+      if (action.type === "attempt_creative" && !this.cutInAllowed && mentionsCutInIdea(action.intent)) {
+        outcome = { ok: false, text: UNAVAILABLE_STRATEGY };
+      } else if (action.type === "attempt_creative") {
         const record = this.beginAttempt("classification", turn);
         try {
           classification = await this.classify(action.intent, observation);
@@ -167,7 +172,8 @@ export class GameRunner {
           if (record.status !== "cancelled") record.classification = classification;
         } finally { this.endAttempt(record); }
         if (engine.status !== "running") return;
-        outcome = engine.applyAction(action, classification.mechanic);
+        outcome = !this.cutInAllowed && classification.mechanic === "cut_in_line"
+          ? { ok: false, text: UNAVAILABLE_STRATEGY } : engine.applyAction(action, classification.mechanic);
       } else if (action.type === "request_cut_in") {
         const negotiation = await this.negotiate(action);
         if (engine.status !== "running") return;
@@ -228,6 +234,7 @@ export class GameRunner {
   }
 
   private async negotiate(action: Extract<AgentAction, { type: "request_cut_in" }>): Promise<{ outcome: ActionResult; dialogue?: NpcDialogueRecord }> {
+    if (!this.cutInAllowed) return { outcome: { ok: false, text: UNAVAILABLE_STRATEGY } };
     const e = this.engine;
     const history = this.dialogues.filter((d) => d.request.npc.id === action.npcId && d.response)
       .map((d) => ({ message: d.request.message, reply: d.response!.reply, accepted: d.response!.accepted }));
