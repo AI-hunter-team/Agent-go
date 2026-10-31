@@ -61,7 +61,7 @@ describe("GameRunner", () => {
     expect(engine.player.pos).toEqual(entrance);
     expect(engine.t).toBe(0);
     if (action.type === "join_queue") expect(engine.player.activity).toMatchObject({ kind: "to_queue", facility: action.facility });
-    else if (action.type === "move_to") expect(engine.player.activity).toMatchObject({ kind: "walking", label: "3号自动售票机附近" });
+    else if (action.type === "move_to") expect(engine.player.activity).toMatchObject({ kind: "walking", label: "3号自动售票机队尾" });
     else expect(engine.player.activity).toMatchObject({ kind: "waiting", remaining: 2 });
     runner.stop();
   });
