@@ -7,6 +7,7 @@ import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS } from "../sim/scenario";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { guidanceError } from "../shared/guidance";
 import { GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
@@ -128,7 +129,12 @@ export function App() {
     } catch (failure) { if (request === requests.current) setError(`开局失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
-  const edit = () => { requests.current++; preparationRef.current = null; setIntent("setup"); setError(null); session.preview(seed); };
+  const edit = () => { requests.current++; preparationRef.current = null; setShowModelConfig(false); setIntent("setup"); setError(null); session.preview(seed); };
+  const adoptGuidance = (text: string) => {
+    const problem = guidanceError(text);
+    if (problem) { setError(problem); return; }
+    setGuidance(text); setNormalized(null); edit();
+  };
   const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
   const applyAsset = (path: string) => {
     if (path && (!path.startsWith("/models/") || path.includes("..") || !/\.(gltf|glb)$/i.test(path))) { setAssetError("请输入 /models/ 下的 .glb 或 .gltf 文件路径。"); return; }
@@ -172,6 +178,7 @@ export function App() {
         <div className={styles.ticketHeading}><span>METRO / JOURNEY</span><span>NO. {String(seed).padStart(4, "0")}</span></div>
         <div className={styles.sidebarBody}>
           {error && <div className="error" role="alert">{error}</div>}
+          {ended && showModelConfig && <ModelConfigPanel health={health} closeLabel="返回复盘" onClose={() => setShowModelConfig(false)} onEnabled={value => { setHealth(value); setShowModelConfig(false); }} />}
           {intent === "setup" && showModelConfig && <ModelConfigPanel health={health} onClose={() => setShowModelConfig(false)} onEnabled={(value) => {
             setHealth(value);
             setAgentKind(value.llm ? "llm" : "offline");
@@ -188,7 +195,7 @@ export function App() {
               {runner.budgetExhausted && <p className="badge brick">决策次数已用完，世界继续运行。</p>}
               <button className="ghost full-width" onClick={() => session.stop()}>结束本局</button>
             </>}
-            {ended && <><ReportSummary report={runner.report()} onRetry={start} onEdit={edit} /><Modal title="轨迹回放" description="回看角色位置、路线与当时决策；NPC 和设施显示终局状态。" wide trigger={<button className="full-width">查看轨迹回放</button>}><TrajectoryReplayView key={session.generation} report={runner.report()} engine={session.engine} /></Modal></>}
+            {ended && <><ReportSummary key={session.generation} report={runner.report()} onRetry={start} onEdit={edit} onAdopt={adoptGuidance} modelAvailable={health.llm} onConfigureModel={() => setShowModelConfig(true)} /><Modal title="轨迹回放" description="回看角色位置、路线与当时决策；NPC 和设施显示终局状态。" wide trigger={<button className="full-width">查看轨迹回放</button>}><TrajectoryReplayView key={session.generation} report={runner.report()} engine={session.engine} /></Modal></>}
             {playing && runner.attempts.at(-1)?.status === "pending" && <details><summary>当前调用（请求中）</summary><DecisionTrace attempts={[runner.attempts.at(-1)!]} /></details>}
             {playing && runner.dialogues.at(-1)?.status === "pending" && <NpcDialogue record={runner.dialogues.at(-1)!} />}
             <Modal title="行程记录" description="查看角色的决策依据、执行结果和已经发生的事件。" wide trigger={<button className={styles.logButton}>查看完整行程记录 <span aria-hidden="true">↗</span></button>}>

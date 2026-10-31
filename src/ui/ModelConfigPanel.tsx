@@ -5,9 +5,10 @@ interface Props {
   health: { llm: boolean; model: string | null };
   onEnabled: (health: Props["health"]) => void;
   onClose: () => void;
+  closeLabel?: string;
 }
 
-export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
+export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返回开局设置" }: Props) {
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -76,7 +77,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
     <section className="card model-config" aria-labelledby="model-config-title" aria-busy={busy !== null}>
       <div className="row between">
         <h2 id="model-config-title">模型 API 配置</h2>
-        <button className="ghost" disabled={busy !== null} onClick={onClose}>返回开局设置</button>
+        <button className="ghost" disabled={busy !== null} onClick={onClose}>{closeLabel}</button>
       </div>
       <p className="muted">连接你的 OpenAI 兼容 API，验证后选择模型来驱动角色。</p>
       <ol className="config-steps" aria-label="配置步骤">

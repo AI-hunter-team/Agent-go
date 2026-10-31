@@ -19,6 +19,7 @@ import type { Agent, Classifier, NpcNegotiator } from "./agent";
 import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
 import { prepareCutIn } from "../sim/negotiation";
 import { allowsCutIn, mentionsCutInIdea, UNAVAILABLE_STRATEGY } from "../shared/strategyPermissions";
+import { ReviewRecorder } from "./reviewRecorder";
 
 export type RunnerPhase = "ready" | "running" | "thinking" | "ended";
 
@@ -57,6 +58,7 @@ export class GameRunner {
   private readonly now: () => number;
   private readonly debug: RunDebug;
   private active: { record: DebugAttempt; start: number } | null = null;
+  private readonly reviewRecorder = new ReviewRecorder();
 
   constructor(
     readonly engine: Engine,
@@ -72,6 +74,7 @@ export class GameRunner {
       parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: engine.settings.timeLimitSeconds, extraQueuePeople: engine.settings.extraQueuePeople, cutInEnabled: this.cutInAllowed, stepSeconds: DT, simulationRules: { ...RULES, timeLimit: engine.settings.timeLimitSeconds }, decisionLimits: { ...DECISION_LIMITS } },
       preparation: opts.preparation ?? { durationMs: 0, server: null }, attempts: [], summary: summarizeDebug([]),
     };
+    this.reviewRecorder.capture(engine);
   }
 
   start() {
@@ -97,6 +100,7 @@ export class GameRunner {
       }
       if (i >= steps) return;
       this.engine.step();
+      this.reviewRecorder.capture(this.engine);
     }
   }
 
@@ -110,6 +114,7 @@ export class GameRunner {
   }
 
   private beginDecision() {
+    this.reviewRecorder.capture(this.engine, true);
     this.phase = "thinking";
     this.opts.onChange?.();
     this.pending = this.decide().finally(() => {
@@ -341,6 +346,7 @@ export class GameRunner {
   private finish() {
     if (this.phase === "ended") return;
     this.phase = "ended";
+    this.reviewRecorder.capture(this.engine, true);
     if (this.active) {
       this.active.record.durationMs = Math.max(0, this.now() - this.active.start);
       this.active.record.status = "cancelled";
@@ -364,6 +370,7 @@ export class GameRunner {
     const round = (n: number) => Math.round(n * 10) / 10;
     const tb = e.timeBreakdown;
     return {
+      ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot() } : {}),
       debug: this.snapshotDebug(),
       seed: e.seed,
       settings: { ...e.settings },

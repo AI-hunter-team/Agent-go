@@ -3,7 +3,7 @@ import type { CreativeClassification, CreativeMechanic, CutInDialogueRequest, No
 import { baseParams, type ClaudeConfig } from "./claude";
 import { assertSafeText, SAFETY_SYSTEM_PROMPT, untrustedData, validateNormalized } from "./security";
 
-async function structuredCall<T>(
+export async function structuredCall<T>(
   client: Anthropic,
   cfg: ClaudeConfig,
   opts: {

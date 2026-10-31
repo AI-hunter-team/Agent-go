@@ -6,6 +6,8 @@ import type { Session } from "./sessions";
 import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
 import { agentToolsForGuidance, parseToolUse } from "./tools";
 import { assertSafeText, untrustedData, validateNormalized } from "./security";
+import { DRAFT_SCHEMA, DRAFT_SYSTEM, REVIEW_SCHEMA, REVIEW_SYSTEM } from "./review";
+import { ReviewFailure, validateDraft, validateReview, type ReviewInput, type ReviewResult, type ReviewStrategy, type DraftResult, type ReviewMetadata } from "../src/shared/review";
 
 interface ToolCall {
   id: string;
@@ -176,7 +178,7 @@ export class OpenAILlmService implements LlmService {
     }
   }
 
-  private async structured(system: string, user: string, schema: object, name: string, maxTokens: number): Promise<unknown> {
+  private async structured(system: string, user: string, schema: object, name: string, maxTokens: number, onResponse?: (response: Completion) => void): Promise<unknown> {
     const response = await this.client.complete({
       model: this.model,
       max_completion_tokens: maxTokens,
@@ -185,10 +187,36 @@ export class OpenAILlmService implements LlmService {
       response_format: { type: "json_schema", json_schema: { name, strict: true, schema } },
     });
     const choice = response.choices?.[0];
+    onResponse?.(response);
     if (choice?.message?.refusal || choice?.finish_reason === "content_filter") throw new Error("模型拒绝了这次请求");
     if (choice?.finish_reason === "length") throw new Error("输出被截断");
     if (!choice?.message?.content) throw new Error("模型未返回结构化内容");
     return JSON.parse(choice.message.content);
+  }
+
+  private async reviewCall<T>(system: string, input: unknown, schema: object, name: string, validate: (value: unknown) => T, operation: "review" | "draft") {
+    const started = Date.now();
+    let metadata: ReviewMetadata = { model: this.model, usage: null, latencyMs: 0 };
+    try {
+      const value = await this.structured(system, untrustedData("赛后资料", input), schema, name, 4096, response => {
+      const u = response.usage;
+      metadata = { model: response.model ?? this.model, latencyMs: Date.now() - started,
+        usage: u ? { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0, thinkingTokens: u.completion_tokens_details?.reasoning_tokens ?? null, cacheReadTokens: u.prompt_tokens_details?.cached_tokens ?? 0 } : null };
+    });
+      return { value: validate(value), ...metadata, latencyMs: Date.now() - started };
+    } catch {
+      throw new ReviewFailure("模型未返回有效的复盘或草稿，请重试", { ...metadata, latencyMs: Date.now() - started, operation, status: "error" });
+    }
+  }
+
+  async review(input: ReviewInput): Promise<ReviewResult> {
+    const { value, ...metadata } = await this.reviewCall(REVIEW_SYSTEM, input, REVIEW_SCHEMA, "round_review", v => validateReview(v, input), "review");
+    return { analysis: value, ...metadata };
+  }
+
+  async draftGuidance(guidance: string, strategies: ReviewStrategy[]): Promise<DraftResult> {
+    const { value, ...metadata } = await this.reviewCall(DRAFT_SYSTEM, { guidance, strategies }, DRAFT_SCHEMA, "review_guidance", validateDraft, "draft");
+    return { ...value, ...metadata };
   }
 
   async normalize(text: string): Promise<NormalizedGuidance> {

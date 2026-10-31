@@ -383,3 +383,13 @@ PORT=8787
 
 - [TrajectoryReplay](../src/ui/TrajectoryReplay.tsx) 是独立二维历史地图，展示角色位置、已走路线和决策，支持播放、暂停、倍速、拖动与决策跳转；不倒退实时世界、不重建 NPC/设施历史，也不产生新的模型调用。旧报告缺失时间戳时按兼容逻辑播放。见[回放设计](superpowers/specs/2026-10-30-trajectory-replay-design.md)。
 - 主观战仍为同一模拟器驱动的 3D，会话模型隔离与 Debug 保留。集成软件检查、离线浏览器整局/回放/JSON 和远端 CI 的范围见集成报告及 PR；不据此宣布 Chrome、完整性能或真实模型整局验收通过。
+
+## 17. 失败复盘与指导采纳（FAILURE-REVIEW-001）
+
+身份：本次聊天确认后新增的本地实现，未合入远端。需求与边界见[任务简报](tasks/FAILURE-REVIEW-001.md)，验证见[本地验证](validation/FAILURE-REVIEW-001.md)。本次允许赛后全局分析，不改变局内感知权限或清空运行记忆的规则。
+
+- `ReviewRecorder` 在开局、每 5 秒、决策及终局保存已发生的设施队列/服务状态、角色位置与保安位置，结束后才通过报告的可选 `worldSnapshots` 暴露；不记录未来脚本、未发生的服务抽样或原始模型推理。
+- `POST /api/review` 接收结束报告投影 `ReviewInput`，包含完整事件（保留 `playerVisible`）、决策时观察与动作/结果、耗时及快照。它不依赖已删除的局内 session，也不将全局资料写入新 session；客户端报告仍非服务端权威事实。
+- Anthropic/DeepSeek Anthropic 兼容与 OpenAI 兼容接口各自执行独立结构化调用。返回失败主因、次因、不确定性、关键转折及 2–3 条策略，校验时间范围、真实决策/事件引用、字段与长度。模型异常显示错误及重试入口，不以固定文案冒充模型复盘。
+- `POST /api/review/guidance` 仅接收原指导与玩家所选策略，返回 1–300 Unicode 字符草稿。玩家可编辑，显式采用后返回设置，清除旧整理与准备记录，再整理并确认开局。未选策略与完整复盘不自动注入下一局。
+- 每份终局报告有独立的 UI 控制器：自动调用去重，选择变化及生成期间的新编辑使旧草稿失效，迟到响应不覆盖当前选择或其他对局；终局内连接模型保留报告。JSON 导出增加可选 `review`、`selectedStrategyIds`、`reviewDraft`、`reviewDraftHistory` 和 `reviewAttempts`；后者保留成功及失败调用的独立用量，未返回时为未知，不计入原有局内统计。

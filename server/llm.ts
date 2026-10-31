@@ -4,6 +4,7 @@ import { ClaudeDecider, configFromEnv } from "./claude";
 import { OpenAIClient, OpenAILlmService } from "./openai";
 import { classifyIntent, negotiateNpc, normalizeGuidance } from "./structured";
 import { debugFetch } from "./debug";
+import { reviewRound, draftReviewGuidance } from "./review";
 
 export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | null {
   const provider = env.AGENT_PROVIDER || (env.OPENAI_API_KEY ? "openai" : "anthropic");
@@ -30,5 +31,7 @@ export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | nu
     normalize: (text) => normalizeGuidance(client, cfg, text),
     classify: (intent, observation) => classifyIntent(client, cfg, intent, observation),
     negotiate: (request) => negotiateNpc(client, cfg, request),
+    review: (input) => reviewRound(client, cfg, input),
+    draftGuidance: (guidance, strategies) => draftReviewGuidance(client, cfg, guidance, strategies),
   };
 }

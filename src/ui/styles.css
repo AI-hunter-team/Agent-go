@@ -125,6 +125,31 @@ html:has([data-reduced-motion=true]) *, html:has([data-reduced-motion=true]) *::
   border-top: 3px solid var(--blue);
 }
 
+.failure-review { width: 100%; margin: 8px 0; padding: 4px 0 18px; border-top: 2px solid var(--ochre); overflow-wrap: anywhere; }
+.failure-review h3 { margin-top: 15px; }
+.review-summary { font-size: 15px; line-height: 1.8; font-weight: 500; }
+.review-content { font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.review-content h3 { margin-top: 28px; font-size: 15px; }
+.review-turn { border-top: 1px solid var(--line); padding: 8px 0 12px; }
+.review-turn h4 { color: var(--blue); font-variant-numeric: tabular-nums; }
+.review-perspectives { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.review-perspectives > div { border-left: 2px solid var(--sage); padding-left: 12px; }
+.review-perspectives > div:last-child { border-left-color: var(--ochre); }
+.review-perspectives span { font-size: 11px; color: var(--ink-soft); }
+.review-perspectives p { margin: 5px 0; }
+.review-evidence { font-size: 11px; margin: 10px 0; }
+.review-evidence summary { cursor: pointer; color: var(--blue); }
+.review-evidence li, .review-evidence p { line-height: 1.8; }
+.review-strategies { border: 0; margin: 0; padding: 0; min-width: 0; }
+.review-strategy { border: 1px solid var(--line); padding: 10px 16px; margin: 10px 0; }
+.review-strategy.selected { border-color: var(--blue); background: #315c6508; }
+.review-strategy .check { font-size: 13px; flex-wrap: wrap; }
+.review-recommended { font-size: 10px; font-weight: 400; color: var(--blue); }
+.review-draft { border-top: 2px solid var(--ochre); margin-top: 24px; }
+.review-draft .field { margin: 15px 0; }
+.review-draft > button { width: 100%; white-space: normal; }
+@media (max-width: 560px) { .review-perspectives { grid-template-columns: 1fr; gap: 12px; } .review-content { font-size: 12px; } }
+
 .replay h2 { margin: 0; }
 .replay-note { margin: 8px 0; }
 .replay-clock { color: var(--blue); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
