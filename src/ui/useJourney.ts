@@ -402,14 +402,27 @@ export function useJourney(interval: number) {
     quickStart.current = null;
     void start(twoDimensional);
   });
+  // A fresh scenario must update the preview, saved record and selected descriptor together.
+  const previewSeed = (nextSeed: number) => {
+    if (nextSeed === seed) { session.preview(seed, settings, { backpack }); return null; }
+    const definition = generateWorld(nextSeed);
+    const choice = { ...createdWorld(definition, { mode: "random", value: String(nextSeed) }), id: crypto.randomUUID() };
+    const record: SavedWorld = { ...choice, id: choice.id, schemaVersion: 1, createdAt: Date.now(), updatedAt: Date.now(), preferences: { settings: { ...settings }, backpack, characterId, kind, guidance } };
+    session.preview(nextSeed, settings, { backpack }, definition);
+    currentRecord.current = record; selectedWorld.current = choice; library.save(record);
+    setSeed(nextSeed);
+    dispatch({ type: "world-selected", choice });
+    return choice;
+  };
   const edit = (text?: string) => {
+    const nextSeed = ended ? randomSeed(seed) : seed;
     preserveRun();
     if (text !== undefined) {
       setGuidance(text);
       setKind("llm");
     }
     invalidate();
-    session.preview(seed, settings, { backpack });
+    previewSeed(nextSeed);
     navigate(text !== undefined || kind === "llm" ? "guidance" : "plan");
   };
   const retry = (options: { sameScenario?: boolean; twoDimensional?: boolean } = {}) => {
@@ -419,19 +432,12 @@ export function useJourney(interval: number) {
     if (kind === "llm" && !health.llm) { setError("请先连接模型，上一局结果已保留。"); setDrawer(true); return; }
     preserveRun();
     const nextSeed = options.sameScenario ? seed : randomSeed(seed);
-    if (nextSeed !== seed) {
-      const definition = generateWorld(nextSeed);
-      const choice = { ...createdWorld(definition, { mode: "random", value: String(nextSeed) }), id: crypto.randomUUID() };
-      const record: SavedWorld = { ...choice, id: choice.id, schemaVersion: 1, createdAt: Date.now(), updatedAt: Date.now(), preferences: { settings: { ...settings }, backpack, characterId, kind, guidance } };
-      session.preview(nextSeed, settings, { backpack }, definition);
-      currentRecord.current = record; selectedWorld.current = choice; library.save(record);
-      setSeed(nextSeed);
+    const choice = previewSeed(nextSeed);
+    if (choice) {
       pendingRetry.current = { worldId: choice.id, autonomous, twoDimensional: options.twoDimensional ?? false };
       stage.current = "character";
-      dispatch({ type: "world-selected", choice });
       return;
     }
-    session.preview(nextSeed, settings, { backpack });
     void prepare(autonomous, { seed: nextSeed, twoDimensional: options.twoDimensional ?? false });
   };
   useEffect(() => {
@@ -442,9 +448,10 @@ export function useJourney(interval: number) {
   }, [flow.createdWorld?.id]);
   const returnLobby = () => {
     if (watching) session.stop();
+    const nextSeed = session.runner?.phase === "ended" ? randomSeed(seed) : seed;
     preserveRun();
     invalidate();
-    session.preview(seed, settings, { backpack });
+    previewSeed(nextSeed);
     navigate("lobby");
   };
   const replaceModel = () => {

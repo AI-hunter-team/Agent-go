@@ -30,23 +30,28 @@ describe("NPC director", () => {
     expect(w.gatePassed).toBeGreaterThanOrEqual(10);
   });
 
-  test("scripted closures happen on time and nobody queues at them", () => {
-    const w = simulate(45);
-    const scenario = buildScenario(1);
+  test.each([1, 2, 3, 4, 5, 6])("seed %i scripted closures happen on time and nobody queues at them", (seed) => {
+    const w = simulate(45, seed);
+    const scenario = buildScenario(seed);
     const failedTvm = scenario.events.find((e): e is Extract<typeof e, { type: "status" }> => e.type === "status" && e.status === "broken")!.facility;
+    const closedSecurity = scenario.events.find((e): e is Extract<typeof e, { type: "status" }> => e.type === "status" && e.status === "closed")!.facility;
     expect(w.facility(failedTvm)!.status).toBe("broken");
-    expect(w.facility("S1")!.status).toBe("closed");
-    expect(w.facility("S1")!.queue).toHaveLength(0);
+    expect(w.facility(closedSecurity)!.status).toBe("closed");
+    expect(w.facility(closedSecurity)!.queue).toHaveLength(0);
+    expect([...w.facilities.values()].filter((f) => f.def.kind === "security" && f.status === "open")).toHaveLength(2);
     for (const p of w.persons.values()) {
       if (p.activity.kind === "queued" || p.activity.kind === "to_queue") {
-        expect(["S1", failedTvm, ...Object.keys(scenario.initialStatus)]).not.toContain(p.activity.facility);
+        expect([closedSecurity, failedTvm, ...Object.keys(scenario.initialStatus)]).not.toContain(p.activity.facility);
       }
     }
   });
 
-  test("a recheck lengthens one service at S2", () => {
-    const w = simulate(90);
-    expect(w.events.some((e) => e.kind === "recheck")).toBe(true);
+  test.each([1, 6])("seed %i rechecks a passenger at an open security lane", (seed) => {
+    const w = simulate(90, seed);
+    const recheck = buildScenario(seed).events.find(e => e.type === "recheck")!;
+    const lane = w.facility(recheck.facility)!;
+    expect(lane.status).toBe("open");
+    expect(w.events.some((e) => e.kind === "recheck" && e.text.includes(lane.def.label))).toBe(true);
   });
 
   test("the same seed reproduces the same world", () => {

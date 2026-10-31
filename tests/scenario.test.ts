@@ -3,10 +3,12 @@ import { FACILITIES } from "../src/sim/layout";
 import { NpcDirector } from "../src/sim/npc";
 import { buildScenario } from "../src/sim/scenario";
 import { World } from "../src/sim/world";
+import { generateWorld } from "../src/sim/worldDefinition";
 
 test("seeded failures vary across all gates, ticket machines and times while keeping routes open", () => {
   const gates = new Set<string>();
   const tvms = new Set<string>();
+  const securities = new Set<string>();
   const times = new Set<number>();
   for (let seed = 1; seed <= 200; seed++) {
     const scenario = buildScenario(seed);
@@ -24,11 +26,17 @@ test("seeded failures vary across all gates, ticket machines and times while kee
     expect(failure.t).toBeLessThanOrEqual(40);
     tvms.add(failure.facility);
     times.add(failure.t);
-    expect(scenario.events.filter((e) => e.type === "status" && e.status === "closed")).toEqual([
-      expect.objectContaining({ t: 40, facility: "S1" }),
-    ]);
+    const closures = scenario.events.filter((e): e is Extract<typeof e, { type: "status" }> => e.type === "status" && e.status === "closed");
+    expect(closures).toHaveLength(1);
+    const closure = closures[0];
+    const security = FACILITIES.find((f) => f.id === closure.facility)!;
+    expect(security.kind).toBe("security");
+    expect(closure.t).toBe(40);
+    expect(closure.broadcast).toBe(`广播：${security.label}临时停用，请排队乘客改走其他安检通道。`);
+    securities.add(closure.facility);
+    const recheckFacility = closure.facility === "S2" ? expect.stringMatching(/^S[13]$/) : "S2";
     expect(scenario.events.filter((e) => e.type === "recheck")).toEqual([
-      { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
+      { t: 55, type: "recheck", facility: recheckFacility, extra: [10, 15] },
     ]);
     expect(scenario.events.some((e) => e.type === "power")).toBe(false);
     expect(scenario.spawns.some((s) => s.startQueue === gate)).toBe(false);
@@ -39,6 +47,7 @@ test("seeded failures vary across all gates, ticket machines and times while kee
   }
   expect([...gates].sort()).toEqual(["G1", "G2", "G3", "G4", "G5"]);
   expect([...tvms].sort()).toEqual(["TVM-1", "TVM-2", "TVM-3"]);
+  expect([...securities].sort()).toEqual(["S1", "S2", "S3"]);
   expect(times.size).toBe(21);
 });
 
@@ -49,5 +58,19 @@ test("crowd and deadline settings cannot change the seeded failure schedule", ()
     expect(crowded.initialStatus).toEqual(plain.initialStatus);
     expect(crowded.events).toEqual(plain.events);
     expect(crowded.spawns.filter((s) => !s.startQueue)).toEqual(plain.spawns.filter((s) => !s.startQueue));
+  }
+});
+
+
+test("generated layouts close a real security lane and recheck an open lane", () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const definition = generateWorld(seed), scenario = buildScenario(seed, {}, definition.layout);
+    const closure = scenario.events.find(e => e.type === "status" && e.status === "closed")!;
+    const recheck = scenario.events.find(e => e.type === "recheck")!;
+    const lanes = definition.layout.FACILITIES.filter(f => f.kind === "security");
+    expect("facility" in closure && lanes.some(f => f.id === closure.facility)).toBe(true);
+    expect("facility" in recheck && lanes.some(f => f.id === recheck.facility)).toBe(true);
+    expect("facility" in closure && "facility" in recheck && recheck.facility).not.toBe("facility" in closure && closure.facility);
+    expect(buildScenario(seed, {}, definition.layout)).toEqual(scenario);
   }
 });
