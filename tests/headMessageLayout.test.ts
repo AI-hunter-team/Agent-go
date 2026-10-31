@@ -41,6 +41,19 @@ test("a solitary bubble keeps its original position", () => {
     .toMatchObject([{ id: "p1", x: 90, y: 70 }]);
 });
 
+test("mobile bubbles avoid the live timer, record panel and wrapped bottom controls", () => {
+  const controls: MessageBox[] = [
+    { id: "record", x: 12, y: 16, width: 140, height: 56, priority: 0 },
+    { id: "timer", x: 164, y: 16, width: 144, height: 124, priority: 0 },
+    { id: "dock", x: 12, y: 410, width: 296, height: 146, priority: 0 },
+  ];
+  const placed = layoutHeadMessages([{ id: "player", x: 40, y: 80, width: 240, height: 90, priority: Infinity }], { width: 320, height: 568 }, controls);
+  expect(placed).toHaveLength(1);
+  for (const control of controls) expect(overlaps(placed[0], control)).toBe(false);
+  expect(placed[0].y).toBeGreaterThanOrEqual(150);
+  expect(placed[0].y + placed[0].height).toBeLessThanOrEqual(400);
+});
+
 test("limited space preserves higher priority messages without stacking old ones over them", () => {
   const placed = layoutHeadMessages([
     { id: "old", x: 8, y: 8, width: 280, height: 130, priority: 1 },
