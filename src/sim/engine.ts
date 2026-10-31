@@ -17,7 +17,7 @@ import { findPath, nodeById } from "./nav";
 import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
 import { buildObservation, visibleFacilities } from "./observation";
-import { DT, RULES, STATUS_LABEL, buildScenario } from "./scenario";
+import { DT, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
 import { World, round1, type Person } from "./world";
 import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
@@ -52,10 +52,10 @@ export class Engine {
   /** A wait requested while still walking or queueing: fires wait_done without interrupting. */
   private wakeAt: number | null = null;
 
-  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}) {
+  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}, scenarioOverride?: Scenario) {
     this.settings = resolveGameSettings(settings);
     this.world = new World(seed, this.settings.timeLimitSeconds);
-    this.npcs = new NpcDirector(this.world, buildScenario(seed, this.settings));
+    this.npcs = new NpcDirector(this.world, scenarioOverride ?? buildScenario(seed, this.settings));
     this.creative = new CreativeSystem(this.world, this.guards);
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
     this.recordTrail();

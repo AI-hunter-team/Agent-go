@@ -1,6 +1,11 @@
 // Types shared by the simulation, the agents, the API server and the UI.
 import type { OperationDebug, RunDebug } from "./debug";
 import type { GameSettings } from "./gameSettings";
+import type {
+  ActionObservation, AlertChange, BagObservation, BossRecord, InventoryEntry,
+  ItemObservation, ItemTransfer, Persona, PersonObservation, WorldEvent,
+} from "./interaction";
+export type * from "./interaction";
 
 export interface Vec {
   x: number;
@@ -66,6 +71,9 @@ export interface Trigger {
 }
 
 export interface SelfObservation {
+  inventory?: InventoryEntry[];
+  bag?: BagObservation;
+  action?: ActionObservation | null;
   position: Vec;
   zone: string;
   nearestNode: string;
@@ -96,6 +104,7 @@ export interface FacilityObservation {
 }
 
 export interface GuardObservation {
+  doing?: string;
   id: string;
   position: Vec;
   facing: string;
@@ -103,6 +112,8 @@ export interface GuardObservation {
 }
 
 export interface Observation {
+  people?: PersonObservation[];
+  items?: ItemObservation[];
   t: number;
   self: SelfObservation;
   facilities: FacilityObservation[];
@@ -239,6 +250,11 @@ export interface TrailPoint extends Vec {
 }
 
 export interface GameReport {
+  alerts?: AlertChange[];
+  items?: ItemTransfer[];
+  worldEvents?: WorldEvent[];
+  personas?: Record<string, Persona>;
+  boss?: BossRecord[];
   /** Missing only on recordings made before configurable difficulty. */
   settings?: GameSettings;
   debug?: RunDebug;
