@@ -468,5 +468,13 @@
     "pageErrors": []
   },
   "paidModel": "not rerun; IV2-18 belongs to the previous protocol/map",
-  "merged": false
+  "merged": false,
+  "implementationCommit": "2d8c1fef10c71454668408f686084f9e24fe698c",
+  "pullRequest": {
+    "number": 32,
+    "url": "https://github.com/AI-hunter-team/Agent-go/pull/32",
+    "state": "OPEN",
+    "autoMergeEnabled": false,
+    "ci": "see live PR checks"
+  }
 }
