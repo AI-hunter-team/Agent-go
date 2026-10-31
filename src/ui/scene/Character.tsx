@@ -10,6 +10,7 @@ import { box, coat, cylinder, materials, sphere } from "./resources";
 import { disposeAvatar, findAvatarClip } from "../avatarModel";
 import { createAvatarRootMotionGuard } from "./avatarRootMotion";
 import { createProceduralLocomotion } from "./proceduralLocomotion";
+import { Passenger } from "./Passenger";
 
 const blobModels = new Map<string, { users: number; scene: Object3D }>();
 export class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
@@ -138,7 +139,9 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
     root.current.position.set(pose.current.x, pose.current.y, pose.current.z);
     root.current.rotation.y = pose.current.yaw;
   });
-  const placeholder = <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />;
+  const placeholder = kind === "player" || kind === "guard"
+    ? <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />
+    : <Passenger kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />;
   return <group ref={root}>
     {kind === "player" && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
       <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial color="#315c65" transparent opacity={0.65} depthWrite={false} />
