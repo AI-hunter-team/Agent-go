@@ -19,6 +19,8 @@ export interface ChatMessage {
   content: string | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  /** Provider-returned reasoning required by DeepSeek tool conversation history. */
+  reasoning_content?: string;
 }
 
 interface Completion {
@@ -36,6 +38,7 @@ interface Completion {
 /** OpenAI-compatible Chat Completions; credentials stay in the server process. */
 export class OpenAIClient {
   private readonly endpoint: string;
+  readonly isDeepSeek: boolean;
 
   constructor(
     baseURL: string,
@@ -48,6 +51,7 @@ export class OpenAIClient {
       throw new Error("OPENAI_BASE_URL 必须是不含凭据、查询参数的 HTTP(S) 地址");
     }
     this.endpoint = `${url.href.replace(/\/$/, "")}/chat/completions`;
+    this.isDeepSeek = url.hostname === "api.deepseek.com";
   }
 
   async complete(params: Record<string, unknown>): Promise<Completion> {
@@ -81,11 +85,52 @@ const CHAT_TOOLS = AGENT_TOOLS.map((tool) => ({
   function: { name: tool.name, description: tool.description, parameters: tool.input_schema, strict: true },
 }));
 
+// DeepSeek strict tools require /beta and reject string length constraints.
+// Use ordinary function tools on either endpoint; parseToolUse still enforces limits.
+const DEEPSEEK_TOOLS = CHAT_TOOLS.map(({ function: fn, ...tool }) => ({
+  ...tool,
+  function: {
+    name: fn.name, description: fn.description,
+    parameters: { ...fn.parameters, properties: Object.fromEntries(
+      Object.entries(fn.parameters.properties ?? {}).map(([name, definition]) => {
+        const property = { ...definition as Record<string, unknown> };
+        delete property.minLength;
+        delete property.maxLength;
+        return [name, property];
+      }),
+    ) },
+  },
+}));
+
 export class OpenAILlmService implements LlmService {
   readonly model: string;
 
   constructor(private readonly client: OpenAIClient, private readonly cfg: ClaudeConfig) {
     this.model = cfg.model;
+  }
+
+  private completionOptions(maxTokens: number) {
+    const effort = this.cfg.reasoningEffort ?? "low";
+    return {
+      model: this.model, reasoning_effort: effort,
+      ...(this.client.isDeepSeek
+        ? { max_tokens: maxTokens, thinking: { type: effort === "none" ? "disabled" : "enabled" } }
+        : { max_completion_tokens: maxTokens }),
+    };
+  }
+
+  private jsonOptions(system: string, user: string, schema: object, name: string) {
+    return {
+      messages: [
+        { role: "system", content: this.client.isDeepSeek
+          ? `${system}\n只返回一个 JSON 对象，遵循以下 JSON Schema（字段、类型及限制均适用）：\n${JSON.stringify(schema)}`
+          : system },
+        { role: "user", content: user },
+      ],
+      response_format: this.client.isDeepSeek
+        ? { type: "json_object" }
+        : { type: "json_schema", json_schema: { name, strict: true, schema } },
+    };
   }
 
   async decide(session: Session, turn: AgentTurn): Promise<DecisionResult> {
@@ -104,17 +149,15 @@ export class OpenAILlmService implements LlmService {
     const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings);
     try {
       const response = await this.client.complete({
-        model: this.model,
-        max_completion_tokens: this.cfg.maxTokens,
-        reasoning_effort: this.cfg.reasoningEffort ?? "low",
+        ...this.completionOptions(this.cfg.maxTokens),
         messages: [
           { role: "system", content: `${prompt.rules}\n本次思考预算不超过 ${this.cfg.maxThinkingTokens} token，动作输出另计。` },
           { role: "user", content: prompt.guidance },
           ...session.chatMessages,
         ],
-        tools: CHAT_TOOLS,
-        tool_choice: "required",
-        parallel_tool_calls: false,
+        tools: this.client.isDeepSeek ? DEEPSEEK_TOOLS : CHAT_TOOLS,
+        tool_choice: this.client.isDeepSeek ? "auto" : "required",
+        ...(this.client.isDeepSeek ? {} : { parallel_tool_calls: false }),
       });
       const usage = response.usage;
       result.model = response.model ?? this.model;
@@ -139,7 +182,12 @@ export class OpenAILlmService implements LlmService {
       // become blank assistant turns in the next paid request. Keep every tool id,
       // including rejected/truncated calls, so the next turn can answer them.
       const empty = calls.length === 0 && !message.content?.trim();
-      if (!empty) session.chatMessages.push({ role: "assistant", content: message.content ?? null, ...(calls.length ? { tool_calls: calls } : {}) });
+      if (!empty) session.chatMessages.push({
+        role: "assistant", content: message.content ?? null,
+        ...(calls.length ? { tool_calls: calls } : {}),
+        ...(this.client.isDeepSeek && typeof message.reasoning_content === "string"
+          ? { reasoning_content: message.reasoning_content } : {}),
+      });
       if ((result.usage?.thinkingTokens ?? 0) > this.cfg.maxThinkingTokens) {
         throw new Error(`思考用量 ${result.usage!.thinkingTokens} 超过 ${this.cfg.maxThinkingTokens} token，未执行`);
       }
@@ -163,9 +211,8 @@ export class OpenAILlmService implements LlmService {
     let metadata: Pick<NpcReply, "model" | "usage" | "output"> = { model: this.model, usage: null };
     try {
       const response = await this.client.complete({
-        model: this.model, max_completion_tokens: 1024, reasoning_effort: this.cfg.reasoningEffort ?? "low",
-        messages: [{ role: "system", content: NPC_SYSTEM }, { role: "user", content: untrustedData("NPC 对话资料", request) }],
-        response_format: { type: "json_schema", json_schema: { name: "npc_reply", strict: true, schema: NPC_SCHEMA } },
+        ...this.completionOptions(1024),
+        ...this.jsonOptions(NPC_SYSTEM, untrustedData("NPC 对话资料", request), NPC_SCHEMA, "npc_reply"),
       });
       const choice = response.choices?.[0];
       const usage = response.usage;
@@ -189,11 +236,8 @@ export class OpenAILlmService implements LlmService {
 
   private async structured(system: string, user: string, schema: object, name: string, maxTokens: number): Promise<unknown> {
     const response = await this.client.complete({
-      model: this.model,
-      max_completion_tokens: maxTokens,
-      reasoning_effort: this.cfg.reasoningEffort ?? "low",
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      response_format: { type: "json_schema", json_schema: { name, strict: true, schema } },
+      ...this.completionOptions(maxTokens),
+      ...this.jsonOptions(system, user, schema, name),
     });
     const choice = response.choices?.[0];
     if (choice?.message?.refusal || choice?.finish_reason === "content_filter") throw new Error("模型拒绝了这次请求");

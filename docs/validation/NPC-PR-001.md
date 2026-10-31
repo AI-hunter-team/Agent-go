@@ -13,7 +13,10 @@
 
 - 集成前 `npm run typecheck`、`npm run build`、`git diff --check` 通过；构建仍提示已有大 chunk，未视为性能验收。
 - 首次全量与构建并行，`gameSession` seed 1 耗时超过默认 5 秒（其余 363 项通过）；停止构建竞争后独立执行 `npm test`，40 文件/364 项全部通过，seed 1 为 2.734 秒。没有改变测试超时或断言掩盖失败。
-- 最新 main 集成、集成后软件/浏览器复验、PR/CI 与分支清理待完成，未完成项不视为通过。
+- 集成目标为 `b1bde9ddb24edbcee7d621eb0b9dae7fee91997e`；仅验证索引与中央记录发生文本冲突，保留双方条目。源码自动合并；DeepSeek 17 项新增回归保留。
+- 资产库 `src/assets/station-kit/` 与独立预览使用自身布局，未引用模拟器设施 head，游戏运行时仍用 Station 几何模型。本轮没有将预览资产擅自接入游戏；未来正式资产仍需按实际尺寸校准碰撞。
+- 集成后 `npm run typecheck`、`npm test`（41 文件/381 项）、`npm run build` 均通过；保留已有大 chunk 提示。
+- 集成后浏览器复验、PR/CI 与分支清理待完成，未完成项不视为通过。
 
 ## 状态
 
