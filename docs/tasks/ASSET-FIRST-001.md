@@ -1,6 +1,6 @@
 # ASSET-FIRST-001：站厅首次渲染优先使用正式素材
 
-状态：实现及本地软件验证完成，待 PR 审核
+状态：已提交并创建 PR #37，待审核
 
 ## 目标与分工
 
@@ -31,8 +31,8 @@
 
 ## 当前交接
 
-代码实现、任务简报、验证报告及中央记录已补齐；下一步只提交本任务允许路径、推送任务分支并创建面向 `main` 的 PR。工作区已有的 `.claude/launch.json`、`.dockerignore`、`src/ui/App.tsx` 及其他未跟踪任务记录不属于本任务。
+代码实现、任务简报、验证报告及中央记录已补齐；已创建提交 `c3c3df0be23b001fe12a0d426e37f153e00a4792`、远端分支 `codex/asset-first-render` 和 [PR #37](https://github.com/AI-hunter-team/Agent-go/pull/37)。工作区已有的 `.claude/launch.json`、`.dockerignore`、`src/ui/App.tsx` 及其他未跟踪任务记录不属于本任务。
 
 ## 交接
 
-完成后填写当前分支、变更文件、命令结果和未验证项。
+当前交接：PR #37 待 CI/审核；未执行远端合并或部署。浏览器首次帧验收仍待用户/集成负责人确认。
