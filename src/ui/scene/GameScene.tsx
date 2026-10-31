@@ -21,7 +21,11 @@ export interface SceneProps {
   simpleCrowd: boolean;
   reducedMotion: boolean;
   assetUrl: string;
+  assetRotation: number;
+  guardAssetUrl: string;
+  guardAssetRotation: number;
   onAssetError: (message: string) => void;
+  onGuardAssetError: (message: string) => void;
   onFailure: (message: string) => void;
   metrics: FrameMetrics;
   showVision: boolean;
@@ -178,7 +182,7 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   </group>;
 }
 
-/** 组装场景并记录实际渲染开销；节能设置只改变展示层。 */
+/** 组装场景并记录渲染开销；简化乘客时保留主角和保安各自的模型与动画。 */
 function Contents(props: SceneProps) {
   const { session, metrics } = props;
   const { gl } = useThree();
@@ -216,7 +220,7 @@ function Contents(props: SceneProps) {
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
     <Station session={session} />
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
-    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
+    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
 }

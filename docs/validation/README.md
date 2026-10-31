@@ -6,12 +6,15 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [ALL-LOCAL-001](ALL-LOCAL-001.md) | 全部本地源工作、角色资产与既有 Responses/UI/性能交付的最终组合；含提交、冲突及验证边界 |
 | [PR18-MERGE-001](PR18-MERGE-001.md) | 名称统一 PR 与最新 main 的文档冲突解决及集成验证；最终合入见原 PR |
 | [BRAND-002](BRAND-002.md) | 英文名agent-go及包/下载/素材生成标识统一；验证范围与结果见报告 |
 | [NPC-PR-001](NPC-PR-001.md) | 人物修复与最新 main 兼容、PR/CI/合并及已合并分支清理，进行中 |
 | [NPC-VISUAL-001](NPC-VISUAL-001.md) | 连续移动避让、队列/办理占位、设施朝向、364 项检查及离线浏览器复验 |
 | [DEEPSEEK-THINKING-001](DEEPSEEK-THINKING-001.md) | 官方 DeepSeek 思考模式工具选择、多轮回传及 JSON 模式适配；模拟接口验证，不代表真实模型验收 |
 | [STARTUP-API-001](STARTUP-API-001.md) | 本地服务恢复、上游权限 400 与 DeepSeek 工具调用参数 400 诊断、386 项集成回归及真实 Safari 开局；包含临时伪响应入口导致截图 500 的纠正记录 |
+| [GUARD-002](GUARD-002.md) | 独立奶娃保安 GLB、缩小帽子/警棍、烘焙 Idle/Walk 与自定义导入，5 项相关检查和浏览器快照 |
+| [AVATAR-001](AVATAR-001.md) | 主角/保安默认 GLB、独立本机导入/保存/恢复、358 项检查与生产版浏览器核验；本地未提交 |
 | [STATION-PR-001](STATION-PR-001.md) | 难度/故障修复与最新 main 的冲突、提示一致性和 343 项集成检查；PR 发布前验证快照 |
 | [DIFFICULTY-002](DIFFICULTY-002.md) | 固定 120 秒 / 每条开放队列额外 3 人、移除难度选择、318 项回归和 650 局离线对照；覆盖原可调 UI 方案 |
 | [DIFFICULTY-001 / FACILITY-FAIL-001](DIFFICULTY-001.md) | 可调时限/初始队列、办理中故障结算、314 项回归、浏览器与 600 局离线对照；不代表真实模型验收 |
