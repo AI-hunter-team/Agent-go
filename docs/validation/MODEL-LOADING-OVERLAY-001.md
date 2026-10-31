@@ -1,6 +1,6 @@
 # MODEL-LOADING-OVERLAY-001 验证报告
 
-状态：软件检查完成；浏览器慢加载与失败回退路径未在本轮稳定复验
+状态：软件检查完成，PR #57 已合入 `main`；浏览器慢加载与失败回退路径未在本轮稳定复验
 
 ## 范围与基线
 
@@ -14,10 +14,10 @@
 | 检查 | 结果 | 证据/限制 |
 |---|---|---|
 | `npm run typecheck` | 通过 | `tsc --noEmit` 退出码 0 |
-| `npm test -- tests/modelLoading.test.ts` | 通过 | 3 tests passed；覆盖首次加载显示、成功/失败隐藏、进度钳制及缓存 URL 处理 |
+| `npm test -- tests/modelLoading.test.ts` | 通过 | 4 tests passed；覆盖首次加载显示、成功/失败隐藏、进度钳制、缓存 URL 处理及缓存资源不显示遮罩 |
 | `npm run build` | 通过 | Web 与 server 生产构建均完成；Vite 仅报告既有大 chunk 警告 |
 | `git diff --check` | 通过 | 已跟踪改动无空白错误；新增文件另行检查 |
-| `npm test` | 通过 | 91 个测试文件、725 项全部通过；仅保留既有 Debug 日志权限提示 |
+| `npm test -- --maxWorkers=2 --testTimeout=15000` | 通过 | 91 个测试文件、730 项全部通过；仅保留既有 Debug 日志权限提示 |
 | `npm run dev:web` / 浏览器 | 未运行 | 本轮以软件回归为主；模型慢加载中间态与不存在模型回退未稳定复验 |
 
 ## 实现核对
@@ -29,6 +29,6 @@
 
 ## 交接
 
-- 当前分支：`codex/model-loading-overlay`，基于 `origin/main` 的 `45e7964a1c806faa43093cd6e536ce4b938df1bb`；原工作区的无关修改未带入。
-- 本任务新增/修改文件尚未提交、推送或合并；用户已授权继续完成 PR 交付与合入。
+- 当前分支：`codex/model-loading-overlay`；PR #57 已合入 `main`，合并 commit 为 `7068db42756124e3d52230b904e2061bf6af064b`；原工作区的无关修改未带入。
+- 本任务新增/修改文件已提交、推送并合入；最终主线已通过本地类型、测试、构建和 diff 检查。
 - 浏览器慢加载、成功及不存在模型回退三条路径未在本轮稳定复验，不能以软件检查替代真实浏览器验收。

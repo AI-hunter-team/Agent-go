@@ -1,6 +1,6 @@
 # MODEL-LOADING-OVERLAY-001：模型首次加载进度遮罩
 
-状态：实现完成，待 PR 合入
+状态：已合入 `main`
 
 ## 目标与分工
 
@@ -38,7 +38,7 @@
 
 ## 交接（离开任务前填写）
 
-- 当前分支、完整 commit、已提交/未提交文件与状态：`codex/model-loading-overlay`，基线 `45e7964a1c806faa43093cd6e536ce4b938df1bb`；实现与文档已完成，待提交；原工作区的 `src/sim/movement.ts`、`tests/movement.test.ts` 等无关修改未带入。
-- 已做/未做、验证报告与证据：`npm run typecheck`、定向 3 项测试、全量 91 文件/725 项测试、`npm run build` 和 `git diff --check` 已通过；详见[验证报告](../validation/MODEL-LOADING-OVERLAY-001.md)。
-- 关键决定、依赖方是否可继续、范围外事项及下一步：进度来自 Drei `useProgress`，成功/失败均有明确终态；下一步提交、推送并创建 PR，等待 CI 后合入 `main`。浏览器慢加载与不存在模型回退未在本轮稳定复验。
-- 接手负责人/入口：本次 Codex 会话；PR 合入后补记最终 commit 与 CI 状态。
+- 当前分支、完整 commit、已提交/未提交文件与状态：`codex/model-loading-overlay`；功能提交 `48beb92`、主线同步 `d98bab7`、缓存模型修复 `898976d`；已合入 `main`，合并 commit `7068db42756124e3d52230b904e2061bf6af064b`；原工作区的 `src/sim/movement.ts`、`tests/movement.test.ts` 等无关修改未带入。
+- 已做/未做、验证报告与证据：最终 `npm run typecheck`、定向 4 项测试、CI 等价全量 91 文件/730 项测试、`npm run build` 和 `git diff --check` 均通过；详见[验证报告](../validation/MODEL-LOADING-OVERLAY-001.md)及 PR #57。
+- 关键决定、依赖方是否可继续、范围外事项及下一步：进度来自 Drei `useProgress`，成功、失败和缓存切换均有明确终态；PR #57 已合入，浏览器慢加载与不存在模型回退未在本轮稳定复验。
+- 接手负责人/入口：已合入 `main`；后续如需真实浏览器验收，从 PR #57 和本验证报告继续。
