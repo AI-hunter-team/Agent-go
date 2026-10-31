@@ -14,10 +14,10 @@ function runUntilTrigger(e: Engine, maxSeconds = 200) {
 }
 
 describe("engine", () => {
-  test("starts with a start trigger and nothing visible from the entrance", () => {
+  test("starts with a start trigger and only the nearby end of the ticket bank visible", () => {
     const e = new Engine(1);
     expect(e.takeTriggers().map((t) => t.kind)).toEqual(["start"]);
-    expect(e.observe().facilities).toHaveLength(0);
+    expect(e.observe().facilities.map(f => f.id)).toEqual(["TVM-1"]);
     expect(e.observe().self.timeLeft).toBe(120);
   });
 
@@ -97,8 +97,8 @@ describe("engine", () => {
   test("seeing a broken facility for the first time triggers a decision", () => {
     const e = new Engine(1);
     e.takeTriggers();
-    act(e, { type: "move_to", target: "HALL_N" });
-    // TVM-1 breaks at t=25 while it is in view of HALL_N.
+    act(e, { type: "move_to", target: "TICKETS_C" });
+    // TVM-1 breaks at t=25 while it is in view of the bank comparison point.
     const seen: string[] = [];
     for (let i = 0; i < 6 && e.t < 40; i++) {
       const triggers = runUntilTrigger(e, 40);

@@ -3,6 +3,7 @@ import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { Engine } from "../src/sim/engine";
 import { classifyByKeywords } from "../src/sim/intent";
 import { LEGACY_GAME_SETTINGS, type GameSettings } from "../src/shared/gameSettings";
+import { STAIRS_TOP } from "../src/sim/layout";
 
 async function play(seed: number, settings?: Readonly<GameSettings>) {
   const engine = new Engine(seed, settings);
@@ -42,7 +43,8 @@ describe("offline heuristic agent", () => {
     expect(difficult.engine.t).toBe(120);
     expect(difficult.engine.failReason).toContain("超时");
     expect(difficult.engine.creative.violations).toHaveLength(0);
-    const possible = await play(5);
+    // The expanded landing adds walking distance; seed 22 is a verified legal 120s fixture.
+    const possible = await play(22);
     expect(possible.engine.status).toBe("success");
     expect(possible.engine.t).toBeLessThan(120);
     expect(possible.engine.creative.violations).toHaveLength(0);
@@ -53,8 +55,8 @@ describe("offline heuristic agent", () => {
     const observation = engine.observe();
     Object.assign(observation.self, { passedGate: true, position: { x: 45.4, y: 25 } });
     const { action } = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
-    expect(action).toMatchObject({ type: "move_to", target: "STAIRS_TOP" });
-    observation.self.position = { x: 48, y: 15 };
+    expect(action).toMatchObject({ type: "move_to", target: "LANDING_C" });
+    observation.self.position = { ...STAIRS_TOP };
     const atEntrance = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
     expect(atEntrance.action).toMatchObject({ type: "descend_stairs" });
     observation.self.activity = "正在下楼梯（剩余 3 秒）";

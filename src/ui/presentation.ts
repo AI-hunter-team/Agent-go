@@ -47,7 +47,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const moving = Math.hypot(dx, dz) > 0.00001;
     const next = a.kind === "walking" || a.kind === "to_queue" ? a.path[0] : undefined;
     const yaw = moving ? Math.atan2(dx, dz) : next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : old?.yaw ?? Math.PI / 2;
-    const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving || a.kind === "walking" || a.kind === "to_queue" ? "walk" : "idle";
+    const motion: Motion = a.kind === "escalator" ? "idle" : a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" || (a.kind === "distracted" && !a.resume) ? "interact" : moving || a.kind === "walking" || a.kind === "to_queue" ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
       elevation: platformElevation(person.pos.x),

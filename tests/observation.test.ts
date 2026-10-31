@@ -16,7 +16,7 @@ function worldWithPlayerAt(x: number, y: number) {
 
 describe("observation", () => {
   test("only nearby facilities are visible", () => {
-    const { world, guards } = worldWithPlayerAt(19, 15);
+    const { world, guards } = worldWithPlayerAt(17, 12);
     const ids = buildObservation(world, guards).facilities.map((f) => f.id);
     expect(ids).toContain("TVM-2");
     expect(ids).toContain("S2");
@@ -66,8 +66,8 @@ describe("observation", () => {
 });
 
 test("seeing a machine does not reveal passengers outside sight", () => {
-  const { world, guards } = worldWithPlayerAt(19, 15);
-  const hidden = world.addPerson("luggage", { x: 1, y: 1 });
+  const { world, guards } = worldWithPlayerAt(10, 10);
+  const hidden = world.addPerson("luggage", { x: 1, y: 29 });
   world.facility("TVM-2")!.queue.push(hidden.id);
   const view = buildObservation(world, guards).facilities.find((f) => f.id === "TVM-2")!;
   expect(view.queue).not.toContain("携带大件行李");

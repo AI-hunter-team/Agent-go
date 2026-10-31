@@ -41,6 +41,7 @@ export class CreativeSystem {
     const mine = w.queuePosition(p);
     const f = w.facility(valid.request.npc.facility)!;
     const dest = queueSlot(f.def, f.queue.indexOf(npcId));
+    w.finishAttention(p, "结束关注，接受乘客让位");
     if (mine) w.removeFromQueue(p);
     p.activity = { kind: "creative", mechanic: "cut_in_line", remaining: RULES.cutInSeconds, facility: f.def.id, dest };
     this.consentTarget = npcId;
@@ -53,6 +54,7 @@ export class CreativeSystem {
       return { ok: false, text: `只能在安检后大厅、距闸机线 ${RULES.jumpGateDistance} 米内翻越闸机` };
     }
     const dest: Vec = { x: GATE_X + 1.4, y: Math.min(HEIGHT - 1, Math.max(1, p.pos.y)) };
+    this.world.finishAttention(p, "结束关注，开始其他行动");
     if (this.world.queuePosition(p)) this.world.removeFromQueue(p);
     p.activity = { kind: "creative", mechanic: "jump_gate", remaining: RULES.jumpGateSeconds, facility: "", dest };
     this.begin("jump_gate");
@@ -88,7 +90,7 @@ export class CreativeSystem {
       p.passedGate = true;
       p.activity = { kind: "idle" };
       w.gatePassed++;
-      w.notifyPlayer("creative_done", "翻越闸机成功，已到闸机内连接区；请前往楼梯入口下楼到站台");
+      w.notifyPlayer("creative_done", "翻越闸机成功，已到闸机内连接区；请选择楼梯或扶梯下行到站台");
       this.current = null;
       return;
     }

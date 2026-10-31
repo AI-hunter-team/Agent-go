@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentAction } from "../src/shared/types";
-import { FACILITIES, NAV_NODES } from "../src/sim/layout";
+import { ATTRACTIONS, FACILITIES, NAV_NODES } from "../src/sim/layout";
 import { assertSafeText, SafetyError } from "./security";
 import { allowsCutIn, UNAVAILABLE_STRATEGY } from "../src/shared/strategyPermissions";
 
@@ -39,6 +39,11 @@ export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
     seconds: { type: "integer", description: "1 到 20 之间的整数" },
   }),
   tool("descend_stairs", "过闸后走到 STAIRS_TOP 楼梯入口，再下楼到站台；下楼期间不能改向。", {}),
+  tool("take_escalator", "过闸后到 ESCALATOR_TOP 扶梯入口候梯。按先到先上排队，候梯可离队，上扶梯后需乘坐至站台。", {}),
+  tool("inspect_attraction", "自主关注当前可见的商业大厅设施。glance 为减速查看 3 秒，linger 需靠近后停留 6 秒；可用正常移动恢复赶路。", {
+    attraction: { type: "string", enum: ATTRACTIONS.map(a => a.id) },
+    mode: { type: "string", enum: ["glance", "linger"] },
+  }),
   tool("request_cut_in", "向附近可见的具体排队乘客请求让位，必须说出话术；NPC 将根据性格与请求决定是否同意。只有同意才移动到该乘客前面，拒绝保留当前位次。", {
     npcId: { type: "string", description: "当前观察 facilities.people 中的乘客 id" },
     message: { type: "string", minLength: 1, maxLength: 200, description: "你直接对这位乘客说的话，最多 200 字" },
@@ -61,7 +66,7 @@ export function parseToolUse(name: string, input: unknown, availableTools: reado
   const i = input as Record<string, unknown>;
   const allowed: Record<string, string[]> = {
     move_to: ["target", "reason"], join_queue: ["facility", "reason"], leave_queue: ["reason"],
-    wait: ["seconds", "reason"], descend_stairs: ["reason"], request_cut_in: ["npcId", "message", "reason"], attempt_creative: ["intent", "reason"],
+    wait: ["seconds", "reason"], descend_stairs: ["reason"], take_escalator: ["reason"], inspect_attraction: ["attraction", "mode", "reason"], request_cut_in: ["npcId", "message", "reason"], attempt_creative: ["intent", "reason"],
   };
   if (!Object.hasOwn(allowed, name)) return { error: "未知工具，未执行" };
   if (Object.keys(i).some((key) => !allowed[name].includes(key))) return { error: "工具含有未授权参数，未执行" };
@@ -85,6 +90,12 @@ export function parseToolUse(name: string, input: unknown, availableTools: reado
       return { action: { type: "leave_queue", reason: why } };
     case "descend_stairs":
       return { action: { type: "descend_stairs", reason: why } };
+    case "take_escalator":
+      return { action: { type: "take_escalator", reason: why } };
+    case "inspect_attraction":
+      if (typeof i.attraction === "string" && ATTRACTIONS.some(a => a.id === i.attraction) && (i.mode === "glance" || i.mode === "linger"))
+        return { action: { type: "inspect_attraction", attraction: i.attraction, mode: i.mode, reason: why } };
+      return { error: "inspect_attraction 需要有效设施和 glance 或 linger 方式" };
     case "request_cut_in":
       if (typeof i.npcId === "string" && /^p\d+$/.test(i.npcId) && typeof i.message === "string" && i.message.trim() && [...i.message].length <= 200) {
         return { action: { type: "request_cut_in", npcId: i.npcId, message: i.message, reason: why } };

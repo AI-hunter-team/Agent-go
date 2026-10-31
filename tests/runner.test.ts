@@ -33,7 +33,7 @@ class ScriptedAgent implements Agent {
 
 describe("GameRunner", () => {
   test("offline agent finishes a run and produces a report", async () => {
-    const runner = new GameRunner(new Engine(5), new HeuristicAgent(), keywords, { guidance: "" });
+    const runner = new GameRunner(new Engine(22), new HeuristicAgent(), keywords, { guidance: "" });
     await runner.runToEnd();
     const report = runner.report();
     expect(report.status).toBe("success");

@@ -14,6 +14,8 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "queueing", label: "排队", color: "#c3912f" },
   { key: "service", label: "办理", color: "#6e8a74" },
   { key: "stairs", label: "下楼梯", color: "#7a7194" },
+  { key: "escalator", label: "乘扶梯", color: "#527e91" },
+  { key: "distraction", label: "关注设施", color: "#a66a56" },
   { key: "waiting", label: "等待", color: "#b8ad94" },
   { key: "creative", label: "创造性行动", color: "#b4533c" },
   { key: "idle", label: "空闲", color: "#d9d3c4" },
@@ -53,6 +55,7 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
       </p>
 
       <h3>时间花在哪里</h3>
+      {(report.timeBreakdown.distraction ?? 0) > 0 && <p className="small">关注用时可能包含减速行走；它不是全部净损失，可结合事件时间线复盘。</p>}
       <p className="small">{`时限 ${settings.timeLimitSeconds} 秒 · 每条开放队列 +${settings.extraQueuePeople} 人`}</p>
       <div className="bar">
         {SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0).map((s) => (

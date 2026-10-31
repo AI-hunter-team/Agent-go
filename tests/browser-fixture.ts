@@ -1,11 +1,13 @@
 /** Local browser acceptance fixture. No SDK client, dotenv, credentials or paid calls. */
 import { setTimeout as delay } from "node:timers/promises";
+import { resolve } from "node:path";
 import { createApp, type LlmService } from "../server/app";
 import { SessionStore, type Session } from "../server/sessions";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { classifyByKeywords } from "../src/sim/intent";
 
 const agents = new WeakMap<Session, HeuristicAgent>();
+const attentionDone = new WeakSet<Session>();
 const llm: LlmService = {
   model: "浏览器验收伪模型（无费用）",
   async review(input) {
@@ -38,6 +40,22 @@ const llm: LlmService = {
     let agent = agents.get(session);
     if (!agent) { agent = new HeuristicAgent(); agents.set(session, agent); }
     const result = await agent.decide(turn);
+    const self = turn.observation.self;
+    // Explicit opt-in acceptance modes; never used by the production model service.
+    if (session.guidance.includes("ATTENTION") && self.screened && !self.passedGate && !self.queue && !self.activity.includes("办理") && !attentionDone.has(session)) {
+      const toy = turn.observation.attractions?.find(a => a.id === "TOYS");
+      if (toy) {
+        if (toy.canLinger) {
+          result.action = { type: "inspect_attraction", attraction: toy.id, mode: "linger", reason: "伪模型验收：自主停留查看玩具" };
+          attentionDone.add(session);
+        } else result.action = { type: "move_to", target: toy.id, reason: "伪模型验收：主动靠近玩具机" };
+      }
+    }
+    if (session.guidance.includes("ESCALATOR") && self.passedGate) {
+      if (/正在乘扶梯|正在候梯|正在走向扶梯队尾/.test(self.activity) || turn.lastResult?.text.includes("候梯区已满")) result.action = { type: "wait", seconds: 2, reason: "伪模型验收：保持候梯或乘坐" };
+      else if (Math.hypot(self.position.x - 61, self.position.y - 22) <= .8) result.action = { type: "take_escalator", reason: "伪模型验收：选择扶梯" };
+      else result.action = { type: "move_to", target: "ESCALATOR_TOP", reason: "伪模型验收：前往扶梯" };
+    }
     if (session.guidance.includes("JUMP") && turn.observation.self.screened) {
       const self = turn.observation.self;
       if (self.position.x >= 42.3) result.action = { type: "attempt_creative", intent: "翻越闸机", reason: "伪模型动作演示" };
@@ -49,6 +67,6 @@ const llm: LlmService = {
   async classify(intent) { return classifyByKeywords(intent); },
 };
 const sessions = new SessionStore();
-const app = createApp({ llm, sessions });
+const app = createApp({ llm, sessions, frontendDir: process.env.SERVE_FRONTEND === "1" ? resolve("dist") : undefined });
 const port = Number(process.env.PORT ?? 8891);
 app.listen(port, "127.0.0.1", () => console.log(`Browser acceptance fixture on 127.0.0.1:${port}. No paid model calls.`));

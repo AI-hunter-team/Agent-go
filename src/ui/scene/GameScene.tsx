@@ -38,7 +38,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     if (active instanceof PerspectiveCamera) active.aspect = size.width / Math.max(1, size.height);
     else {
       const aspect = size.width / Math.max(1, size.height);
-      const halfHeight = Math.max(26, 40 / aspect); const halfWidth = halfHeight * aspect;
+      const halfHeight = Math.max(26, (WIDTH / 2 + 9) / aspect); const halfWidth = halfHeight * aspect;
       active.left = -halfWidth; active.right = halfWidth; active.top = halfHeight; active.bottom = -halfHeight;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
@@ -155,7 +155,7 @@ function Contents(props: SceneProps) {
     <ambientLight intensity={1.35} />
     <directionalLight position={[-8, 28, -12]} intensity={3} castShadow={props.quality === "standard"} shadow-mapSize={[1024, 1024]} shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={40} shadow-camera-bottom={-40} shadow-camera-far={100} shadow-normalBias={0.04} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
-    <Station session={session} />
+    <Station session={session} reducedMotion={props.reducedMotion} />
     {actors.map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
