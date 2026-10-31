@@ -8,6 +8,7 @@ import type { GameSession } from "../gameSession";
 import { sampleActor, type ActorFrame, type Motion } from "../presentation";
 import { box, coat, cylinder, materials, sphere } from "./resources";
 import { disposeAvatar, findAvatarClip } from "../avatarModel";
+import { createAvatarRootMotionGuard } from "./avatarRootMotion";
 import { createProceduralLocomotion } from "./proceduralLocomotion";
 
 const blobModels = new Map<string, { users: number; scene: Object3D }>();
@@ -43,13 +44,7 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
   const availableAnimations = useMemo(() => [...animations, ...generated], [animations, generated]);
   const { actions, mixer } = useAnimations(availableAnimations, model);
   const clips = useMemo(() => Object.fromEntries((["idle", "walk", "interact", "jump"] as Motion[]).map((motion) => [motion, findAvatarClip(availableAnimations, motion)])) as Record<Motion, string>, [availableAnimations]);
-  const anchors = useMemo(() => {
-    const roots: { object: Object3D; x: number; z: number }[] = [];
-    model.traverse((object) => {
-      if ("isBone" in object && !(object.parent && "isBone" in object.parent)) roots.push({ object, x: object.position.x, z: object.position.z });
-    });
-    return roots;
-  }, [model]);
+  const constrainRootMotion = useMemo(() => createAvatarRootMotionGuard(model), [model]);
   const last = useRef({ key: "", name: "" });
   const root = useRef<Group>(null);
   useFrame(() => {
@@ -71,8 +66,8 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
       }
       last.current = { key, name };
     }
-    // 动画只提供姿态；世界位置始终由模拟器驱动，避免根骨骼带着模型滑离主角。
-    for (const anchor of anchors) { anchor.object.position.x = anchor.x; anchor.object.position.z = anchor.z; }
+    // 模型 Y 才是竖直方向；骨架父节点可旋转，不能直接冻结骨骼局部 X/Z。
+    constrainRootMotion();
     if (root.current) root.current.position.y = (!clips.walk || generated.length > 0) && motion === "walk" && !reducedMotion ? Math.abs(Math.sin(session.visualTime * Math.PI * 2)) * 0.025 : 0;
   });
   useEffect(() => {

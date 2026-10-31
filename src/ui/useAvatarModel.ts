@@ -52,14 +52,14 @@ export function useAvatarModel(role: AvatarRole) {
     } finally { locked.current = false; if (active.current) setBusy(false); }
   }
 
-  /** 清除这一角色的本机记录，恢复对应的默认模型。 */
+  /** 立即恢复当前页默认模型，独立尝试清除本机记录，失败仍保留提示。 */
   async function reset() {
     if (locked.current) return;
     locked.current = true; setBusy(true); setError(""); setNotice("");
+    if (active.current) setAvatar(defaultAvatar);
     try {
       await avatarStorage(role, "clear");
-      if (active.current) setAvatar(defaultAvatar);
-    } catch { if (active.current) setError("无法清除本机保存的角色，请关闭旧页面或检查浏览器存储后重试。"); }
+    } catch { if (active.current) setNotice("本页已恢复默认，但未能清除本机记录；刷新后可能恢复旧模型。"); }
     finally { locked.current = false; if (active.current) setBusy(false); }
   }
 

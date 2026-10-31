@@ -21,3 +21,10 @@
 - 本会话继续在同一范围整合 main；读取 STATION-INTEGRATION-001 简报及 App/GameScene 完整相关代码，保留正式站厅、布光、栏杆和上游规则。
 - 新增内部场景回调 `onStationAssetError`，把站厅加载提示与主角/保安导入错误分开；`retryScene` 只清除站厅提示并重挂载画面。HTTP/API/报告格式不变。
 - 因上游引入场景与几何变化，需要对新组合复跑既有完整检查及显示/资源错误恢复核对；不新增业务测试或改断言/时限。
+
+## PR #24 的两条模型审查意见
+
+- 当前集成 CI/Compose 已通过，审查指出 `Character.tsx` 在骨骼局部轴剔除根位移，以及 `useAvatarModel.reset` 依赖存储成功才恢复当前页。这两处均已沿源码核实。
+- 本任务允许修复 `avatarModel.ts`、`Character.tsx`、`useAvatarModel.ts` 及现有 `tests/avatarModel.test.ts` 的对应边界：在模型坐标系剔除水平根位移，保留竖直动作；当前页恢复默认不依赖 IndexedDB 删除成功，失败仍提示持久化风险。
+- 仅补一项旋转/缩放父节点的根位移回归，并在本地生产页模拟存储拒绝检查导入/恢复；不增加功能、依赖或其他测试矩阵。
+- 根运动实现放在 `src/ui/scene/avatarRootMotion.ts`，避免基础 GLB 校验/设置模块静态引入 Three.js 运行时；`avatarModel.ts` 保持原本轻量边界。移动后只做受影响的定点及构建核对，最终 CI 仍覆盖完整用例。

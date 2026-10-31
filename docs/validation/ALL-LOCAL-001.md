@@ -64,3 +64,11 @@
 - 当前截图 `artifacts/all-local/settings-station.png`（早期截图保留为初轮证据）。未重跑整局或付费调用，也未重复上游的全套资产验收。
 - 当前构建保存为原项目本地 `artifacts/all-local/final/dist/` 与 `final/build/server.js`；初轮构建仍保留，最终交付以 final 目录为准。
 - 后续仅更新同一 [PR #24](https://github.com/AI-hunter-team/Agent-go/pull/24)，以该最新头的 CI/合入结果为准，不把初轮检查冒充新头通过。
+
+## 追加：两条已核实的模型审查修复
+
+- 根位移：`scene/avatarRootMotion.ts` 的 `createAvatarRootMotionGuard` 捕获根骨骼绑定位置和可复用矩阵，内部 `constrainRootMotion` 将动画位移映射到模型坐标系、仅保留 Y 位移，再映回父节点局部坐标。`ImportedModel` 每帧调用它，保留竖直动作而不沿地面偏离模拟位置。函数均有注释，独立模块避免影响轻量设置页入口的 Three.js 延迟加载。
+- 存储：`useAvatarModel.reset` 先恢复当前页默认外观，再异步删除持久记录；删除失败保留“刷新后可能恢复旧模型”的提示，不把恢复当前页绑定到存储可用性。
+- 仅新增 1 项旋转/缩放骨架边界回归：模型竖直位移保留、地面平移归零、重复调用不漂移。全量 `npm test -- --maxWorkers=2` 为 48 文件 / 417 项通过。逻辑机械移至独立场景模块后，类型、4 项相关检查和完整构建再次通过；没有放宽时限或修改现有断言。
+- 浏览器原生故障注入命令不受支持，改用本地排除目录中的隔离静态检查服务（5198），只向生产 HTML 注入 IndexedDB 拒绝访问；生产文件未改。实际选择用户模型导入后出现“本次页面内有效”，再点恢复默认，名称变回“大肥鱼”、恢复按钮禁用且持久化警告保留。另一个角色不受影响。标签页和临时服务在交付前关闭。
+- 本地证据 `artifacts/all-local/storage-reset.png`；临时检查脚本、截图和构建不提交。自动审批拒绝了含旧产物目录替换的命令（仅返回 blocked by policy），故保留旧目录，新产物非破坏性复制到 `artifacts/all-local/reviewed/`。只对实际修复做针对性检查，不扩展功能或测试矩阵。
