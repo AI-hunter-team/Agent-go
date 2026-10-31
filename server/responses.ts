@@ -1,3 +1,4 @@
+import { generateWorld, publicMap } from "../src/sim/worldDefinition";
 import { interpret, type Structured } from "./boss";
 import { respond } from "./npcDialogue";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
@@ -8,7 +9,7 @@ import { normalizeBaseUrl, type ModelSettings } from "./modelSettings";
 import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
 import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
-import { AGENT_TOOLS, parseToolUse } from "./tools";
+import { agentTools, parseToolUse } from "./tools";
 import { assertSafeText, untrustedData, validateNormalized } from "./security";
 import { readResponsesStream } from "./responsesStream";
 import { modelHttpError } from "./modelError";
@@ -101,13 +102,13 @@ export class ResponsesLlmService implements LlmService {
     } else {
       session.responseItems.push({ type: "message", role: "user", content });
     }
-    const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings);
+    const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings, session.publicMap);
     let currentCalls: string[] = [];
     try {
       const response = await this.client.create({
         ...this.parameters(), instructions: prompt.rules,
         input: [{ type: "message", role: "user", content: prompt.guidance }, ...session.responseItems],
-        tools: AGENT_TOOLS, tool_choice: "required", parallel_tool_calls: false,
+        tools: agentTools(session.publicMap), tool_choice: "required", parallel_tool_calls: false,
       });
       result.model = response.model ?? this.model;
       result.usage = responseUsage(response);
@@ -121,7 +122,7 @@ export class ResponsesLlmService implements LlmService {
       let input: unknown;
       try { input = JSON.parse(calls[0].arguments!); }
       catch { throw new Error("工具参数不是有效 JSON，未执行"); }
-      const parsed = parseToolUse(calls[0].name!, input);
+      const parsed = parseToolUse(calls[0].name!, input, session.publicMap);
       if ("error" in parsed) throw new Error(parsed.error);
       result.action = parsed.action;
       session.pendingCallIds = currentCalls;
@@ -208,6 +209,7 @@ export class ResponsesLlmService implements LlmService {
       guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
       timeLimitSeconds: input.settings.timeLimitSeconds, goal: "抵达下层站台", extraQueuePeople: input.settings.extraQueuePeople,
       backpack: input.loadout?.backpack ?? true,
+      ...(input.world?{publicMap:publicMap(generateWorld(input.seed))}:{}),
     }), schema, "journey_plan");
     if (!validPlan(data)) throw new Error("初始方案格式无效，请重试");
     assertSafeText(JSON.stringify(data));

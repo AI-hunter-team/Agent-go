@@ -1,3 +1,5 @@
+import type { WorldDefinition } from "../shared/world";
+import { legacyWorld, publicMap } from "./worldDefinition";
 import { resolveLoadout } from "../shared/interaction";
 import { playerCanSee } from "./observation";
 import type {
@@ -23,13 +25,13 @@ import { ActionExecutor } from "./actions/executor";
 import { DialogueSystem } from "./dialogue";
 import { buildIntentContext, parsePlan } from "./intent";
 import { GuardSystem } from "./guards";
-import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
-import { findPath, nodeById } from "./nav";
+import { queueSlot } from "./layout";
+
 import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
 import { NpcBrain } from "./npcBrain";
 import { buildObservation, visibleFacilities } from "./observation";
-import { DT, GUARDS, SECURITY_STAFF, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
+import { DT, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
 import { World, round1, type Person } from "./world";
 import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
@@ -40,7 +42,7 @@ import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 export class Engine {
   readonly settings: Readonly<GameSettings>;
   readonly world: World;
-  readonly guards = new GuardSystem([...GUARDS, ...SECURITY_STAFF]);
+  readonly guards: GuardSystem;
   readonly events = new EventBus();
   readonly perception: PerceptionSystem;
   readonly alerts: AlertSystem;
@@ -66,21 +68,25 @@ export class Engine {
   private wakeAt: number | null = null;
 
   readonly loadout: Readonly<import("../shared/interaction").Loadout>;
-  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}, scenarioOverride?: Scenario, loadout?: import("../shared/interaction").Loadout) {
+  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}, scenarioOverride?: Scenario, loadout?: import("../shared/interaction").Loadout, definition:WorldDefinition=legacyWorld(seed)) {
     this.settings = resolveGameSettings(settings);
     this.loadout = resolveLoadout(loadout);
-    this.world = new World(seed, this.settings.timeLimitSeconds, this.loadout);
+    this.world = new World(seed, this.settings.timeLimitSeconds, this.loadout, definition);
+    this.guards=new GuardSystem(definition.guards,definition.layout);
     this.world.onWorldEvent = event => { this.events.emit(event); };
     this.guards.lightAt = this.world.lightAt;
-    this.npcs = new NpcDirector(this.world, scenarioOverride ?? buildScenario(seed, this.settings), !scenarioOverride);
-    this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id), this.world.lightAt);
+    this.npcs = new NpcDirector(this.world, scenarioOverride ?? buildScenario(seed, this.settings, definition.layout), !scenarioOverride);
+    this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id), this.world.lightAt,definition.layout);
     this.alerts = new AlertSystem(this.events, (id) => this.guards.guards.find((g) => g.def.id === id)?.role ?? (this.world.persons.has(id) && id !== "player" ? "npc" : undefined), () => this.t);
     this.npcBrain = new NpcBrain(this.world, this.guards, this.events, this.alerts);
     this.dialogue = new DialogueSystem(this.world,this.events,this.alerts,this.npcBrain);
     this.executor = new ActionExecutor({world:this.world,guards:this.guards,bus:this.events,alerts:this.alerts,brain:this.npcBrain,dialogue:this.dialogue});
     this.creative = new CreativeSystem(this.world, this.guards, this.events, () => this.resolveInteractions(0),this.executor);
-    this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
-    if (!scenarioOverride) this.world.transit.startCrowd();
+    this.player = this.world.addPerson("player", this.world.layout.ENTRANCE, { isPlayer: true });
+    if (!scenarioOverride) {
+      this.world.transit.startCrowd();
+      const entrance=definition.entrances?.[0];if(entrance)this.world.entry.begin(this.player,entrance);
+    }
     this.recordTrail();
     this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内进入站台。");
     this.perceive();
@@ -202,7 +208,7 @@ export class Engine {
   /** Attribute this step's time to what the player was doing when it began. */
   private account(kind: Person["activity"]["kind"]) {
     const tb = this.timeBreakdown;
-    if (kind === "walking" || kind === "to_queue" || kind === "to_escalator") tb.walking += DT;
+    if (kind === "entering" || kind === "walking" || kind === "to_queue" || kind === "to_escalator") tb.walking += DT;
     else if (kind === "queued" || kind === "escalator_queue") tb.queueing += DT;
     else if (kind === "service") tb.service += DT;
     else if (kind === "waiting") tb.waiting += DT;
@@ -215,7 +221,10 @@ export class Engine {
   }
 
   private recordTrail() {
-    const point = { t: this.t, ...this.player.pos };
+    const a=this.player.activity;
+    const transit=a.kind==="stairs"||a.kind==="escalator";
+    const progress=a.kind==="entering"?a.progress:transit?1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)):undefined;
+    const point = { ...(this.world.definition.generatorVersion==="metro-v1"?{floorId:this.player.pos.floorId,elevation:this.player.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector:a.kind as "stairs"|"escalator",progress}:{})}:{}), t: this.t, ...this.player.pos };
     if (this.trail.at(-1)?.t === this.t) this.trail[this.trail.length - 1] = point;
     else this.trail.push(point);
   }
@@ -258,7 +267,7 @@ export class Engine {
   }
 
   observe(): Observation {
-    return buildObservation(this.world, this.guards);
+    return {...buildObservation(this.world, this.guards), ...(this.world.definition.generatorVersion==="metro-v1"?{publicMap:publicMap(this.world.definition)}:{})};
   }
 
   /** Validate and start an action. `mechanic` is required for attempt_creative. */
@@ -270,6 +279,7 @@ export class Engine {
     // Waiting never changes the world, so it is always allowed; anything else must not
     // interrupt a service or a creative act in progress.
     if (action.type !== "wait") {
+      if (p.activity.kind === "entering") return { ok:false,text:"正在沿入口下楼进站，请等到达站厅" };
       if (p.activity.kind === "service") return { ok: false, text: "正在办理中，请等办理完成" };
       if (p.activity.kind === "creative") return { ok: false, text: "上一个行动尚未完成" };
       if ((p.activity.kind === "stairs" || p.activity.kind === "escalator") && !(p.activity.kind === "escalator" && action.type === "act")) return { ok: false, text: "正在下楼梯，请等到达站台" };
@@ -305,16 +315,16 @@ export class Engine {
       }
       case "observe": {
         const n = w.persons.get(action.targetId);
-        if (!n || n.isPlayer || !playerCanSee(p.pos, n.pos, w.lightAt)) return {ok:false,text:"目标不在可见范围"};
+        if (!n || n.isPlayer || !playerCanSee(p.pos, n.pos, w.lightAt, w.layout)) return {ok:false,text:"目标不在可见范围"};
         if (p.activity.kind === "idle" || p.activity.kind === "waiting") p.activity = { kind: "waiting", remaining: 1 };
         else this.wakeAt = round1(w.t + 1);
         const holding = w.items.holdings(n.id).filter(i => w.items.slot(i) === "hand").map(i => i.kind).join("、") || "无";
         return {ok:true,text: `${n.id}：${n.persona ? Object.values(n.persona.look).flat().join("、") : n.kind}；${n.activity.kind}；手持：${holding}`} ;
       }
       case "move_to": {
-        const target = resolveTarget(action.target);
-        if (!target) return { ok: false, text: `未知地点 ${action.target}。可用：${NAV_NODES.map((n) => n.id).join("、")}，或设施编号` };
-        if (!findPath(p.pos, target.pos)) return { ok: false, text: "目标不可步行到达，保留当前动作与队列位次" };
+        const target = resolveTarget(action.target, this.world.layout);
+        if (!target) return { ok: false, text: `未知地点 ${action.target}。可用：${this.world.layout.NAV_NODES.map((n) => n.id).join("、")}，或设施编号` };
+        if (!this.world.navigation.findPath(p.pos, target.pos)) return { ok: false, text: "目标不可步行到达，保留当前动作与队列位次" };
         const left = this.leaveIfQueued();
         const err = w.walkTo(p, target.pos, target.label);
         if (err) return { ok: false, text: left + err };
@@ -322,11 +332,11 @@ export class Engine {
       }
       case "join_queue": {
         const f = w.facility(action.facility);
-        if (!f) return { ok: false, text: `不存在设施 ${action.facility}。可用：${FACILITIES.map((d) => d.id).join("、")}` };
+        if (!f) return { ok: false, text: `不存在设施 ${action.facility}。可用：${this.world.layout.FACILITIES.map((d) => d.id).join("、")}` };
         const current = w.queuePosition(p);
         if (current?.facility.def.id === action.facility) return { ok: true, text: `继续在 ${action.facility} 排队` };
         if (p.activity.kind === "to_queue" && p.activity.facility === action.facility) return { ok: true, text: `继续走向 ${action.facility} 队尾` };
-        if (!findPath(p.pos, queueSlot(f.def, f.queue.length))) return { ok: false, text: "目标队列不可步行到达，保留当前动作与队列位次" };
+        if (!this.world.navigation.findPath(p.pos, queueSlot(f.def, f.queue.length))) return { ok: false, text: "目标队列不可步行到达，保留当前动作与队列位次" };
         const left = this.leaveIfQueued();
         const err = w.joinQueue(p, action.facility);
         if (err) return { ok: false, text: left + err };
@@ -383,13 +393,13 @@ export class Engine {
   }
 }
 
-function resolveTarget(id: string): { pos: Vec; label: string } | null {
-  const node = nodeById(id);
+function resolveTarget(id: string, layout: import("../shared/world").StationLayout): { pos: Vec; label: string } | null {
+  const node = layout.NAV_NODES.find(n=>n.id===id);
   if (node) return { pos: node.pos, label: node.label };
-  const f = FACILITIES.find((d) => d.id === id);
+  const f = layout.FACILITIES.find((d) => d.id === id);
   if (f) {
     const beside = queueSlot(f, f.kind === "gate" ? 0 : 2);
-    return { pos: { x: beside.x, y: beside.y + 1.2 }, label: `${f.label}附近` };
+    return { pos: { ...beside, x: beside.x, y: beside.y + 1.2 }, label: `${f.label}附近` };
   }
   return null;
 }

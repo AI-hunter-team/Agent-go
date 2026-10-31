@@ -7,6 +7,7 @@ import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettin
 
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
+  publicMap?: import("../src/shared/world").PublicStationMap;
   loadout: Readonly<import("../src/shared/interaction").Loadout>;
   settings: Readonly<GameSettings>;
   id: string;

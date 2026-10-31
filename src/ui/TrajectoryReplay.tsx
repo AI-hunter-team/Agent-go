@@ -1,3 +1,8 @@
+import { StationMapWidget } from "./MiniMap";
+import { stationAtlas, replayMapFrame } from "./stationMap";
+import { legacyWorld } from "../sim/worldDefinition";
+import { Engine as ReplayEngine } from "../sim/engine";
+import { hydrateWorld } from "../sim/worldDefinition";
 import { EVENT_LABEL } from "./interactionLabels";
 import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { GameReport } from "../shared/types";
@@ -15,6 +20,8 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
   const [speed, setSpeed] = useState(1);
   const duration = Math.max(0, report.elapsed);
   const frame = useMemo(() => getReplayFrame(report, time), [report, time]);
+  const atlas=useMemo(()=>stationAtlas(report.world?hydrateWorld(report.world):legacyWorld(report.seed)),[report.world,report.seed]);
+  const mapFrame=useMemo(()=>replayMapFrame(atlas,frame),[atlas,frame]);
   const canPlay = duration > 0 && report.trail.length > 0;
   const previous = [...report.decisions].reverse().find((d) => d.t < frame.t - 1e-6);
   const next = report.decisions.find((d) => d.t > frame.t + 1e-6);
@@ -90,6 +97,7 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
           <button disabled={!next} onClick={() => next && seek(next.t)}>下一决策</button>
         </div>
       </div>
+      {frame.position&&<div style={{maxWidth:320,marginBlock:16}}><StationMapWidget atlas={atlas} frame={mapFrame} replay/></div>}
       <div className="replay-context">
         {!!frame.events?.length && <details open><summary>截至此时的交互事件</summary>{frame.events.slice(-12).map(e => <p key={e.id}>{e.t.toFixed(1)}s {EVENT_LABEL[e.kind]} · {e.actorId ?? "环境"} → {e.targetId ?? "周围"}</p>)}</details>}
         <p className="muted">警戒变化 {frame.alerts?.length ?? 0} 条 · 物品转移 {frame.items?.length ?? 0} 条。地图中的乘客与设施为终局位置；角色轨迹和上述记录按回放时间展示。</p>
@@ -104,6 +112,10 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
 export function TrajectoryReplayView({ report, engine }: { report: GameReport; engine: Engine }) {
   const engineRef = useRef<Engine | null>(engine);
   const optionsRef = useRef<RenderOptions>({ showVision: false, showTrail: true, thinking: false });
-  engineRef.current = engine;
+  const resolved=useMemo(()=>{
+    const recordedHash=report.world?.layoutHash??"legacy-v0";
+    return engine.world.definition.layoutHash===recordedHash?engine:new ReplayEngine(report.seed,report.settings,{seed:report.seed,spawns:[],events:[],initialStatus:{}},report.loadout,report.world?hydrateWorld(report.world):undefined);
+  },[report.world,report.seed,report.settings,report.loadout,engine]);
+  engineRef.current = resolved;
   return <><MapCanvas engineRef={engineRef} optionsRef={optionsRef} /><TrajectoryReplay report={report} optionsRef={optionsRef} /></>;
 }

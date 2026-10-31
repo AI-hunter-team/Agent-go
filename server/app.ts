@@ -1,3 +1,5 @@
+import { generateWorld, publicMap } from "../src/sim/worldDefinition";
+import type { WorldDescriptor } from "../src/shared/world";
 import { resolveLoadout } from "../src/shared/interaction";
 import type { ActionPlan, BossContext, NpcDialogueRequest, NpcResponse } from "../src/shared/types";
 import { bossContextValid, validatePlan } from "./boss";
@@ -144,10 +146,11 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       || !input.settings || gameSettingsError(input.settings) || input.settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
       return void res.status(400).json({ error: "准备条件无效，请检查指导、种子与时限" });
     }
-    if (Object.keys(input).some(key => !["sceneId", "seed", "settings", "loadout", "guidance", "autonomous", "runId"].includes(key))) {
+    if (Object.keys(input).some(key => !["sceneId", "seed", "settings", "loadout", "guidance", "autonomous", "runId", "world"].includes(key))) {
       return void res.status(400).json({ error: "准备请求包含未知字段" });
     }
     try { resolveLoadout(input.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
+    try { requestedMap(input.seed,input.world); } catch { return void res.status(409).json({error:"车站版本或布局已变化，请刷新后重新准备"}); }
     assertSafeText(input.guidance);
     const current = runtime(req);
     if (!requireLlm(current.llm, res)) return;
@@ -192,6 +195,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       const prepared = preparations.get(req.body.preparationId);
       if (!prepared || Date.now() - prepared.created > 600_000 || prepared.runtime.llm !== binding.llm || prepared.runtime.token !== binding.token
         || JSON.stringify(prepared.runtime.parameters) !== JSON.stringify(binding.parameters)
+        || JSON.stringify(prepared.input.world)!==JSON.stringify(req.body.world)
         || prepared.input.seed !== req.body.seed || prepared.input.sceneId !== req.body.sceneId
         || prepared.input.runId !== req.body.runId || prepared.input.settings.timeLimitSeconds !== settings?.timeLimitSeconds
         || prepared.input.settings.extraQueuePeople !== settings?.extraQueuePeople
@@ -211,7 +215,10 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     if (settings && settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
       return void res.status(400).json({ error: `每条初始开放队列固定额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
     }
+    let stationMap;
+    try { stationMap=requestedMap(req.body.seed,req.body.world); } catch {return void res.status(409).json({error:"车站版本或布局不匹配，请重新准备"});}
     const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings, loadout);
+    s.publicMap=stationMap;
     if (preparationId !== undefined) preparations.delete(preparationId);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
@@ -226,6 +233,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       const session = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
       if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
       if (!turn?.observation) return void res.status(400).json({ error: "缺少 turn.observation" });
+      if(session.publicMap && (turn.observation.publicMap?.layoutHash!==session.publicMap.layoutHash || turn.observation.publicMap?.generatorVersion!==session.publicMap.generatorVersion))return void res.status(409).json({error:"观察与当前车站不匹配"});
       assertSafeText(JSON.stringify(turn));
       const { llm, parameters: modelParameters } = forSession(req, session);
       if (!requireLlm(llm, res)) return;
@@ -238,7 +246,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     const session = sessions.get(req.body?.sessionId);
     if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
     const binding = forSession(req, session);
-    const { instruction, context } = req.body;
+    const { instruction } = req.body;
+    const context={...req.body.context,publicMap:session.publicMap};
     if (!boundedText(instruction, 200) || !bossContextValid(context)) return void res.status(400).json({ error: "行动或可见上下文无效" });
     assertSafeText(JSON.stringify({ instruction, context }));
     const { value, debug } = await traceOperation({ operation: "interpret", runId: session.runId, sessionId: session.id }, { instruction, context, modelParameters: binding.parameters }, debugLogger, async () => {
@@ -311,4 +320,10 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
   });
 
   return app;
+}
+
+function requestedMap(seed:number, world?:WorldDescriptor) {
+  if(world===undefined)return undefined;
+  if(!world||Object.keys(world).some(k=>!["generatorVersion","layoutHash"].includes(k))||world.generatorVersion!=="metro-v1")throw new Error("未知世界版本");
+  const d=generateWorld(seed);if(d.layoutHash!==world.layoutHash)throw new Error("地图摘要不一致");return publicMap(d);
 }

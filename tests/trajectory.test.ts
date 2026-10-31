@@ -1,3 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TrajectoryReplayView } from "../src/ui/TrajectoryReplay";
+import { generateWorld } from "../src/sim/worldDefinition";
 import { describe, expect, test } from "vitest";
 import { GameRunner } from "../src/agent/runner";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
@@ -78,4 +82,12 @@ describe("trajectory replay", () => {
     expect(getReplayFrame({ elapsed: 0, trail: [], decisions: [] }, 5)).toMatchObject({ t: 0, position: null, trail: [], decision: null });
     expect(getReplayFrame({ elapsed: 0, trail: [{ t: 0, x: 2, y: 15 }], decisions: [] }, 5).position).toEqual({ x: 2, y: 15 });
   });
+});
+
+test("an old report keeps its legacy map when opened beside a generated journey",()=>{
+  const old=new GameRunner(new Engine(1),new HeuristicAgent(),offlineClassifier).report();
+  const current=new Engine(4,{},undefined,undefined,generateWorld(4));
+  const html=renderToStaticMarkup(createElement(TrajectoryReplayView,{report:old,engine:current}));
+  expect(html).toContain("上层平台");expect(html).not.toContain("双层车站地图");
+  expect(current.world.definition.generatorVersion).toBe("metro-v1");
 });

@@ -5,9 +5,9 @@ import type { DialogueSystem } from "../dialogue";
 import type { EventBus } from "../events";
 import { angleDiff, angleTo, dist, lineOfSight } from "../geometry";
 import type { GuardSystem } from "../guards";
-import { atRailing, GATE_X, RAILING_APPROACHES, RAILING_X, STAIRS_TOP, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, ESCALATOR_TOP, HEIGHT, ITEM_SPOTS, NAV_NODES, SIGHT_OCCLUDERS, zoneOf } from "../layout";
-import { clearOfPeople, clearOfScenery, personRadius } from "../movement";
-import { findPath } from "../nav";
+import { STAIRS_REACH, STAIRS_SECONDS } from "../layout";
+import { personRadius } from "../movement";
+
 import type { NpcBrain } from "../npcBrain";
 import { playerCanSee } from "../observation";
 import { DT, RULES } from "../scenario";
@@ -78,7 +78,7 @@ export class ActionExecutor {
   }
   start(plan: ActionPlan): ActionResult {
     const p = this.context.world.player;
-    if (!p || this.busy || this.pendingDialogue || p.incapacitated || ["service", "done"].includes(p.activity.kind) || (["stairs", "escalator"].includes(p.activity.kind) && !(p.activity.kind === "escalator" && plan?.steps?.length === 1 && plan.steps[0].op === "vault" && plan.steps[0].obstacle === "escalator_side"))) return {
+    if (!p || this.busy || this.pendingDialogue || p.incapacitated || ["entering", "service", "done"].includes(p.activity.kind) || (["stairs", "escalator"].includes(p.activity.kind) && !(p.activity.kind === "escalator" && plan?.steps?.length === 1 && plan.steps[0].op === "vault" && plan.steps[0].obstacle === "escalator_side"))) return {
       ok: false,
       text: "当前行动尚未完成或无法行动"
     };
@@ -174,7 +174,7 @@ export class ActionExecutor {
         this.prepare();
         return;
       }
-      if (!a.path.length || dist(a.path.at(-1)!, point) > .5) a.path = findPath(p.pos, point, personRadius(p.kind)) ?? [];
+      if (!a.path.length || dist(a.path.at(-1)!, point) > .5) a.path = this.context.world.navigation.findPath(p.pos, point, personRadius(p.kind)) ?? [];
       if (!a.path.length) {
         this.fail("目标不可到达");
         return;
@@ -187,16 +187,16 @@ export class ActionExecutor {
     if ((a.step.op === "vault" || a.step.op === "slide_handrail") && a.dest) {
       const fraction = Math.min(1, DT / Math.max(DT, a.remaining + DT));
       const next = { x: p.pos.x + (a.dest.x - p.pos.x) * fraction, y: p.pos.y + (a.dest.y - p.pos.y) * fraction };
-      if (!clearOfPeople(p.pos, next, personRadius(p.kind), world.collisionBodies(p.id))) {
-        if (a.step.op === "vault" && a.step.obstacle === "escalator_side") {
-          const target=world.collisionBodies(p.id).find(b=>!clearOfPeople(p.pos,next,personRadius(p.kind),[b]));
+      if (!this.context.world.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), world.collisionBodies(p.id))) {
+    if (a.step.op === "vault" && a.step.obstacle === "escalator_side") {
+          const target=world.collisionBodies(p.id).find(b=>!this.context.world.spatial.clearOfPeople(p.pos,next,personRadius(p.kind),[b]));
           const event=this.emit(a,{kind:"collision",severity:"affecting",targetId:target?.id,loudness:4,causeId:a.eventIds[0]});
           this.context.bus.beginAct({actorId:p.id,kind:event.kind,severity:event.severity,eventId:event.id,targetId:event.targetId});
           a.blocked=true;a.ready=true;
         } else a.remaining += DT;
         return;
       }
-      p.pos = next;
+      p.pos = world.definition.generatorVersion==="metro-v1"&&a.step.op==="slide_handrail"?{...next,floorId:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
     }
     if (a.step.op === "force_cut_in") {
       const npc = world.persons.get(a.step.npcId)!,
@@ -256,14 +256,14 @@ export class ActionExecutor {
     this.resetActivity();
     if (this.traversal) {
       const p = this.context.world.player!, a = this.traversal;
-      p.pos.y = a.kind === "escalator" ? ESCALATOR_TOP.y : a.start.y;
+      p.pos.y = a.kind === "escalator" ? this.context.world.layout.ESCALATOR_TOP.y : a.start.y;
       p.activity = { ...a };
       this.traversal = null;
     }
     if (interrupted?.op === "slide_handrail") {
       const p=this.context.world.player!;
-      const duration=Math.max(.1,(STAIRS_BOTTOM.x-p.pos.x)/(STAIRS_BOTTOM.x-STAIRS_TOP.x)*STAIRS_SECONDS);
-      p.activity={kind:"stairs",remaining:duration,duration,start:{...p.pos},end:STAIRS_BOTTOM};
+      const duration=Math.max(.1,Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-p.pos.x,this.context.world.layout.STAIRS_BOTTOM.y-p.pos.y)/Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-this.context.world.layout.STAIRS_TOP.x,this.context.world.layout.STAIRS_BOTTOM.y-this.context.world.layout.STAIRS_TOP.y)*STAIRS_SECONDS);
+      p.activity={kind:"stairs",remaining:duration,duration,start:{...p.pos},end:this.context.world.layout.STAIRS_BOTTOM};
     }
     this.context.world.notifyPlayer("action_interrupted", text);
   }
@@ -311,10 +311,10 @@ export class ActionExecutor {
       isRailingVault = (s?: PlanStep) => s?.op === "vault" && s.obstacle === "railing";
     if (step.op === "approach" && isRailingVault(this.queue[0])) {
       const point = this.target(step);
-      if (!point || !findPath(p.pos, point)) step = this.queue.shift()!;
+      if (!point || !this.context.world.navigation.findPath(p.pos, point)) step = this.queue.shift()!;
     }
-    if (!isRailingVault(step) || p.pos.x >= RAILING_X || atRailing(p.pos)) return step;
-    const spot = RAILING_APPROACHES.filter(r => dist(p.pos, r.pos) > 1 && findPath(p.pos, r.pos)).sort((a, b) => dist(p.pos, a.pos) - dist(p.pos, b.pos))[0];
+    if (!isRailingVault(step) || this.context.world.layout.zoneOf(p.pos)!=="hall" || this.context.world.layout.atRailing(p.pos)) return step;
+    const spot = this.context.world.layout.RAILING_APPROACHES.filter(r => dist(p.pos, r.pos) > 1 && this.context.world.navigation.findPath(p.pos, r.pos)).sort((a, b) => dist(p.pos, a.pos) - dist(p.pos, b.pos))[0];
     if (!spot) return step;
     this.queue.unshift(step);
     return {
@@ -356,8 +356,8 @@ export class ActionExecutor {
       const i = w.items.items.get(ref.id);
       return i ? w.items.position(i) : null;
     }
-    if (ref.kind === "node") return NAV_NODES.find(n => n.id === ref.id)?.pos ?? null;
-    if (ref.kind === "spot") return ITEM_SPOTS.find(s => s.id === ref.id)?.pos ?? null;
+    if (ref.kind === "node") return this.context.world.layout.NAV_NODES.find(n => n.id === ref.id)?.pos ?? null;
+    if (ref.kind === "spot") return this.context.world.layout.ITEM_SPOTS.find(s => s.id === ref.id)?.pos ?? null;
     return w.facility(ref.id)?.def.head ?? null;
   }
   private person(id: string) {
@@ -384,8 +384,8 @@ export class ActionExecutor {
     if (["approach", "take", "give", "talk", "snatch", "push", "strike", "force_cut_in"].includes(step.op)) {
       if (!point) return "目标不存在";
       const known = step.op === "approach" && ["node", "facility", "spot"].includes(step.target.kind);
-      if (!known && !playerCanSee(p.pos, point, w.lightAt)) return "目标已不可见";
-      if (!findPath(p.pos, point)) return "目标不可步行到达";
+      if (!known && !playerCanSee(p.pos, point, w.lightAt, w.layout)) return "目标已不可见";
+      if (!this.context.world.navigation.findPath(p.pos, point)) return "目标不可步行到达";
       if (settling && !this.inRange(step, point)) return "目标离开可及范围，行动中断";
     }
     if ("npcId" in step || step.op === "give") {
@@ -406,7 +406,7 @@ export class ActionExecutor {
       if (step.op === "give" && (!w.persons.has(step.toId) || !w.items.canMove(item.id, this.slot(item, step.toId)))) return "对方无法接收物品";
       if (step.op === "drop" && step.at) {
         const at = this.resolveRef(step.at);
-        if (!at || !playerCanSee(p.pos, at, w.lightAt) || dist(p.pos, at) > (step.mode === "throw" ? 6 : 1.6) || !lineOfSight(p.pos, at, SIGHT_OCCLUDERS) || !clearOfScenery(at, at, .1)) return "放置/投掷位置不可及";
+        if (!at || !playerCanSee(p.pos, at, w.lightAt, w.layout) || dist(p.pos, at) > (step.mode === "throw" ? 6 : 1.6) || !lineOfSight(p.pos, at, this.context.world.layout.SIGHT_OCCLUDERS) || !this.context.world.spatial.clearOfScenery(at, at, .1)) return "放置/投掷位置不可及";
       }
     }
     if (step.op === "talk") {
@@ -428,14 +428,14 @@ export class ActionExecutor {
     }
     if (step.op === "vault") {
       if (!settling) {
-        if (step.obstacle === "gate" && (zoneOf(p.pos) !== "concourse" || GATE_X - p.pos.x > RULES.jumpGateDistance)) return "只能在安检后大厅、靠近闸机线翻越闸机";
-        if (step.obstacle === "railing" && !atRailing(p.pos)) return "请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
+        if (step.obstacle === "gate" && (this.context.world.layout.zoneOf(p.pos) !== "concourse" || (w.definition.generatorVersion==="metro-v1"?Math.min(...[...w.facilities.values()].filter(f=>f.def.kind==="gate").map(f=>dist(p.pos,f.def.pos))):w.layout.GATE_X-p.pos.x) > RULES.jumpGateDistance)) return "只能在安检后大厅、靠近闸机线翻越闸机";
+        if (step.obstacle === "railing" && !this.context.world.layout.atRailing(p.pos)) return w.definition.generatorVersion==="metro-v1"?"请靠近公开地图标出的安检低栏杆段":"请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
         if (step.obstacle === "escalator_side" && !(p.activity.kind === "escalator")) return "只能在下行扶梯上翻出侧边";
       }
       const dest = this.current?.dest;
-      if (settling && step.obstacle !== "escalator_side" && dest && !clearOfPeople(p.pos, dest, personRadius(p.kind), w.collisionBodies(p.id))) return "落地点被占用";
+      if (settling && step.obstacle !== "escalator_side" && dest && !this.context.world.spatial.clearOfPeople(p.pos, dest, personRadius(p.kind), w.collisionBodies(p.id))) return "落地点被占用";
     }
-    if (step.op === "slide_handrail" && !settling && (!p.passedGate || p.onPlatform || dist(p.pos, STAIRS_TOP) > STAIRS_REACH)) return "请先通过闸机并靠近楼梯扶手入口";
+    if (step.op === "slide_handrail" && !settling && (!p.passedGate || p.onPlatform || dist(p.pos, this.context.world.layout.STAIRS_TOP) > STAIRS_REACH)) return "请先通过闸机并靠近楼梯扶手入口";
     return null;
   }
   private prepare() {
@@ -467,7 +467,7 @@ export class ActionExecutor {
     a.duration = a.step.op === "wait" ? a.step.seconds : a.step.op === "drop" && a.step.mode === "throw" ? 1 : primitive.duration;
     if (a.step.op === "take") {
       const item = w.items.items.get(a.step.itemId)!;
-      if (item.location.type === "spot") a.duration = ITEM_SPOTS.find(s => s.id === (item.location as {
+      if (item.location.type === "spot") a.duration = this.context.world.layout.ITEM_SPOTS.find(s => s.id === (item.location as {
         spotId: string;
       }).spotId)!.takeSeconds;
     }
@@ -475,12 +475,22 @@ export class ActionExecutor {
     if (a.step.op === "vault" && a.step.obstacle === "escalator_side") a.duration = 1;
     a.remaining = a.duration;
     if (a.step.op === "vault") a.dest = {
-      x: GATE_X + 1.4,
-      y: Math.min(HEIGHT - 1, Math.max(1, p.pos.y))
+      x: this.context.world.layout.GATE_X + 1.4,
+      y: Math.min(this.context.world.layout.HEIGHT - 1, Math.max(1, p.pos.y))
     };
-    if (a.step.op === "vault" && a.step.obstacle === "railing") a.dest = { x: RAILING_X + 1.4, y: p.pos.y };
-    if (a.step.op === "vault" && a.step.obstacle === "escalator_side") a.dest = { x: p.pos.x, y: STAIRS_TOP.y };
-    if (a.step.op === "slide_handrail") a.dest = { ...STAIRS_BOTTOM };
+    if(w.definition.generatorVersion==="metro-v1"&&a.step.op==="vault"&&a.step.obstacle==="gate") {
+      const nearest=[...w.facilities.values()].filter(f=>f.def.kind==="gate").sort((a,b)=>dist(p.pos,a.def.pos)-dist(p.pos,b.def.pos))[0];a.dest={...nearest.def.exit!};
+    }
+    if (a.step.op === "vault" && a.step.obstacle === "railing") a.dest = { x: this.context.world.layout.RAILING_X + 1.4, y: p.pos.y };
+if(w.definition.generatorVersion==="metro-v1"&&a.step.op==="vault"&&a.step.obstacle==="railing") {
+      const point=w.layout.RAILING_APPROACHES[0].pos, f=w.layout.FACILITIES.find(f=>f.kind==="security")!,q=f.queueDirection??{x:-1,y:0};a.dest={...point,x:point.x-q.x*2.1,y:point.y-q.y*2.1};
+    }
+    if (a.step.op === "vault" && a.step.obstacle === "escalator_side") a.dest = { x: p.pos.x, y: this.context.world.layout.STAIRS_TOP.y };
+    if(w.definition.generatorVersion==="metro-v1"&&a.step.op==="vault"&&a.step.obstacle==="escalator_side"){
+      const progress=this.traversal?1-this.traversal.remaining/(this.traversal.duration??10):0,from=w.layout.STAIRS_TOP,to=w.layout.STAIRS_BOTTOM;
+      a.dest={x:from.x+(to.x-from.x)*progress,y:from.y+(to.y-from.y)*progress,floorId:"transit:stairs",elevation:-6*progress};
+    }
+    if (a.step.op === "slide_handrail") a.dest = { ...this.context.world.layout.STAIRS_BOTTOM };
     if (a.step.op === "force_cut_in") {
       const npc = w.persons.get(a.step.npcId)!,
         q = w.queuePosition(npc)!;
@@ -590,8 +600,8 @@ export class ActionExecutor {
       if (s.obstacle === "railing") { p.pos = { ...a.dest! }; p.screened = true; return { ok: true, text: "翻过安检栏杆，进入大厅；尚未过闸" }; }
       if (s.obstacle === "escalator_side") {
         p.pos = { ...a.dest! };
-        const remaining = Math.max(.1, (STAIRS_BOTTOM.x - p.pos.x) / (STAIRS_BOTTOM.x - STAIRS_TOP.x) * STAIRS_SECONDS);
-        p.activity = { kind: "stairs", route: "stairs", remaining, duration: remaining, start: { ...p.pos }, end: STAIRS_BOTTOM };
+        const remaining = Math.max(.1, Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-p.pos.x,this.context.world.layout.STAIRS_BOTTOM.y-p.pos.y)/Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-this.context.world.layout.STAIRS_TOP.x,this.context.world.layout.STAIRS_BOTTOM.y-this.context.world.layout.STAIRS_TOP.y) * STAIRS_SECONDS);
+        p.activity = { kind: "stairs", route: "stairs", remaining, duration: remaining, start: { ...p.pos }, end: this.context.world.layout.STAIRS_BOTTOM };
         this.traversal = null;
         return { ok: true, text: "翻出扶梯侧边，改从楼梯下行" };
       }
@@ -685,7 +695,7 @@ export class ActionExecutor {
           y: target.pos.y + dy * .8
         },
         radius = personRadius(npc?.kind ?? "guard");
-      if (clearOfScenery(target.pos, dest, radius) && clearOfPeople(target.pos, dest, radius, w.collisionBodies(s.npcId))) {
+      if (this.context.world.spatial.clearOfScenery(target.pos, dest, radius) && this.context.world.spatial.clearOfPeople(target.pos, dest, radius, w.collisionBodies(s.npcId))) {
         target.pos = dest;
         if (npc) {
           w.removeFromQueue(npc);
@@ -794,7 +804,7 @@ export class ActionExecutor {
       npc = w.persons.get(npcId),
       q = npc ? w.queuePosition(npc) : null;
     if (p.incapacitated || ["service", "stairs", "done"].includes(p.activity.kind)) return "当前行动未完成，不能移动让位";
-    if (this.consent || this.current && this.current.phase !== "dialogue" || !q || q.facility.status !== "open" || npc!.incapacitated || dist(p.pos, npc!.pos) > RULES.cutInDistance || !playerCanSee(p.pos, npc!.pos, w.lightAt) || !findPath(p.pos, npc!.pos)) return "让位已失效：请先到可见可达的排队乘客附近";
+    if (this.consent || this.current && this.current.phase !== "dialogue" || !q || q.facility.status !== "open" || npc!.incapacitated || dist(p.pos, npc!.pos) > RULES.cutInDistance || !playerCanSee(p.pos, npc!.pos, w.lightAt, w.layout) || !this.context.world.navigation.findPath(p.pos, npc!.pos)) return "让位已失效：请先到可见可达的排队乘客附近";
     const mine = w.queuePosition(p);
     return mine?.facility === q.facility && mine.index <= q.index ? "这位乘客在你后面，无需请求插队" : null;
   }

@@ -1,3 +1,5 @@
+import { createdWorld } from "../src/ui/worldCreation";
+import { generateWorld, descriptor } from "../src/sim/worldDefinition";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -151,7 +153,7 @@ test("a session creation failure does not consume a valid preparation", async ()
   expect((await call("/api/session", request)).status).toBe(409);
 });
 test("navigation and changed dependencies discard stale planning responses", () => {
-  const planning = journeyReducer(initialFlow, {
+  const planning = journeyReducer({...initialFlow,createdWorld:createdWorld(generateWorld(1),{mode:"custom",value:"1"})}, {
     type: "navigate",
     stage: "planning",
   });
@@ -271,6 +273,15 @@ test("changing enabled model under the same token invalidates the old preparatio
     (await call("/api/session", { ...input, preparationId: prepared.body.id }))
       .status,
   ).toBe(409);
+});
+
+test("generated layouts are validated and bound to prepared sessions",async()=>{
+ const {call,sessions,prepareJourney}=await start();const world=descriptor(generateWorld(input.seed));
+ expect((await call("/api/journey/prepare",{...input,world:{...world,layoutHash:"wrong"}})).status).toBe(409);expect(prepareJourney).not.toHaveBeenCalled();
+ const result=await call("/api/journey/prepare",{...input,world});expect(result.status).toBe(200);
+ const body={...input,world,preparationId:result.body.id};
+ expect((await call("/api/session",{...body,world:descriptor(generateWorld(input.seed+1))})).status).toBe(409);
+ const created=await call("/api/session",body);expect(created.status).toBe(200);expect(sessions.get(created.body.sessionId)?.publicMap?.layoutHash).toBe(world.layoutHash);
 });
 
 test("expired preparation requires replanning", async () => {

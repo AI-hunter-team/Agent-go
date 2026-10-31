@@ -1,6 +1,8 @@
+import * as legacyLayout from "./layout";
+import type { StationLayout } from "../shared/world";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import { Rng } from "./rng";
-import { FACILITIES } from "./layout";
+
 import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
 // All tunable MVP numbers live here (docs/MVP技术方案.md §5). They are starting
@@ -126,12 +128,15 @@ const INITIAL_QUEUES: { facility: string; kinds: NpcSpawn["kind"][] }[] = [
   { facility: "G4", kinds: ["elderly", "normal", "normal"] },
 ];
 
-export function buildScenario(seed: number, input: Partial<GameSettings> = {}): Scenario {
+export function buildScenario(seed: number, input: Partial<GameSettings> = {}, layout:StationLayout=legacyLayout): Scenario {
   const settings = resolveGameSettings(input);
   const rng = new Rng(seed);
   const spawns: NpcSpawn[] = [];
 
-  for (const q of INITIAL_QUEUES) {
+  const FACILITIES=layout.FACILITIES;
+  const initial=new Rng(seed).fork("initial-queues");
+  const queues=layout.openings ? FACILITIES.map(f=>({facility:f.id,kinds:Array.from({length:initial.pick([0,1,2])},()=>"normal" as const)})) : INITIAL_QUEUES;
+  for (const q of queues) {
     for (const kind of q.kinds) {
       const isTvm = q.facility.startsWith("TVM");
       spawns.push({ t: 0, kind, hasCard: !isTvm, irritable: rng.chance(0.5), startQueue: q.facility });
@@ -151,6 +156,8 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
   const brokenGate = failures.pick(FACILITIES.filter((f) => f.kind === "gate"));
   const brokenTvm = failures.pick(FACILITIES.filter((f) => f.kind === "tvm"));
   const tvmFailureTime = 20 + Math.floor(failures.range(0, 21));
+  const security=FACILITIES.filter(f=>f.kind==="security");
+  const closedSecurity=layout.openings?failures.pick(security).id:"S1", recheckSecurity=layout.openings?failures.pick(security).id:"S2";
   const initialStatus: Record<string, FacilityStatus> = { [brokenGate.id]: "broken" };
   const crowd = new Rng(seed ^ 0x4d43f9a1);
   for (const f of FACILITIES) {
@@ -170,13 +177,13 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
       {
         t: 40,
         type: "status",
-        facility: "S1",
+        facility: closedSecurity,
         status: "closed",
         note: "临时停用",
-        broadcast: "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
+        broadcast: layout.openings?`广播：${closedSecurity} 安检通道临时停用，请改走其他通道。`:"广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
       },
       { t: 65, type: "power", zone: "concourse", duration: 12 },
-      { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
+      { t: 55, type: "recheck", facility: recheckSecurity, extra: [10, 15] },
     ],
   };
 }

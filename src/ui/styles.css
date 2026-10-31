@@ -12,10 +12,10 @@
 @keyframes thought-dot { 50% { transform: translateY(-4px); opacity: .5; } }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
 :root {
-  --paper: #f1f4f7; --bg: #f1f4f7; --card: #ffffff; --surface: #ffffff;
-  --surface-muted: #f2f5f8; --ink: #142033; --ink-soft: #5b687b; --muted: #5b687b;
-  --line: #e3e8ef; --control-line: #dce3ec; --ochre: #ffca00; --sage: #83aaa1;
-  --green: #43816e; --brick: #a5533e; --blue: #26576c; --radius: 16px;
+  --paper: #F6F3EA; --bg: #F6F3EA; --card: #fcfbf6; --surface: #fcfbf6;
+  --surface-muted: #eeeee5; --ink: #182724; --ink-soft: #617065; --muted: #617065;
+  --line: #d8dbd0; --control-line: #cbd2c5; --ochre: #FFC600; --sage: #899789;
+  --green: #43816e; --brick: #a5533e; --blue: #26576c; --radius: 8px;
   color: var(--ink); background: var(--paper);
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   font-size: 14px; line-height: 1.6; font-synthesis: none; text-rendering: optimizeLegibility;
@@ -252,3 +252,5 @@ html:has([data-reduced-motion=true]) *, html:has([data-reduced-motion=true]) *::
   .replay-jump button { flex: 1; }
   .replay-controls > .segmented { flex: 1 0 144px; }
 }
+
+.settings-drawer{background:#f6f3ea;border-radius:12px;color:#182724}.drawer-body>details{border-color:#d8dbd0}button.primary{background:#ffc600;color:#182724;border-color:#ffc600;box-shadow:none}button.primary:hover:not(:disabled){background:#ffda40;border-color:#ffda40}

@@ -46,6 +46,7 @@ export const ITEM_SPOTS: ItemSpot[] = [
 ];
 
 export interface FacilityDef {
+  ingress?: "A" | "B";
   id: string;
   kind: FacilityKind;
   label: string;

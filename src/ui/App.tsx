@@ -1,3 +1,4 @@
+import { MiniMap } from "./MiniMap";
 import {
   Component,
   Suspense,
@@ -18,7 +19,6 @@ import { useAvatarModel } from "./useAvatarModel";
 import { usePerformanceSettings } from "./performanceSettings";
 import { CHARACTERS, useJourney } from "./useJourney";
 import { useBroadcast } from "./useBroadcast";
-import { randomSeed } from "./seed";
 import { FrameMetrics } from "./frameMetrics";
 import { Modal, TooltipProvider } from "./overlays";
 import { MapCanvas } from "./MapCanvas";
@@ -30,6 +30,11 @@ import { NpcDialogue } from "./NpcDialogue";
 import { ReportSummary, EventTimeline } from "./ReportView";
 import { TrajectoryReplayView } from "./TrajectoryReplay";
 import styles from "./App.module.css";
+import roomStyles from "./ControlRoom.module.css";
+import { useDepartureAudio } from "./departureAudio";
+import { BrandMark } from "./BrandMark";
+import { ControlRoomMenu } from "./ControlRoomMenu";
+import { WorldCreation } from "./WorldCreationPanel";
 
 const AvatarThumbnail = lazy(() => import("./AvatarThumbnail"));
 const GameScene = lazy(() => import("./scene/GameScene"));
@@ -67,6 +72,7 @@ export function App() {
     setSettings: setDisplay,
     reducedMotion,
   } = usePerformanceSettings();
+  const sound=useDepartureAudio();
   const j = useJourney(display.lowFrequencyHud ? 500 : 120);
   const {
     session,
@@ -84,7 +90,6 @@ export function App() {
     ended,
     report,
   } = j;
-  const [sceneIndex, setSceneIndex] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
   const [expandedReviewGeneration, setExpandedReviewGeneration] = useState<number | null>(null);
@@ -99,6 +104,17 @@ export function App() {
   );
   const avatar = useAvatarModel("player"),
     guardAvatar = useAvatarModel("guard");
+  const restoredAppearance=useRef(false);
+  useEffect(()=>{if(avatar.busy||restoredAppearance.current)return;restoredAppearance.current=true;
+    if(j.initialCharacter==="custom"&&avatar.isDefault){j.recoverDefaultAppearance();j.setError("默认自定义角色文件不可用，已使用大肥鱼。可以重新导入皮肤。");}
+  },[avatar.busy,avatar.isDefault,j.initialCharacter,j.recoverDefaultAppearance,j.setError]);
+  const restoredWorld=useRef<string|undefined>(undefined);
+  useEffect(()=>{
+    const id=flow.createdWorld?.id;
+    if(!id||avatar.busy||restoredWorld.current===id)return;
+    restoredWorld.current=id;
+    if(characterId==="custom"&&avatar.isDefault){j.setCharacterId("dafeiyu");j.setError("这个世界的自定义角色文件不可用，已使用大肥鱼。可以重新导入皮肤。");}
+  },[flow.createdWorld?.id,avatar.busy,avatar.isDefault,characterId,j.setCharacterId,j.setError]);
   const engineRef = useRef(session.engine);
   engineRef.current = session.engine;
   const optionsRef = useRef<RenderOptions>({
@@ -182,11 +198,11 @@ export function App() {
         data-reduced-motion={reducedMotion}
       >
         <div
-          className={`${styles.scene} ${flow.stage === "lobby" && sceneIndex === 1 ? styles.scenePlaceholder : ""}`}
+          className={styles.scene}
           aria-label="三维地铁站场景"
         >
           {renderer === "2d" ? (
-            <MapCanvas engineRef={engineRef} optionsRef={optionsRef} />
+            watching || ended ? <MapCanvas engineRef={engineRef} optionsRef={optionsRef} /> : <div className={roomStyles.fallback}><BrandMark/></div>
           ) : sceneError ? (
             fallback
           ) : (
@@ -199,6 +215,16 @@ export function App() {
                 <GameScene
                   session={session}
                   camera={j.camera}
+                  stage={flow.stage}
+                  launchReady={j.launchReady}
+                  fastEntry={j.fastEntry}
+                  audio={sound.audio}
+                  onRoomAction={(action) => {
+                    if(action==="world")j.enterScene();
+                    else if(action==="settings")j.setDrawer(true);
+                    else if(action==="character"&&flow.stage==="lobby")j.openAppearance();
+                    else j.navigate(action);
+                  }}
                   quality={display.quality}
                   targetFps={display.targetFps}
                   simpleCrowd={display.simpleCrowd}
@@ -206,14 +232,7 @@ export function App() {
                   assetUrl={
                     characterId === "custom" ? avatar.url : character.url
                   }
-                  assetRotation={
-                    (characterId === "custom" ? avatar.rotation : 0) +
-                    (["character", "guidance", "planning", "plan"].includes(
-                      flow.stage,
-                    )
-                      ? 180
-                      : 0)
-                  }
+                  assetRotation={characterId === "custom" ? avatar.rotation : 0}
                   guardAssetUrl={guardAvatar.url}
                   guardAssetRotation={guardAvatar.rotation}
                   onAssetError={onAssetError}
@@ -230,29 +249,23 @@ export function App() {
             </SceneBoundary>
           )}
         </div>
-        {!watching && !ended && (
+        {!watching && !ended && flow.stage!=="lobby" && flow.stage!=="world" && (
           <div className={styles.topLeft}>
-            <span className={styles.brand}>
-              agent-go<span>●</span>
-            </span>
-            {flow.stage !== "lobby" && (
+            <BrandMark className={styles.brand}/>
               <button
                 disabled={flow.stage === "launch"}
                 onClick={() =>
-                  j.navigate(flow.stage === "character" ? "lobby" : "character")
+                  flow.stage==="character"?j.cancelCharacter():j.navigate("lobby")
                 }
               >
-                ← {flow.stage === "character" ? "返回大厅" : "更换角色"}
+                ← 返回休息室
               </button>
-            )}
           </div>
         )}
         {!watching && flow.stage !== "launch" && (
           <Dialog.Root open={j.drawer} onOpenChange={j.setDrawer}>
             <Dialog.Trigger asChild>
-              <button className={styles.settingsTrigger} aria-label="打开设置">
-                ⚙
-              </button>
+              <button className={styles.settingsTrigger} aria-label="打开设置">⚙ <span>设置</span></button>
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="drawer-overlay" />
@@ -266,7 +279,7 @@ export function App() {
                 <Dialog.Description className="muted">
                   {ended ? "为当前复盘连接或更换模型。" : "配置后续旅程；浏览与选角无需连接模型。"}
                 </Dialog.Description>
-                <div className="drawer-body">
+                <div className="drawer-body"><label className="check"><input type="checkbox" checked={sound.enabled} onChange={sound.toggle}/>启程声音</label>
                   <details open>
                     <summary>模型连接</summary>
                     <ModelConfigPanel
@@ -308,32 +321,7 @@ export function App() {
                   </details>
                   <details>
                     <summary>高级设置</summary>
-                    <label className="field">
-                      情景种子
-                      <div className="row">
-                        <input
-                          aria-label="情景种子"
-                          type="number"
-                          min={1}
-                          max={4294967295}
-                          value={seed}
-                          onChange={(e) =>
-                            j.changeSeed(
-                              Math.min(
-                                4294967295,
-                                Math.max(
-                                  1,
-                                  Math.floor(Number(e.target.value)) || 1,
-                                ),
-                              ),
-                            )
-                          }
-                        />
-                        <button onClick={() => j.changeSeed(randomSeed(seed))}>
-                          随机生成
-                        </button>
-                      </div>
-                    </label>
+                    <button onClick={j.editWorld}>创建 / 查看世界</button>
                     <label className="field">
                       对局时限
                       <select
@@ -361,10 +349,12 @@ export function App() {
             </Dialog.Portal>
           </Dialog.Root>
         )}
+        {j.library.storageError&&flow.stage!=="lobby"&&!watching&&<p className={roomStyles.storageBanner} role="status">{j.library.storageError}</p>}
         {(j.error || assetError) && (
           <div className={styles.alert} role="alert">
             {j.error || assetError}
             <div className="row">
+              {j.incompatibleWorld && <button onClick={()=>j.recreateWorld(j.incompatibleWorld!)}>用当前版本创建副本</button>}
               {j.error && (
                 <button onClick={() => j.setDrawer(true)}>查看设置</button>
               )}
@@ -393,58 +383,9 @@ export function App() {
             </div>
           </div>
         )}
-        {flow.stage === "lobby" && (
-          <section className={styles.lobby} aria-label="选择场景">
-            <h1>{sceneIndex === 0 ? "地铁末班车" : "新的旅程，正在路上"}</h1>
-            <p>
-              {sceneIndex === 0
-                ? "在人群与变化中，找到你的通行方式。"
-                : "更多世界正在开发中，敬请期待。"}
-            </p>
-            <button
-              className="primary"
-              disabled={sceneIndex !== 0}
-              onClick={j.enterScene}
-            >
-              {sceneIndex === 0 ? "进入场景 →" : "敬请期待"}
-            </button>
-            <div className={styles.carousel}>
-              <button
-                aria-label="上一个场景"
-                onClick={() => {
-                  j.invalidate();
-                  setSceneIndex((v) => 1 - v);
-                }}
-              >
-                ‹
-              </button>
-              {[0, 1].map((index) => (
-                <button
-                  key={index}
-                  aria-pressed={sceneIndex === index}
-                  onClick={() => {
-                    j.invalidate();
-                    setSceneIndex(index);
-                  }}
-                >
-                  <span className={styles.sceneThumb}>
-                    {index === 0 ? "01" : "⌁"}
-                  </span>
-                  {index === 0 ? "地铁末班车" : "开发中场景"}
-                </button>
-              ))}
-              <button
-                aria-label="下一个场景"
-                onClick={() => {
-                  j.invalidate();
-                  setSceneIndex((v) => 1 - v);
-                }}
-              >
-                ›
-              </button>
-            </div>
-          </section>
-        )}
+        {flow.stage === "lobby" && <ControlRoomMenu worlds={j.library.worlds} loaded={j.library.loaded} storageError={j.library.storageError} selectedName={flow.createdWorld?.name} onCreate={j.enterScene} onAppearance={j.openAppearance} onSelect={j.selectWorld} onContinue={j.continueWorld} onRename={j.renameWorld} onDelete={j.deleteWorld}/>}
+        {flow.stage === "world" && <WorldCreation draft={j.worldDraft} onConfirm={j.confirmWorld} onCancel={()=>j.navigate("lobby")} quality={display.quality} reducedMotion={reducedMotion}/>}
+
         {flow.stage === "character" && (
           <section className={`${styles.preparation} ${styles.character}`}>
             <span className={styles.eyebrow}>选择你想看谁行动</span>
@@ -477,11 +418,12 @@ export function App() {
             {characterId === "custom" && <AvatarSettings avatar={avatar} />}
             <button
               className="primary full-width"
-              disabled={characterId === "custom" && avatar.busy}
+              disabled={characterId === "custom" && (avatar.busy || avatar.isDefault)}
               onClick={j.confirmCharacter}
             >
-              确认角色 →
+              {flow.characterEntry==="lobby"?"保存外观":"确认角色 →"}
             </button>
+            <button className="ghost full-width" onClick={j.cancelCharacter}>取消</button>
           </section>
         )}
         {flow.stage === "guidance" && (
@@ -489,6 +431,8 @@ export function App() {
             <span className={styles.eyebrow}>给角色一个方向</span>
             <h1>这一次，怎么走？</h1>
             <p>目标：{settings.timeLimitSeconds} 秒内抵达下层站台。</p>
+            <div className={roomStyles.prepRules}><label>时限<select aria-label="旅程时限" value={settings.timeLimitSeconds} onChange={e=>j.changeDeadline(Number(e.target.value))}>{[120,150,180,240,300].map(t=><option key={t} value={t}>{t}秒{t===150?"（默认）":""}</option>)}</select></label><label><input type="checkbox" checked={backpack} onChange={e=>j.changeBackpack(e.target.checked)}/>携带背包</label></div>
+            <div className="segmented">{(["llm","offline"] as const).map(value=><button key={value} aria-pressed={kind===value} className={kind===value?"on":""} onClick={()=>{j.invalidate();j.setKind(value);}}>{value==="llm"?"模型驱动":"离线体验"}</button>)}</div>
             {kind === "offline" ? (
               <>
                 <p>离线体验按固定策略行动，不读取指导。</p>
@@ -507,6 +451,7 @@ export function App() {
                   </span>
                   <textarea
                     rows={5}
+                    maxLength={1200}
                     value={guidance}
                     aria-label="你的指导"
                     aria-invalid={countChars(guidance) > 300}
@@ -604,9 +549,9 @@ export function App() {
                 )}
                 <button
                   className="primary full-width"
-                  onClick={() => void j.start(renderer === "2d")}
+                  onClick={() => {sound.audio.unlock();void j.start(renderer === "2d");}}
                 >
-                  Agent Go · 开始行动 →
+                  agent-go · 开始行动 →
                 </button>
                 <button
                   className="ghost full-width"
@@ -618,13 +563,7 @@ export function App() {
             )}
           </section>
         )}
-        {flow.stage === "launch" && (
-          <section className={styles.launch} role="status">
-            <strong>Agent Go</strong>
-            <span>正在就位，尚未开始计时…</span>
-            <button onClick={() => j.navigate("guidance")}>取消出发</button>
-          </section>
-        )}
+        {flow.stage === "launch" && <section className={roomStyles.progress} role="status"><span className={roomStyles.kicker}>{flow.createdWorld?.name} / DEPARTURE</span><p>{j.launchReady?"正在接通车站并前往入口。踏上楼梯后开始计时。":"正在准备车站、角色与本次旅程，尚未计时…"}</p><button aria-pressed={j.fastEntry} onClick={()=>j.setFastEntry(!j.fastEntry)}>{j.fastEntry?"恢复正常速度":"加速启程"}</button><button onClick={()=>j.navigate("guidance")}>取消出发</button></section>}
         {watching && runner && (
           <>
             {broadcast && (
@@ -675,12 +614,12 @@ export function App() {
                 {runner.interactionDialogues.map((d, i) => <p key={i}>{d.t.toFixed(1)}s 对 {d.request.npc.id}：「{d.request.message}」→「{d.response.reply}」· {d.response.decision}</p>)}
               </Modal>
             </section>
-            <section className={`${styles.timer} ${styles.panel}`}>
+            <div className={styles.mapRail}><section className={`${styles.timer} ${styles.panel}`}>
               <span className={styles.eyebrow}>剩余时间</span>
               <strong>{clock}</strong>
               <progress max={settings.timeLimitSeconds} value={remaining} />
               <span>
-                {session.engine.player.passedGate
+                {session.engine.player.activity.kind === "entering" ? "沿入口楼梯进入站厅" : session.engine.player.passedGate
                   ? "前往下层站台"
                   : session.engine.player.screened
                     ? "选择闸机"
@@ -688,7 +627,7 @@ export function App() {
                       ? "选择安检通道"
                       : "前往购票区"}
               </span>
-            </section>
+            </section><MiniMap key={session.generation} engine={session.engine}/></div>
             <div className={styles.controls}>
               <button
                 className="primary"
@@ -725,7 +664,7 @@ export function App() {
               </button>
               <button onClick={() => session.stop()}>结束</button>
             </div>
-            <div className={styles.runInfo}>
+            <div className={styles.runInfo}><BrandMark className={roomStyles.runBrand}/>
               <Modal
                 title="本局信息"
                 description="本局模型已固定，更换模型需结束本局并返回大厅。"
@@ -734,6 +673,8 @@ export function App() {
                 <p>场景：地铁末班车</p>
                 <p>角色：{runner.journey?.characterName}</p>
                 <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
+                <p>世界：{flow.createdWorld?.name}</p>
+                <button aria-pressed={sound.enabled} onClick={sound.toggle}>{sound.enabled?"关闭声音":"开启声音"}</button>
                 <p>情景种子：{seed}</p>
                 <p>时限：{settings.timeLimitSeconds} 秒</p>
               </Modal>

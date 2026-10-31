@@ -1,3 +1,4 @@
+import { GeneratedStation } from "./GeneratedStation";
 import { memo, useEffect, useMemo, useState, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { BufferGeometry, Float32BufferAttribute, DoubleSide, Group, Mesh, PointLight } from "three";
@@ -107,7 +108,7 @@ function ImportedStation({ kit, session, overview, standard, reducedMotion }: { 
   </group>;
 }
 
-export const Station = memo(function Station({ session, overview, standard, reducedMotion = false, onAssetError }: { session: GameSession; overview: boolean; standard: boolean; reducedMotion?: boolean; onAssetError: (message: string) => void }) {
+export const Station = memo(function Station({ session, overview, standard, reducedMotion = false, onAssetError }: { session: GameSession; generation?:number; overview: boolean; standard: boolean; reducedMotion?: boolean; onAssetError: (message: string) => void }) {
   const [kit, setKit] = useState<StationKit | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
@@ -123,6 +124,7 @@ export const Station = memo(function Station({ session, overview, standard, redu
     });
     return () => { active = false; };
   }, [onAssetError]);
+  if(session.engine.world.definition.generatorVersion==="metro-v1")return loadState==="loading"?<group name="station-kit-loading"/>:<GeneratedStation session={session} kit={kit??undefined} overview={overview}/>;
   // 正式素材加载期间保持空场景，避免旧几何先闪现；只有加载失败才进入几何回退。
   return <><OutageOverlay session={session} />{loadState === "ready" && kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : loadState === "error" ? <StationFallback session={session} reducedMotion={reducedMotion} /> : <group name="station-kit-loading" />}</>;
 });

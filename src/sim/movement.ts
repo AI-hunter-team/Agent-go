@@ -1,18 +1,22 @@
 import type { PassengerKind, Vec } from "../shared/types";
 import { dist, moveToward, segmentIntersectsRect, type Rect } from "./geometry";
-import { ATTRACTIONS, FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_BARRIERS, WIDTH } from "./layout";
+import * as legacyLayout from "./layout";
+import type { StationLayout } from "../shared/world";
 import { facilitySolids } from "./facilityGeometry";
 
 export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
 export const personRadius = (kind: PassengerKind | "guard") => kind === "luggage" ? 0.48 : 0.32;
+
+export function createMovement(layout: StationLayout = legacyLayout) {
+const {FACILITIES,PILLARS,ATTRACTIONS,MOVE_BLOCKERS,SECURITY_BARRIERS,GATE_BARRIERS,WIDTH,HEIGHT}=layout;
 const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos, f.queueDirection));
-const solids = [...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
+const solids = [...(layout.solids??[]), ...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
 /** Shared by persistent route planning and the per-tick collision sweep. */
-export const SCENERY_OBSTACLES: readonly Rect[] = [...MOVE_BLOCKERS.slice(0, 3), ...solids];
+const SCENERY_OBSTACLES: readonly Rect[] = [...(layout.openings ? [...MOVE_BLOCKERS,...(layout.openingBlocks??layout.openings)] : MOVE_BLOCKERS.slice(0, 3)), ...solids];
 
 /** Service may cross its scanner/gate opening, but never a solid side barrier. */
-export function clearServiceExit(from: Vec, to: Vec, radius: number): boolean {
-  return [...SECURITY_BARRIERS, ...GATE_BARRIERS, ...solids].every((obstacle) => {
+function clearServiceExit(from: Vec, to: Vec, radius: number): boolean {
+  return [...SECURITY_BARRIERS, ...GATE_BARRIERS, ...solids].filter(r=>(r.floorId??"concourse")===(from.floorId??"concourse")).every((obstacle) => {
     const r = { x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + 2 * radius, h: obstacle.h + 2 * radius };
     return !segmentIntersectsRect(from, to, r);
   });
@@ -20,7 +24,7 @@ export function clearServiceExit(from: Vec, to: Vec, radius: number): boolean {
 const contains = (r: Rect, p: Vec) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
 /** Minimum separation throughout one simultaneous, linearly interpolated tick. */
-export function sweptDistance(a: Vec, to: Vec, b: Vec, bTo = b): number {
+function sweptDistance(a: Vec, to: Vec, b: Vec, bTo = b): number {
   const x = a.x - b.x, y = a.y - b.y;
   const dx = to.x - a.x - bTo.x + b.x, dy = to.y - a.y - bTo.y + b.y;
   const denominator = dx * dx + dy * dy;
@@ -28,8 +32,9 @@ export function sweptDistance(a: Vec, to: Vec, b: Vec, bTo = b): number {
   return Math.hypot(x + dx * t, y + dy * t);
 }
 
-export function clearOfPeople(from: Vec, to: Vec, radius: number, others: readonly MovingBody[]): boolean {
+function clearOfPeople(from: Vec, to: Vec, radius: number, others: readonly MovingBody[]): boolean {
   return others.every((other) => {
+    if ((from.floorId ?? "concourse") !== (other.pos.floorId ?? "concourse")) return true;
     const start = other.from ?? other.pos;
     const gap = radius + other.radius + 0.02;
     // Reject distant swept pairs before the exact relative-motion calculation.
@@ -45,9 +50,10 @@ export function clearOfPeople(from: Vec, to: Vec, radius: number, others: readon
   });
 }
 
-export function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
+function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
   if (to.x < radius || to.x > WIDTH - radius || to.y < radius || to.y > HEIGHT - radius) return false;
-  return SCENERY_OBSTACLES.every((obstacle) => {
+  if ((from.floorId ?? "concourse") !== (to.floorId ?? "concourse")) return false;
+  return SCENERY_OBSTACLES.filter(obstacle => (obstacle.floorId ?? "concourse") === (from.floorId ?? "concourse")).every((obstacle) => {
     const r = { x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + radius * 2, h: obstacle.h + radius * 2 };
     // Keep existing point-nav corner/fixture positions recoverable, but never cross a wall.
     if (contains(r, from)) return !contains(r, to) || dist(to, { x: r.x + r.w / 2, y: r.y + r.h / 2 }) > dist(from, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
@@ -56,7 +62,7 @@ export function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
 }
 
 /** Choose a swept, collision-safe stride; wait when an occupied nearby waypoint cannot be reached. */
-export function steer(from: Vec, target: Vec, stride: number, radius: number, others: readonly MovingBody[], allowDetour = true): Vec {
+function steer(from: Vec, target: Vec, stride: number, radius: number, others: readonly MovingBody[], allowDetour = true): Vec {
   const distance = dist(from, target);
   if (distance < 1e-8) return { ...from };
   const step = Math.min(stride, distance);
@@ -72,9 +78,9 @@ export function steer(from: Vec, target: Vec, stride: number, radius: number, ot
   let best: Vec | undefined, bestScore = -Infinity;
   for (const angle of [0, 0.26, -0.26, 0.52, -0.52, 0.79, -0.79, 1.05, -1.05, 1.31, -1.31, 1.57, -1.57, 1.84, -1.84, 2.1, -2.1, 2.36, -2.36, 2.62, -2.62, Math.PI]) {
     const dx = Math.cos(heading + angle), dy = Math.sin(heading + angle);
-    const next = { x: from.x + dx * step, y: from.y + dy * step };
+    const next = { ...from, x: from.x + dx * step, y: from.y + dy * step };
     if (!safe(next)) continue;
-    const probe = { x: from.x + dx * horizon, y: from.y + dy * horizon };
+    const probe = { ...from, x: from.x + dx * horizon, y: from.y + dy * horizon };
     const score = Math.cos(angle) + (safe(probe) ? 0.75 : 0) + (angle > 0 ? 0.9 : 0);
     if (score > bestScore) { best = next; bestScore = score; }
   }
@@ -82,7 +88,7 @@ export function steer(from: Vec, target: Vec, stride: number, radius: number, ot
 }
 
 /** Route around queues and solid fixtures together, so a queue detour cannot lead into a machine. */
-export function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect[], radius = personRadius("normal")): Vec {
+function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect[], radius = personRadius("normal")): Vec {
   const blockers = queues.filter((r) => !contains(r, from) && !contains(r, target));
   // Keep the cheap queue-only route when it is already safe; build a combined graph only at fixtures.
   const queueWaypoint = queueDetour(from, target, blockers);
@@ -90,19 +96,19 @@ export function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect
   return queueDetour(from, target, blockers, radius);
 }
 
-const detourGraphs = new Map<number, { points: Vec[]; clear: boolean[][] }>();
+const detourGraphs = new Map<string, { points: Vec[]; clear: boolean[][] }>();
 
 /** Cache the fixed station geometry by body radius; moving queues are checked separately each tick. */
-function detourSceneryGraph(radius: number) {
-  const cached = detourGraphs.get(radius);
+function detourSceneryGraph(radius: number, floorId="concourse") {
+  const cached = detourGraphs.get(`${floorId}:${radius}`);
   if (cached) return cached;
   const margin = radius + 0.03;
-  const points = SCENERY_OBSTACLES.flatMap((r) => [
-    { x: r.x - margin, y: r.y - margin }, { x: r.x + r.w + margin, y: r.y - margin },
-    { x: r.x - margin, y: r.y + r.h + margin }, { x: r.x + r.w + margin, y: r.y + r.h + margin },
+  const points = SCENERY_OBSTACLES.filter(r=>(r.floorId??"concourse")===floorId).flatMap((r) => [
+    { floorId, x: r.x - margin, y: r.y - margin }, { floorId, x: r.x + r.w + margin, y: r.y - margin },
+    { floorId, x: r.x - margin, y: r.y + r.h + margin }, { floorId, x: r.x + r.w + margin, y: r.y + r.h + margin },
   ]).filter((point) => clearOfScenery(point, point, radius));
   const graph = { points, clear: points.map((a) => points.map((b) => clearOfScenery(a, b, radius))) };
-  detourGraphs.set(radius, graph);
+  detourGraphs.set(`${floorId}:${radius}`, graph);
   return graph;
 }
 
@@ -112,10 +118,10 @@ function queueDetour(from: Vec, target: Vec, blockers: readonly Rect[], radius?:
   const visible = (a: Vec, b: Vec) => (radius === undefined || clearOfScenery(a, b, radius)) && blockers.every((r) => !segmentIntersectsRect(a, b, r));
   if (visible(from, target)) return target;
   const corners = blockers.flatMap((r) => [
-    { x: r.x - 0.03, y: r.y - 0.03 }, { x: r.x + r.w + 0.03, y: r.y - 0.03 },
-    { x: r.x - 0.03, y: r.y + r.h + 0.03 }, { x: r.x + r.w + 0.03, y: r.y + r.h + 0.03 },
+    { floorId:from.floorId, x: r.x - 0.03, y: r.y - 0.03 }, { floorId:from.floorId, x: r.x + r.w + 0.03, y: r.y - 0.03 },
+    { floorId:from.floorId, x: r.x - 0.03, y: r.y + r.h + 0.03 }, { floorId:from.floorId, x: r.x + r.w + 0.03, y: r.y + r.h + 0.03 },
   ]).filter((point) => visible(point, point));
-  const graph = radius === undefined ? undefined : detourSceneryGraph(radius);
+  const graph = radius === undefined ? undefined : detourSceneryGraph(radius,from.floorId);
   const staticStart = 2 + corners.length;
   const points = [from, target, ...corners, ...(graph?.points ?? [])];
   const costs = points.map(() => Infinity), previous = points.map(() => -1), done = new Set<number>();
@@ -140,3 +146,7 @@ function queueDetour(from: Vec, target: Vec, blockers: readonly Rect[], radius?:
     }
   }
 }
+
+return {clearServiceExit,sweptDistance,clearOfPeople,clearOfScenery,steer,detourAroundQueues,SCENERY_OBSTACLES};
+}
+export const {clearServiceExit,sweptDistance,clearOfPeople,clearOfScenery,steer,detourAroundQueues,SCENERY_OBSTACLES}=createMovement();

@@ -7,9 +7,9 @@ import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettin
 
 const KIND_LABEL = { tvm: "售票机", security: "安检通道", gate: "闸机" } as const;
 
-function fixedKnowledge(settings: Readonly<GameSettings>): string {
-  const nodes = NAV_NODES.map((n) => `- ${n.id}：${n.label}（${n.pos.x}, ${n.pos.y}）`).join("\n");
-  const facilities = FACILITIES.map((f) => `- ${f.id}：${KIND_LABEL[f.kind]}，位于（${f.pos.x}, ${f.pos.y}）`).join("\n");
+function fixedKnowledge(settings: Readonly<GameSettings>, map?:import("../src/shared/world").PublicStationMap): string {
+  const nodes = (map?.nodes??NAV_NODES).map((n) => `- ${n.id}：${n.label}（${n.pos.x}, ${n.pos.y}）`).join("\n");
+  const facilities = (map?.facilities??FACILITIES).map((f) => `- ${f.id}：${KIND_LABEL[f.kind]}，位于（${f.pos.x}, ${f.pos.y}）`).join("\n");
   const profiles = (["normal", "elderly", "luggage", "hurried"] as const)
     .map((k) => {
       const p = PROFILES[k];
@@ -17,7 +17,7 @@ function fixedKnowledge(settings: Readonly<GameSettings>): string {
     })
     .join("\n");
   const you = PROFILES.player;
-  const lanes = Object.entries(FACILITY_MULTIPLIER)
+  const lanes = (map?map.facilities.map(f=>[f.id,FACILITY_MULTIPLIER[f.id]??1]):Object.entries(FACILITY_MULTIPLIER))
     .map(([id, m]) => `${id} ×${m}`)
     .join("，");
 
@@ -39,7 +39,7 @@ function fixedKnowledge(settings: Readonly<GameSettings>): string {
 - 即使当前观察的 facilities 为空，也可以依据公开设施位置直接 move_to 设施附近，或用 join_queue 直接前往设施队尾。是否先去观察、去哪里观察，由你判断；不要把看不到实时队列当成必须绕行中间点位的理由。
 - 直接选择设施不会提前获知其队列或状态；视野外的实时信息仍然未知，接近后根据新观察和执行结果调整。
 
-## 车站布局（单位：米，x 向右为东，y 向下为南）
+${map ? `## 本局车站布局\n${JSON.stringify(map)}\n静态地图全部公开，设施方向和楼层明确；现场队伍、设施状态和人物仅以观察为准。楼梯与扶梯通往同一站台。` : `## 车站布局（单位：米，x 向右为东，y 向下为南）
 - 售票厅：x < 26，未安检区，入口在西侧。
 - 安检墙位于 x = 26，只能经安检通道进入安检后大厅。
 - 安检后商业大厅：26 < x < 44，中间有两根柱子遮挡视线。北侧玩具售卖机和广告，南侧花摊和座椅，中间为通行区及悬挂信息屏，全部位于闸机前。
@@ -53,6 +53,7 @@ function fixedKnowledge(settings: Readonly<GameSettings>): string {
 - inspect_attraction 的 glance 为查看 3 秒，已有行走路径时以原步速 55% 边走边看；linger 需接近设施 2.5 米内，停留 6 秒。move_to 可先到 ${ATTRACTIONS.map(a => a.id).join("、")} 的接近点。关注期间可正常移动或排队恢复赶路，每处关注结束后冷却 30 秒。
 - 信息屏只提供公开方向或公告，不提供视野外精确队列、未发生事件或额外权限。根据目标和剩余时间自行权衡关注价值。
 
+`}
 ## 可前往的地点（move_to 的 target 也可以填设施编号，表示走到该设施附近）
 ${nodes}
 
@@ -90,9 +91,9 @@ function playerGuidance(guidance: string, normalized: NormalizedGuidance | null)
 }
 
 /** Only server-owned policy and rules belong in system; guidance is a user message. */
-export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null, settings: Partial<GameSettings> = {}): { rules: string; guidance: string } {
+export function buildSystemPrompt(guidance: string, normalized: NormalizedGuidance | null, settings: Partial<GameSettings> = {}, map?:import("../src/shared/world").PublicStationMap): { rules: string; guidance: string } {
   return {
-    rules: `${SAFETY_SYSTEM_PROMPT}\n\n你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge(resolveGameSettings(settings))}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
+    rules: `${SAFETY_SYSTEM_PROMPT}\n\n你是一个地铁站游戏中由玩家指导的角色。\n\n${fixedKnowledge(resolveGameSettings(settings),map)}${guidance.trim() ? "" : `\n\n${DEFAULT_GUIDANCE}`}`,
     guidance: playerGuidance(guidance, normalized),
   };
 }

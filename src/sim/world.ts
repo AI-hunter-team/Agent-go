@@ -1,8 +1,11 @@
+import { EntranceSystem } from "./entrance";
+import { legacyWorld } from "./worldDefinition";
+import type { WorldDefinition } from "../shared/world";
 import type { FacilityStatus, GameEvent, PassengerKind, Persona, Trigger, TriggerKind, Vec } from "../shared/types";
 import { angleTo, dist, lineOfSight } from "./geometry";
 import { generatePersona } from "./persona";
-import { zoneOf, type Zone, GATE_X, WIDTH, ATTRACTIONS, SIGHT_OCCLUDERS, FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
-import { findPath } from "./nav";
+import { type Zone, STAIRS_REACH, STAIRS_SECONDS, QUEUE_SPACING, type FacilityDef } from "./layout";
+import { createNavigation } from "./nav";
 import { Rng } from "./rng";
 import { DT, INTERACTION_RULES, PROFILES, RULES, STATUS_LABEL, multiplierOf } from "./scenario";
 import { TransitSystem } from "./transit";
@@ -10,10 +13,11 @@ import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
 import { DEFAULT_LOADOUT, resolveLoadout, type Loadout } from "../shared/interaction";
 import { ITEM_DEFS } from "./content/items";
 import { ItemSystem } from "./items";
-import { ITEM_SPOTS } from "./layout";
-import { clearOfPeople, clearServiceExit, detourAroundQueues, personRadius, steer, type MovingBody } from "./movement";
+
+import { createMovement, personRadius, type MovingBody } from "./movement";
 
 export type Activity =
+  | { kind: "entering"; entranceId: string; progress: number; lane: number; fromSource: boolean }
   | { kind: "idle" }
   | { kind: "walking"; path: Vec[]; label: string }
   | { kind: "to_queue"; facility: string; path: Vec[] }
@@ -48,6 +52,8 @@ export interface Person {
   incapacitated: number;
   transitRoute?: "stairs" | "escalator";
   attentionCooldown: Record<string, number>;
+  entryOrigin?: string;
+  ambient?: { label:string; point:Vec; remaining:number; started:boolean };
   escalatorWalking?: boolean;
   /** Actual service durations, sampled once from the profile ranges. Hidden from the agent. */
   serviceTime: { tvm: number; security: number; gate: number };
@@ -64,14 +70,27 @@ export interface Facility {
 }
 
 export class World {
+  readonly layout;
+  readonly spatial;
+  readonly navigation;
   t = 0;
   readonly outages = new Map<Zone, number>();
   onWorldEvent: ((event: Omit<import("../shared/interaction").WorldEvent, "id">) => void) | null = null;
-  lightAt = (pos: Vec) => (this.outages.get(zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
+  lightAt = (pos: Vec) => (this.outages.get(this.layout.zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
+  private zoneCenter(zone: Zone): Vec {
+    if(this.definition.generatorVersion==="metro-v1") {
+      if(zone==="platform")return {...this.layout.STAIRS_BOTTOM};
+      if(zone==="stairs")return {...this.layout.STAIRS_TOP,floorId:"transit:stairs",elevation:-3};
+      const region=this.definition.regions.find(r=>r.kind===zone)!;
+      return {x:region.bounds.x+region.bounds.w/2,y:region.bounds.y+region.bounds.h/2,floorId:region.floorId};
+    }
+    const x={hall:13,concourse:35,landing:(this.layout.GATE_X+this.layout.STAIRS_TOP.x)/2,stairs:(this.layout.STAIRS_TOP.x+this.layout.STAIRS_BOTTOM.x)/2,platform:(this.layout.STAIRS_BOTTOM.x+this.layout.WIDTH)/2}[zone];
+    return {x,y:15};
+  }
   powerOut(zone: Zone, duration: number) {
     this.outages.set(zone, this.t + duration);
-    const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
-    this.onWorldEvent?.({ t: this.t, kind: "power_out", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 12 });
+    const pos = this.zoneCenter(zone);
+    this.onWorldEvent?.({ t: this.t, kind: "power_out", actorId: null, severity: "odd", pos, loudness: 12 });
     this.log("power_out", `${zone} 区域断电 ${duration} 秒，视距降低`, true);
   }
   damageFacility(id: string, actorId: string | null = null, causeId?: string) {
@@ -85,6 +104,7 @@ export class World {
   private readonly personaRng: Rng;
   private readonly wakeAt = new Map<string, number>();
   readonly transit: TransitSystem;
+  readonly entry: EntranceSystem;
   readonly persons = new Map<string, Person>();
   readonly personas: Record<string, Persona> = {};
   readonly facilities = new Map<string, Facility>();
@@ -95,6 +115,7 @@ export class World {
   gatePassed = 0;
   private nextId = 1;
   collisionGuards: MovingBody[] = [];
+  private readonly detourCache=new Map<string,{target:Vec;waypoint:Vec;until:number}>();
   readonly tickStarts = new Map<string, Vec>();
   readonly cutInReservations = new Map<string, { facility: string; npcId: string }>();
 
@@ -131,7 +152,7 @@ export class World {
       offset += Math.max(QUEUE_SPACING, personRadius(before) + personRadius(next) + 0.02);
     }
     const direction = f.def.queueDirection ?? { x: -1, y: 0 };
-    return { x: f.def.head.x + direction.x * offset, y: f.def.head.y + direction.y * offset };
+    return { ...f.def.head, x: f.def.head.x + direction.x * offset, y: f.def.head.y + direction.y * offset };
   }
 
   /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
@@ -141,7 +162,7 @@ export class World {
     // Safe forward progress still matters: stopping early can obstruct the surrounding traffic.
     const occupiedArrival = p.activity.kind === "to_queue" && p.activity.path.length === 1
       && dist(p.pos, target) <= personRadius(p.kind) + stride
-      && !clearOfPeople(target, target, personRadius(p.kind), bodies);
+      && !this.spatial.clearOfPeople(target, target, personRadius(p.kind), bodies);
     const memberships = [...this.facilities.values()].map(f => [...f.queue, ...(f.serving ? [f.serving.personId] : [])]);
     memberships.push(this.transit.queue);
     const queues = memberships.flatMap((ids) => {
@@ -152,21 +173,28 @@ export class World {
       const minY = Math.min(...people.map((person) => person.pos.y)), maxY = Math.max(...people.map((person) => person.pos.y));
       return [{ x: minX - margin, y: minY - margin, w: maxX - minX + margin * 2, h: maxY - minY + margin * 2 }];
     });
-    const waypoint = detour && !occupiedArrival ? detourAroundQueues(p.pos, target, queues, personRadius(p.kind)) : target;
+    let waypoint:Vec=target;
+    if(detour&&!occupiedArrival){
+      const cached=this.definition.generatorVersion==="metro-v1"?this.detourCache.get(p.id):undefined;
+      if(cached&&cached.until>this.t&&dist(cached.target,target)<.75&&dist(p.pos,cached.waypoint)>stride)waypoint=cached.waypoint;
+      else {waypoint=this.spatial.detourAroundQueues(p.pos,target,queues,personRadius(p.kind));if(this.definition.generatorVersion==="metro-v1")this.detourCache.set(p.id,{target:{...target},waypoint,until:this.t+.5});}
+    }
     const before = { ...p.pos };
-    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour && !occupiedArrival);
+    p.pos = this.spatial.steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour && !occupiedArrival);
     if (dist(before,p.pos)>1e-8) p.facing=angleTo(before,p.pos);
     return dist(p.pos, target) < 1e-6;
   }
 
-  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds, readonly loadout: Readonly<Loadout> = DEFAULT_LOADOUT) {
+  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds, readonly loadout: Readonly<Loadout> = DEFAULT_LOADOUT, readonly definition:WorldDefinition=legacyWorld(seed)) {
+    this.layout=definition.layout; this.spatial=createMovement(this.layout); this.navigation=createNavigation(this.layout,this.spatial);
     this.loadout = resolveLoadout(loadout);
     this.rng = new Rng(seed);
     this.personaRng = this.rng.fork("persona");
-    this.items = new ItemSystem((id) => this.persons.get(id), () => this.t);
-    for (const spot of ITEM_SPOTS) for (const kind of spot.stock) this.items.spawn(kind, { type: "spot", spotId: spot.id }, null);
+    this.items = new ItemSystem((id) => this.persons.get(id), () => this.t, this.layout);
+    for (const spot of this.layout.ITEM_SPOTS) for (const kind of spot.stock) this.items.spawn(kind, { type: "spot", spotId: spot.id }, null);
     this.transit = new TransitSystem(this, seed);
-    for (const def of FACILITIES) {
+    this.entry = new EntranceSystem(this);
+    for (const def of this.layout.FACILITIES) {
       this.facilities.set(def.id, { def, status: "open", note: null, queue: [], serving: null, pendingRecheck: null });
     }
   }
@@ -243,7 +271,7 @@ export class World {
   /** Walk to a point. Returns an error message when it cannot be reached on foot. */
   walkTo(p: Person, to: Vec, label: string): string | null {
     if (p.activity.kind === "stairs" || p.activity.kind === "escalator") return "正在下行，请等到达站台";
-    const path = findPath(p.pos, to, personRadius(p.kind));
+    const path = this.navigation.findPath(p.pos, to, personRadius(p.kind));
     if (!path) return `无法步行到达${label}：需要先通过安检或闸机`;
     this.finishAttention(p, "主动恢复赶路");
     p.activity = { kind: "walking", path, label };
@@ -257,7 +285,7 @@ export class World {
     if (p.activity.kind === "stairs" || p.activity.kind === "escalator") return "正在下行，请等到达站台";
     if (p.activity.kind === "queued" || p.activity.kind === "service") return "已经在队伍中，需先离队";
     const tail = this.queueStandPoint(f, f.queue.length, p.kind);
-    const path = findPath(p.pos, tail, personRadius(p.kind));
+    const path = this.navigation.findPath(p.pos, tail, personRadius(p.kind));
     if (!path) return `无法步行到达 ${facilityId} 的队尾：需要先通过安检或闸机`;
     this.finishAttention(p, "转向排队");
     p.activity = { kind: "to_queue", facility: facilityId, path };
@@ -297,9 +325,10 @@ export class World {
   descendStairs(p: Person): string | null {
     if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs" || p.activity.kind === "escalator") return "当前行动尚未完成";
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
-    if (dist(p.pos, STAIRS_TOP) > STAIRS_REACH) return "请先前往 STAIRS_TOP 下楼梯入口";
+    if (dist(p.pos, this.layout.STAIRS_TOP) > STAIRS_REACH) return "请先前往 this.layout.STAIRS_TOP 下楼梯入口";
     this.finishAttention(p, "选择楼梯");
     this.removeFromQueue(p);
+    if(this.definition.generatorVersion==="metro-v1")p.pos={...p.pos,floorId:"transit:stairs",elevation:0};
     p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos } };
     return null;
   }
@@ -314,9 +343,9 @@ export class World {
   }
 
   inspectAttraction(p: Person, id: string, mode: "glance" | "linger"): string | null {
-    const def = ATTRACTIONS.find(a => a.id === id);
+    const def = this.layout.ATTRACTIONS.find(a => a.id === id);
     if (!def || !["glance", "linger"].includes(mode)) return "无效的关注目标或方式";
-    if (!p.screened || p.passedGate || dist(p.pos, def.approach) > RULES.visionRange || !lineOfSight(p.pos, def.approach, SIGHT_OCCLUDERS)) return "只能关注当前可见、可达的大厅设施";
+    if (!p.screened || p.passedGate || dist(p.pos, def.approach) > RULES.visionRange || !lineOfSight(p.pos, def.approach, this.layout.SIGHT_OCCLUDERS)) return "只能关注当前可见、可达的大厅设施";
     if (!["idle", "walking", "waiting"].includes(p.activity.kind)) return "当前活动不能关注设施，请先完成活动或离队";
     if ((p.attentionCooldown[id] ?? 0) > this.t) return "刚刚已经关注过这里，先继续赶路";
     if (mode === "linger" && dist(p.pos, def.approach) > 2.5) return `请先靠近 ${id} 再停留查看`;
@@ -369,8 +398,8 @@ export class World {
   stepPeopleAndFacilities(startsCaptured = false) {
     for (const [zone, until] of this.outages) if (until <= this.t) {
       this.outages.delete(zone);
-      const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
-      this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 4 });
+      const pos = this.zoneCenter(zone);
+      this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: null, severity: "odd", pos, loudness: 4 });
       this.log("power_restored", `${zone} 区域恢复照明`, true);
     }
     if (!startsCaptured) {
@@ -390,7 +419,7 @@ export class World {
     }
     const a = p.activity;
     const stride = p.speed * DT;
-    if (this.transit.stepPerson(p, stride)) return;
+    if (this.entry.stepPerson(p) || this.transit.stepPerson(p, stride)) return;
     switch (a.kind) {
       case "idle": {
         if (!p.isPlayer && p.passedGate && !p.onPlatform) {
@@ -399,11 +428,12 @@ export class World {
         break;
       }
       case "walking": {
-        if (this.followPath(p, a.path, stride)) {
+        const connectorArrival=this.definition.generatorVersion==="metro-v1"&&p.passedGate&&a.path.length===1&&[this.layout.STAIRS_TOP,this.layout.ESCALATOR_APPROACH].some(top=>dist(a.path[0],top)<.01&&dist(p.pos,top)<=.2);
+        if (connectorArrival || this.followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
           this.personEvent(p, "arrived", `已到达${a.label}`);
         }
-        if (!p.isPlayer && p.passedGate && !p.onPlatform && dist(p.pos, STAIRS_TOP) <= STAIRS_REACH) this.descendStairs(p);
+        if (!p.isPlayer && p.passedGate && !p.onPlatform && dist(p.pos, this.layout.STAIRS_TOP) <= STAIRS_REACH) this.descendStairs(p);
         break;
       }
       case "to_queue": {
@@ -446,14 +476,15 @@ export class World {
       }
       case "stairs": {
         const remaining = Math.max(0, a.remaining - DT);
-        const duration = a.duration ?? STAIRS_SECONDS, end = a.end ?? STAIRS_BOTTOM;
+        const duration = a.duration ?? STAIRS_SECONDS, end = a.end ?? this.layout.STAIRS_BOTTOM;
         const progress = Math.min(1, (duration - remaining) / duration);
         const next = {
+          ...p.pos,
           x: a.start.x + (end.x - a.start.x) * progress,
           y: a.start.y + (end.y - a.start.y) * progress,
         };
-        if (!clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
-        p.pos = next;
+        if (!this.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
+        p.pos = {...next, ...(this.definition.generatorVersion === "metro-v1" ? {floorId:"transit:stairs",elevation:(a.start.elevation??0)+(-6-(a.start.elevation??0))*progress} : {floorId:p.pos.floorId})};
         a.remaining = remaining;
         if (a.remaining <= 1e-9) {
           p.pos = { ...end };
@@ -499,9 +530,10 @@ export class World {
       f.serving.remaining -= DT;
       if (f.serving.remaining <= 1e-9) {
         const p = this.persons.get(f.serving.personId);
-        const nominal = f.def.exit ?? { x: f.def.head.x + 1.3, y: f.def.head.y };
-        const exits = f.def.kind === "tvm" ? [nominal, { x: f.def.head.x - 1.3, y: f.def.head.y }] : [nominal, { x: nominal.x, y: nominal.y + 0.85 }, { x: nominal.x, y: nominal.y - 0.85 }];
-        const exit = p ? exits.find((point) => clearServiceExit(p.pos, point, personRadius(p.kind)) && clearOfPeople(p.pos, point, personRadius(p.kind), this.collisionBodies(p.id))) : nominal;
+        const q=f.def.queueDirection??{x:-1,y:0}, side={x:q.y,y:-q.x};
+        const nominal = f.def.exit ?? { ...f.def.head, x: f.def.head.x + side.x*1.3, y: f.def.head.y+side.y*1.3 };
+        const exits = f.def.kind === "tvm" ? [nominal, {...f.def.head,x:f.def.head.x-side.x*1.3,y:f.def.head.y-side.y*1.3}] : [nominal, {...nominal,x:nominal.x+side.x*.85,y:nominal.y+side.y*.85}, {...nominal,x:nominal.x-side.x*.85,y:nominal.y-side.y*.85}];
+        const exit = p ? exits.find((point) => this.spatial.clearServiceExit(p.pos, point, personRadius(p.kind)) && this.spatial.clearOfPeople(p.pos, point, personRadius(p.kind), this.collisionBodies(p.id))) : nominal;
         if (!exit) return;
         f.serving = null;
         if (p && this.completeService(f, p)) p.pos = exit;

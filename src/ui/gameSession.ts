@@ -1,3 +1,4 @@
+import { generateWorld } from "../sim/worldDefinition";
 import type { Agent, Classifier } from "../agent/agent";
 import { GameRunner, type RunnerOptions } from "../agent/runner";
 import { Engine } from "../sim/engine";
@@ -16,8 +17,8 @@ export class GameSession {
   private accumulator = 0;
   private listeners = new Set<() => void>();
 
-  constructor(seed = 1, settings: Partial<GameSettings> = {}, loadout?: import("../shared/interaction").Loadout) {
-    this.engine = new Engine(seed, settings, undefined, loadout);
+  constructor(seed = 1, settings: Partial<GameSettings> = {}, loadout?: import("../shared/interaction").Loadout, readonly generated=false) {
+    this.engine = new Engine(seed, settings, undefined, loadout, this.generated ? generateWorld(seed) : undefined);
     this.presentation = new PresentationBuffer(this.engine);
   }
   subscribe(listener: () => void) {
@@ -29,11 +30,12 @@ export class GameSession {
   get alpha() { return this.frozen ? 1 : Math.min(1, this.accumulator / DT); }
   get visualTime() { return this.presentation.time(this.alpha); }
 
-  preview(seed: number, settings: Partial<GameSettings> = this.engine.settings, loadout = this.engine.loadout) {
+  preview(seed: number, settings: Partial<GameSettings> = this.engine.settings, loadout = this.engine.loadout, definition?: import("../shared/world").WorldDefinition) {
+    if (definition && (definition.seed !== seed || !this.generated)) throw new Error("准备地图与会话不一致");
     this.generation++;
     if (this.runner && this.runner.phase !== "ended") this.runner.stop();
     this.runner = null;
-    this.engine = new Engine(seed, settings, undefined, loadout);
+    this.engine = new Engine(seed, settings, undefined, loadout, this.generated ? definition ?? (this.engine.seed===seed?this.engine.world.definition:generateWorld(seed)) : undefined);
     this.accumulator = 0;
     this.paused = false;
     this.presentation.reset(this.engine);
@@ -42,6 +44,11 @@ export class GameSession {
   start(agent: Agent, classifier: Classifier, opts: RunnerOptions = {}) {
     const seed = this.engine.seed;
     this.preview(seed);
+    this.startPrepared(agent, classifier, opts);
+  }
+  /** Start the frozen prepared engine without resetting the actor or map. */
+  startPrepared(agent: Agent, classifier: Classifier, opts: RunnerOptions = {}) {
+    if (this.runner || this.engine.t !== 0 || this.engine.status !== "running") throw new Error("本局已启动或需要重新准备");
     const generation = this.generation;
     const interaction = agent as Agent & Pick<RunnerOptions, "interpret" | "respond">;
     this.runner = new GameRunner(this.engine, agent, classifier, {

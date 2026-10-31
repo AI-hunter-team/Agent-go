@@ -1,3 +1,4 @@
+import { displayFloor } from "../../sim/entranceGeometry";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Color, Object3D, type InstancedMesh } from "three";
@@ -16,6 +17,7 @@ export function SimpleCrowd({ session, capacity }: { session: GameSession; capac
     const { object, color, pose } = scratch;
     let index = 0;
     for (const actor of session.presentation.current.actors.values()) {
+      if(session.engine.world.definition.generatorVersion==="metro-v1"&&displayFloor(actor.floorId)!==displayFloor(session.engine.player.pos.floorId))continue;
       if (actor.kind === "player" || actor.kind === "guard") continue;
       if (index >= capacity) break;
       sampleActor(session.presentation, actor.id, session.alpha, pose);
