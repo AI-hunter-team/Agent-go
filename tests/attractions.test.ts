@@ -4,7 +4,8 @@ import { DT } from "../src/sim/scenario";
 
 function inHall() {
   const e = new Engine(2);
-  Object.assign(e.player, { screened: true, hasTicket: true, pos: { x: 31, y: 6 } });
+  e.world.items.spawn("ticket", {type:"held",personId:"player",slot:"pocket"},"player");
+  Object.assign(e.player, { screened: true, pos: { x: 31, y: 6 } });
   e.takeTriggers();
   return e;
 }
@@ -66,7 +67,8 @@ describe("optional attention", () => {
     const e = new Engine(1);
     expect(inspect(e, "glance", "MISSING").ok).toBe(false);
     expect(inspect(e, "glance").ok).toBe(false);
-    Object.assign(e.player, { hasTicket: true, pos: { x: 25.4, y: 15 } });
+    e.world.items.spawn("ticket", {type:"held",personId:"player",slot:"pocket"},"player");
+  Object.assign(e.player, { pos: { x: 25.4, y: 15 } });
     const f = e.world.facility("S2")!;
     f.queue.push(e.player.id);
     e.player.activity = { kind: "queued", facility: "S2" };

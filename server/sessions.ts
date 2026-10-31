@@ -1,3 +1,4 @@
+import { resolveLoadout } from "../src/shared/interaction";
 import { randomUUID } from "node:crypto";
 import type { NormalizedGuidance } from "../src/shared/types";
 import type { ResponseItem } from "./responsesTypes";
@@ -6,6 +7,7 @@ import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettin
 
 /** In-run memory for one game: the frozen system prompt and the append-only history. */
 export interface Session {
+  loadout: Readonly<import("../src/shared/interaction").Loadout>;
   settings: Readonly<GameSettings>;
   id: string;
   runId: string;
@@ -22,13 +24,13 @@ const TTL_MS = 30 * 60 * 1000;
 export class SessionStore {
   private sessions = new Map<string, Session>();
 
-  /** 新建一局独立历史，冻结本局游戏设置。 */
-  create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings: Partial<GameSettings> = {}): Session {
+  create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings: Partial<GameSettings> = {}, loadout?: import("../src/shared/interaction").Loadout): Session {
     assertSafeText(guidance);
     validateNormalized(normalized);
     this.sweep();
     const s: Session = {
       id: randomUUID(),
+      loadout: resolveLoadout(loadout),
       settings: resolveGameSettings(settings),
       runId: runId || randomUUID(),
       guidance,

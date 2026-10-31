@@ -7,6 +7,13 @@ import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettings } from ".
 // values for playtesting, not confirmed product rules.
 
 export const DT = 0.1;
+export const INTERACTION_RULES = { backpackSecuritySeconds: 2, inspectItemSeconds: 2, darkSightFactor: .4, npcCutChancePerSecond: .02, npcCutFairnessMax: .25, npcCutHurryMin: .75, npcCutTimeout: 8 } as const;
+
+export const PERCEPTION_RULES = { npcSightRange: 10, npcFovDeg: 140, shoutRadius: 8 } as const;
+export const ALERT_RULES = {
+  npcWhiteFill: 6, npcWhiteClear: 3, npcYellowFill: 8, npcYellowClear: 12,
+  guardYellowFill: 5, guardYellowClear: 15, knockoutSeconds: 20,
+} as const;
 
 export const RULES = {
   timeLimit: DEFAULT_GAME_SETTINGS.timeLimitSeconds,
@@ -54,6 +61,7 @@ export const FACILITY_MULTIPLIER: Record<string, number> = { S1: 0.8, S2: 1.0, S
 export const multiplierOf = (facilityId: string) => FACILITY_MULTIPLIER[facilityId] ?? 1;
 
 export interface GuardDef {
+  role?: "guard" | "security_staff";
   id: string;
   label: string;
   /** One point = stationary; two = straight back-and-forth; longer routes loop. */
@@ -79,6 +87,12 @@ export const GUARDS: GuardDef[] = [
   },
 ];
 
+export const SECURITY_STAFF: GuardDef[] = [
+  { id: "security-S1", label: "1号安检员", role: "security_staff", route: [{ x: 28.5, y: 3.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
+  { id: "security-S2", label: "2号安检员", role: "security_staff", route: [{ x: 28.5, y: 12.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
+  { id: "security-S3", label: "3号安检员", role: "security_staff", route: [{ x: 28.5, y: 26.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
+];
+
 export interface NpcSpawn {
   t: number;
   kind: Exclude<PassengerKind, "player">;
@@ -90,6 +104,8 @@ export interface NpcSpawn {
 
 export type ScriptedEvent =
   | { t: number; type: "status"; facility: string; status: FacilityStatus; note: string; broadcast: string | null }
+  | { t: number; type: "power"; zone: import("./layout").Zone; duration: number }
+  | { t: number; type: "damage"; facility: string }
   | { t: number; type: "recheck"; facility: string; extra: [number, number] };
 
 export interface Scenario {
@@ -159,6 +175,7 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
         note: "临时停用",
         broadcast: "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
       },
+      { t: 65, type: "power", zone: "concourse", duration: 12 },
       { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
     ],
   };

@@ -33,7 +33,7 @@ describe("NPC director", () => {
   test("scripted closures happen on time and nobody queues at them", () => {
     const w = simulate(45);
     const scenario = buildScenario(1);
-    const failedTvm = scenario.events.find((e) => e.type === "status" && e.status === "broken")!.facility;
+    const failedTvm = scenario.events.find((e): e is Extract<typeof e, { type: "status" }> => e.type === "status" && e.status === "broken")!.facility;
     expect(w.facility(failedTvm)!.status).toBe("broken");
     expect(w.facility("S1")!.status).toBe("closed");
     expect(w.facility("S1")!.queue).toHaveLength(0);

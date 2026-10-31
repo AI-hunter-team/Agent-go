@@ -12,6 +12,7 @@ import { createProceduralLocomotion } from "./proceduralLocomotion";
 import { AvatarAnimator } from "./avatarAnimator";
 import { getScenePerformance } from "./scenePerformance";
 import { CharacterClick, type CaptureTarget } from "./characterClick";
+import { Passenger } from "./Passenger";
 
 const blobModels = new Map<string, { users: number; scene: Object3D }>();
 export class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
@@ -159,7 +160,9 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
     root.current.rotation.y = pose.current.yaw;
     if (ring.current) { ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
   });
-  const placeholder = <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />;
+  const placeholder = kind === "player" || kind === "guard"
+    ? <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />
+    : <Passenger kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />;
   return <group ref={root} name={`actor-${id}`} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
     {kind === "player" && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
       <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial ref={ring} color="#315c65" transparent opacity={0.65} depthWrite={false} />

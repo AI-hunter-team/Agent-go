@@ -1,11 +1,16 @@
-import type { FacilityStatus, GameEvent, PassengerKind, Trigger, TriggerKind, Vec } from "../shared/types";
-import { dist, lineOfSight } from "./geometry";
-import { ATTRACTIONS, FACILITIES, SIGHT_OCCLUDERS, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
+import type { FacilityStatus, GameEvent, PassengerKind, Persona, Trigger, TriggerKind, Vec } from "../shared/types";
+import { angleTo, dist, lineOfSight } from "./geometry";
+import { generatePersona } from "./persona";
+import { zoneOf, type Zone, GATE_X, WIDTH, ATTRACTIONS, SIGHT_OCCLUDERS, FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
-import { DT, PROFILES, RULES, STATUS_LABEL, multiplierOf } from "./scenario";
+import { DT, INTERACTION_RULES, PROFILES, RULES, STATUS_LABEL, multiplierOf } from "./scenario";
 import { TransitSystem } from "./transit";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { DEFAULT_LOADOUT, resolveLoadout, type Loadout } from "../shared/interaction";
+import { ITEM_DEFS } from "./content/items";
+import { ItemSystem } from "./items";
+import { ITEM_SPOTS } from "./layout";
 import { clearOfPeople, clearServiceExit, detourAroundQueues, personRadius, steer, type MovingBody } from "./movement";
 
 export type Activity =
@@ -15,10 +20,12 @@ export type Activity =
   | { kind: "queued"; facility: string }
   | { kind: "service"; facility: string }
   | { kind: "waiting"; remaining: number }
-  | { kind: "stairs"; remaining: number; start: Vec }
+  | { kind: "stairs"; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
+  | { kind: "reacting"; reaction: string; subjectId: string }
+  | { kind: "acting"; op: string; progress: number }
   | { kind: "to_escalator"; path: Vec[] }
   | { kind: "escalator_queue"; joinedAt: number }
-  | { kind: "escalator"; remaining: number }
+  | { kind: "escalator"; remaining: number; duration?: number }
   | { kind: "distracted"; attraction: string; remaining: number; elapsed: number; resume?: { path: Vec[]; label: string } }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
@@ -29,14 +36,19 @@ export interface Person {
   isPlayer: boolean;
   pos: Vec;
   speed: number;
-  hasTicket: boolean;
+  readonly hasTicket: boolean;
+  readonly ticketUsed: boolean;
   screened: boolean;
   passedGate: boolean;
   onPlatform: boolean;
   irritable: boolean;
   activity: Activity;
+  persona?: Persona;
+  facing: number;
+  incapacitated: number;
   transitRoute?: "stairs" | "escalator";
   attentionCooldown: Record<string, number>;
+  escalatorWalking?: boolean;
   /** Actual service durations, sampled once from the profile ranges. Hidden from the agent. */
   serviceTime: { tvm: number; security: number; gate: number };
 }
@@ -53,9 +65,28 @@ export interface Facility {
 
 export class World {
   t = 0;
+  readonly outages = new Map<Zone, number>();
+  onWorldEvent: ((event: Omit<import("../shared/interaction").WorldEvent, "id">) => void) | null = null;
+  lightAt = (pos: Vec) => (this.outages.get(zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
+  powerOut(zone: Zone, duration: number) {
+    this.outages.set(zone, this.t + duration);
+    const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
+    this.onWorldEvent?.({ t: this.t, kind: "power_out", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 12 });
+    this.log("power_out", `${zone} 区域断电 ${duration} 秒，视距降低`, true);
+  }
+  damageFacility(id: string, actorId: string | null = null, causeId?: string) {
+    const f = this.facility(id); if (!f) return false;
+    this.setStatus(id, "broken", "受损停用");
+    this.onWorldEvent?.({ t: this.t, kind: "facility_damaged", actorId, targetId: id, severity: "violation", pos: { ...f.def.pos }, loudness: 10, causeId });
+    return true;
+  }
   readonly rng: Rng;
+  readonly items: ItemSystem;
+  private readonly personaRng: Rng;
+  private readonly wakeAt = new Map<string, number>();
   readonly transit: TransitSystem;
   readonly persons = new Map<string, Person>();
+  readonly personas: Record<string, Persona> = {};
   readonly facilities = new Map<string, Facility>();
   readonly events: GameEvent[] = [];
   /** Decision triggers for the player character, drained by the engine. */
@@ -85,7 +116,7 @@ export class World {
   private physicalQueue(f: Facility): string[] {
     const ids = [...(f.serving ? [f.serving.personId] : []), ...f.queue];
     for (const [id, reservation] of this.cutInReservations) {
-      if (reservation.facility !== f.def.id || this.persons.get(id)?.activity.kind !== "creative") continue;
+      if (reservation.facility !== f.def.id || !["creative","acting"].includes(this.persons.get(id)?.activity.kind ?? "")) continue;
       const before = ids.indexOf(reservation.npcId);
       if (before >= 0) ids.splice(before, 0, id);
     }
@@ -122,12 +153,18 @@ export class World {
       return [{ x: minX - margin, y: minY - margin, w: maxX - minX + margin * 2, h: maxY - minY + margin * 2 }];
     });
     const waypoint = detour && !occupiedArrival ? detourAroundQueues(p.pos, target, queues, personRadius(p.kind)) : target;
+    const before = { ...p.pos };
     p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour && !occupiedArrival);
+    if (dist(before,p.pos)>1e-8) p.facing=angleTo(before,p.pos);
     return dist(p.pos, target) < 1e-6;
   }
 
-  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds) {
+  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds, readonly loadout: Readonly<Loadout> = DEFAULT_LOADOUT) {
+    this.loadout = resolveLoadout(loadout);
     this.rng = new Rng(seed);
+    this.personaRng = this.rng.fork("persona");
+    this.items = new ItemSystem((id) => this.persons.get(id), () => this.t);
+    for (const spot of ITEM_SPOTS) for (const kind of spot.stock) this.items.spawn(kind, { type: "spot", spotId: spot.id }, null);
     this.transit = new TransitSystem(this, seed);
     for (const def of FACILITIES) {
       this.facilities.set(def.id, { def, status: "open", note: null, queue: [], serving: null, pendingRecheck: null });
@@ -136,30 +173,50 @@ export class World {
 
   // ---------------------------------------------------------------- people
 
-  addPerson(kind: PassengerKind, pos: Vec, opts: { isPlayer?: boolean; hasTicket?: boolean; irritable?: boolean } = {}): Person {
+  addPerson(kind: PassengerKind, pos: Vec, opts: { isPlayer?: boolean; hasTicket?: boolean; irritable?: boolean; persona?: Persona; facing?: number } = {}): Person {
     const profile = PROFILES[kind];
     const sample = (r: [number, number]) => this.rng.range(r[0], r[1]);
+    const items = this.items;
+    const persona = kind === "player" || opts.isPlayer ? undefined : opts.persona ?? generatePersona(this.personaRng, kind, opts.irritable);
     const person: Person = {
       id: opts.isPlayer ? "player" : `p${this.nextId++}`,
       kind,
       isPlayer: opts.isPlayer ?? false,
       pos: { ...pos },
       speed: profile.speed,
-      hasTicket: opts.hasTicket ?? false,
+      get hasTicket() { return items.hasValidTicket(this.id); },
+      get ticketUsed() { return items.holdings(this.id).some((i) => i.kind === "ticket" && i.used === true); },
       screened: false,
       passedGate: false,
       onPlatform: false,
-      irritable: opts.irritable ?? false,
+      irritable: persona ? persona.traits.temper > 0.6 : opts.irritable ?? false,
+      persona,
+      facing: opts.facing ?? 0,
+      incapacitated: 0,
       activity: { kind: "idle" },
       attentionCooldown: {},
       serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
     };
     this.persons.set(person.id, person);
+    if (persona) this.personas[person.id] = structuredClone(persona);
+    if (person.isPlayer) {
+      if (this.loadout.backpack) this.items.spawn("backpack", { type: "held", personId: person.id, slot: "bag" }, person.id);
+      this.items.spawn("coins", { type: "held", personId: person.id, slot: "pocket" }, person.id);
+    }
+    if (opts.hasTicket) this.items.spawn("ticket", { type: "held", personId: person.id, slot: "pocket" }, person.id);
     return person;
   }
 
   get player(): Person | undefined {
     return this.persons.get("player");
+  }
+
+  knockOut(p: Person, seconds: number) {
+    this.removeFromQueue(p);
+    for (const f of this.facilities.values()) if (f.serving?.personId === p.id) f.serving = null;
+    p.activity = { kind: "idle" };
+    p.incapacitated = seconds;
+    this.wakeAt.set(p.id, this.t + seconds);
   }
 
   facility(id: string): Facility | undefined {
@@ -238,12 +295,21 @@ export class World {
 
   /** The stable-duration alternative to the queued escalator. */
   descendStairs(p: Person): string | null {
-    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "stairs" || p.activity.kind === "escalator") return "当前行动尚未完成";
+    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs" || p.activity.kind === "escalator") return "当前行动尚未完成";
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
     if (dist(p.pos, STAIRS_TOP) > STAIRS_REACH) return "请先前往 STAIRS_TOP 下楼梯入口";
     this.finishAttention(p, "选择楼梯");
     this.removeFromQueue(p);
     p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos } };
+    return null;
+  }
+
+  traverse(p: Person, route: "stairs" | "escalator", walking = false): string | null {
+    if (route === "stairs") return this.descendStairs(p);
+    if (["service", "creative", "acting", "stairs", "escalator"].includes(p.activity.kind)) return "当前行动尚未完成";
+    const error=this.transit.join(p);
+    if (error) return error;
+    p.escalatorWalking=walking;
     return null;
   }
 
@@ -300,15 +366,28 @@ export class World {
   // ------------------------------------------------------------ simulation
 
   /** Advance people and facilities by one fixed step. */
-  stepPeopleAndFacilities() {
-    this.tickStarts.clear();
-    for (const p of this.persons.values()) this.tickStarts.set(p.id, { ...p.pos });
+  stepPeopleAndFacilities(startsCaptured = false) {
+    for (const [zone, until] of this.outages) if (until <= this.t) {
+      this.outages.delete(zone);
+      const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
+      this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 4 });
+      this.log("power_restored", `${zone} 区域恢复照明`, true);
+    }
+    if (!startsCaptured) {
+      this.tickStarts.clear();
+      for (const p of this.persons.values()) this.tickStarts.set(p.id, { ...p.pos });
+    }
     for (const p of this.persons.values()) this.stepPerson(p);
     for (const f of this.facilities.values()) this.stepFacility(f);
     this.transit.step();
   }
 
   private stepPerson(p: Person) {
+    if (p.incapacitated > 0) {
+      p.incapacitated = Math.max(0, this.wakeAt.has(p.id) ? this.wakeAt.get(p.id)! - this.t : p.incapacitated - DT);
+      if (p.incapacitated <= 1e-9) { p.incapacitated = 0; this.wakeAt.delete(p.id); }
+      else return;
+    }
     const a = p.activity;
     const stride = p.speed * DT;
     if (this.transit.stepPerson(p, stride)) return;
@@ -354,6 +433,7 @@ export class World {
         const f = this.facilities.get(a.facility)!;
         const i = f.queue.indexOf(p.id);
         if (i >= 0) this.movePerson(p, this.queueStandPoint(f, i), stride, false);
+        if (i >= 0 && dist(p.pos, this.queueStandPoint(f, i)) < 0.1) p.facing = angleTo(p.pos, f.def.pos);
         break;
       }
       case "waiting": {
@@ -366,16 +446,17 @@ export class World {
       }
       case "stairs": {
         const remaining = Math.max(0, a.remaining - DT);
-        const progress = Math.min(1, (STAIRS_SECONDS - remaining) / STAIRS_SECONDS);
+        const duration = a.duration ?? STAIRS_SECONDS, end = a.end ?? STAIRS_BOTTOM;
+        const progress = Math.min(1, (duration - remaining) / duration);
         const next = {
-          x: a.start.x + (STAIRS_BOTTOM.x - a.start.x) * progress,
-          y: a.start.y + (STAIRS_BOTTOM.y - a.start.y) * progress,
+          x: a.start.x + (end.x - a.start.x) * progress,
+          y: a.start.y + (end.y - a.start.y) * progress,
         };
         if (!clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
         p.pos = next;
         a.remaining = remaining;
         if (a.remaining <= 1e-9) {
-          p.pos = { ...STAIRS_BOTTOM };
+          p.pos = { ...end };
           p.onPlatform = true;
           p.activity = { kind: p.isPlayer ? "done" : "idle" };
           this.personEvent(p, "arrived", "已下楼梯，到达下层站台");
@@ -423,7 +504,7 @@ export class World {
         const exit = p ? exits.find((point) => clearServiceExit(p.pos, point, personRadius(p.kind)) && clearOfPeople(p.pos, point, personRadius(p.kind), this.collisionBodies(p.id))) : nominal;
         if (!exit) return;
         f.serving = null;
-        if (p) { this.completeService(f, p); p.pos = exit; }
+        if (p && this.completeService(f, p)) p.pos = exit;
       }
       return;
     }
@@ -433,6 +514,7 @@ export class World {
       f.queue.shift();
       return;
     }
+    if (head.incapacitated > 0 || head.activity.kind === "reacting") return;
     if (dist(head.pos, f.def.head) > 0.2) return;
 
     if (f.def.kind === "gate" && !head.hasTicket) {
@@ -443,6 +525,7 @@ export class World {
     }
     f.queue.shift();
     let duration = head.serviceTime[f.def.kind] * multiplierOf(f.def.id);
+    if (f.def.kind === "security") duration += (this.items.bag(head.id) ? INTERACTION_RULES.backpackSecuritySeconds : 0) + this.items.holdings(head.id).filter(i => ITEM_DEFS[i.kind].security === "inspect").length * INTERACTION_RULES.inspectItemSeconds;
     let recheck = false;
     if (f.pendingRecheck !== null && !head.isPlayer) {
       duration += f.pendingRecheck;
@@ -457,18 +540,24 @@ export class World {
   private completeService(f: Facility, p: Person) {
     switch (f.def.kind) {
       case "tvm":
-        p.hasTicket = true;
+        this.items.spawn("ticket", { type: "held", personId: p.id, slot: "pocket" }, p.id);
         p.pos = { x: f.def.head.x, y: f.def.head.y + 1.3 };
         p.activity = { kind: "idle" };
         this.personEvent(p, "service_done", `在 ${f.def.id} 买到单程票`);
         break;
       case "security":
+        for (const item of this.items.holdings(p.id)) if (ITEM_DEFS[item.kind].security === "confiscate") this.items.move(item.id, { type: "spot", spotId: `confiscated-${f.def.id}` }, "confiscate");
         p.screened = true;
         p.pos = { ...f.def.exit! };
         p.activity = { kind: "idle" };
         this.personEvent(p, "service_done", `通过 ${f.def.id} 安检，进入安检后大厅`);
         break;
       case "gate":
+        if (!this.items.useTicket(p.id)) {
+          p.activity = { kind: "idle" };
+          this.personEvent(p, "service_rejected", `${f.def.id} 拒绝通行：车票已离开持有人`);
+          return false;
+        }
         p.pos = { ...f.def.exit! };
         p.passedGate = true;
         p.onPlatform = false;
@@ -477,6 +566,7 @@ export class World {
         this.personEvent(p, "service_done", `刷票通过 ${f.def.id}，到达上层平台；可选择楼梯或扶梯下行进入站台`);
         break;
     }
+    return true;
   }
 }
 

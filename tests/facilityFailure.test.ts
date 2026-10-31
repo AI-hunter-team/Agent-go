@@ -26,7 +26,7 @@ test.each(["TVM-1", "S1", "G2"])("%s stops unfinished service for both passenger
 test.each(buildScenario(1).events.filter((e) => e.type === "status"))("scripted $facility shutdown takes priority over service completing on the same tick", ({ facility: id, t }) => {
   const e = new Engine(1); const f = e.world.facility(id)!; const p = e.player;
   e.world.t = t - 0.1; e.takeTriggers();
-  p.pos = { ...f.def.head }; p.hasTicket = id === "S1"; p.screened = false;
+  p.pos = { ...f.def.head }; if (id === "S1") e.world.items.spawn("ticket", { type: "held", personId: p.id, slot: "pocket" }, p.id); p.screened = false;
   p.activity = { kind: "service", facility: id }; f.serving = { personId: p.id, remaining: 0.1, recheck: false };
   e.step();
   expect(f.status).not.toBe("open"); expect(f.serving).toBeNull();

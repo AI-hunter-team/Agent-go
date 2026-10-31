@@ -41,11 +41,11 @@ export class HeuristicAgent implements Agent {
         const best = routes.reduce((a, b) => cost(a) <= cost(b) ? a : b);
         if (best.id === "escalator" && self.activity.startsWith("正在候梯")) return { type: "wait", seconds: 2, reason: "候梯并观察是否需要改道" };
         if (Math.hypot(self.position.x - best.position.x, self.position.y - best.position.y) <= STAIRS_REACH)
-          return { type: best.id === "stairs" ? "descend_stairs" : "take_escalator", reason: `选择预计较快的${best.label}` };
+          return { type: "traverse", route: best.id, reason: `选择预计较快的${best.label}` };
         return { type: "move_to", target: best.node, reason: `比较可见步行、排队和下行时间，选择${best.label}` };
       }
       if (Math.hypot(self.position.x - STAIRS_TOP.x, self.position.y - STAIRS_TOP.y) <= STAIRS_REACH) {
-        return { type: "descend_stairs", reason: "已到楼梯入口，下楼到站台" };
+        return { type: "traverse", route: "stairs", reason: "已到楼梯入口，下楼到站台" };
       }
       return { type: "move_to", target: routes === undefined ? "STAIRS_TOP" : "LANDING_C", reason: "已过闸机，前往观察下行路线" };
     }

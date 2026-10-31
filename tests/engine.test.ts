@@ -19,7 +19,7 @@ describe("engine", () => {
     const e = new Engine(1);
     expect(e.takeTriggers().map((t) => t.kind)).toEqual(["start"]);
     expect(e.observe().facilities.map(f => f.id)).toEqual(["TVM-1"]);
-    expect(e.observe().self.timeLeft).toBe(120);
+    expect(e.observe().self.timeLeft).toBe(150);
   });
 
   test("world time does not advance without step (bullet time)", () => {
@@ -98,7 +98,7 @@ describe("engine", () => {
   test("seeing a broken facility for the first time triggers a decision", () => {
     const e = new Engine(1);
     e.takeTriggers();
-    const failure = buildScenario(1).events.find((event) => event.type === "status" && event.status === "broken")!;
+    const failure = buildScenario(1).events.find((event): event is Extract<typeof event, { type: "status" }> => event.type === "status" && event.status === "broken")!;
     act(e, { type: "move_to", target: failure.facility });
     // Reach the selected machine before its failure, then wait within sight.
     const seen: string[] = [];

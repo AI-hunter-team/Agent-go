@@ -1,6 +1,6 @@
 # 交互 2.0：规则规范与技术设计
 
-状态：**规划已确认，待实施**（2026-10-31）。依据用户提供的[角色设计提案](source-角色设计.md)和当前 `main`（`d4884a8`）源码整理。本文是实现规划，尚未实现。D1–D8 已由用户确认，见 [README](README.md#已确认决定)；标注“推荐”的参数值（圆环秒数、成功率、耗时、反应评分等）仍是试玩起始值，可按测试与试玩数据调整。
+状态：**现行规则与分阶段实现规划**（2026-10-31）。原规划依据用户[角色设计提案](source-角色设计.md)及当时 `main`（`d4884a8`）；IV2-01–19 现已本地实现，软件、浏览器和真实模型证据分别记录，具体证据与缺口见 [README 状态表](README.md#状态与后续)。D1–D8 已确认；标注“推荐”的数值仍是试玩起始值，可按测试与试玩数据调整。B2 的“现状”保留原基线快照，不代表当前实现。
 
 本文分三部分：A 规则规范（做什么）、B 技术设计（怎么做）、C 接口契约（各模块之间的约定）。任务拆分、文件归属与验收见 [tasks.md](tasks.md)。
 
@@ -168,8 +168,8 @@
 
 ### A10. 时限与预算
 
-- 时限暂保留 120 秒；垂直切片完成后用离线和真实模型试玩复评（任务 IV2-18），确认取道具、交涉、躲避有实际使用空间。
-- 推荐预算：角色决策 80 次 / 局；Boss 20 次 / 局；NPC 对话 30 次 / 局；单次决策思考 ≤ 1024 token（沿用）。
+- 时限正式为 150 秒。IV2-18 离线 50 seeds 在 120/150/180 秒下分别通关 6/21/32 局；用户于 2026-10-31 明确选择 150 秒以保留赶车压力。旧报告保留当局 settings。
+- 推荐预算：角色决策 80 次 / 局；Boss 20 次 / 局；NPC 对话 30 次 / 局；模型输出预算现按上游 [Responses 规范](../MVP技术方案.md#17-responses-与思考设置responses-001)统一计算（含思考、文本和工具参数），不再单列 1024 token 思考上限。
 
 ---
 
@@ -237,11 +237,11 @@ src/agent/
   heuristicAgent.ts  离线策略保持可通关
   remoteAgent.ts     + /api/boss/interpret、/api/npc/respond 客户端
 server/
-  tools.ts           新工具；旧 request_cut_in / attempt_creative 作为兼容别名
+  tools.ts           新工具；IV2-19 已移除旧公开别名
   prompts.ts         固定知识：物品、取物点、背包、警戒语义（不枚举原语）
   boss.ts            interpretAction（结构化输出）
   npcDialogue.ts     npcRespond（结构化输出）
-  app.ts             新路由；旧路由保留一个里程碑
+  app.ts             新路由；IV2-19 已移除旧路由
 src/ui/
   presentation.ts    快照 + alerts、items、speech
   scene/AlertBadge.tsx、scene/Items.tsx、scene/SpeechBubble.tsx
@@ -269,7 +269,7 @@ t += DT
 ### B5. 迁移注意（避免破坏现有行为）
 
 - **`hasTicket`**：消费者有 `world.ts`、`observation.ts`、`npc.ts`、`runner.ts`、`heuristicAgent.ts`、`JourneyProgress.tsx`、`shared/types.ts`（`SelfObservation.hasTicket` 保留为推导值）以及相关测试。先加 `ItemSystem.hasValidTicket(personId)`，`Person.hasTicket` 改为 getter，再逐个替换。
-- **`attempt_creative` / `request_cut_in`**：`parseToolUse` 一个里程碑内把它们映射到 `act` / `talk(goal: "yield")`；旧报告中的 `CreativeMechanic` 类型保留只读兼容。
+- **`attempt_creative` / `request_cut_in`**：过渡期曾映射到 `act` / `talk(goal: "yield")`，IV2-19 已停止公开和解析旧工具；旧报告中的 `CreativeMechanic` 类型保留只读兼容。
 - **翻闸判负**：现有“保安看到翻闸即判负”改由 `vault` 原语 + `violation` 严重度 + 保安红色实现，行为等价，`tests/creative.test.ts`、`tests/gateWindow.test.ts` 应在改造后继续通过（期望文本可调整，判定不可变）。
 - **固定对局设置**：`/api/session` 当前拒绝非默认设置；新增的赛前选择（背包）走独立字段 `loadout`，不复用 `settings`。
 - **报告兼容**：`GameReport` 新字段全部可选；`ReportView` / 回放对缺字段的旧报告照常显示。
@@ -328,6 +328,7 @@ export interface ItemDef {
 export type ItemLocation =
   | { type: "held"; personId: string; slot: "pocket" | "hand" | "bag" }
   | { type: "ground"; pos: Vec }
+  | { type: "container"; containerId: string } // 丢下的背包内物品；不可直接从远处取出
   | { type: "spot"; spotId: string };
 
 export interface Item {
@@ -386,6 +387,7 @@ export interface WorldEvent {
   causeId?: string;
   /** report 专用：被描述的对象。 */
   aboutId?: string;
+  aboutPos?: Vec; // 报告携带的最后已知地点，不跟踪对象隐藏的实时位置
 }
 
 /** 持续动作在执行期间登记；看到行为者即可归因。 */
@@ -442,6 +444,8 @@ export interface ActionPlan {
 export interface StepOutcome { ok: boolean; text: string; eventIds: string[] }
 ```
 
+执行器接收模拟侧校验过的闭合步骤，最多 4 步；开始时保留计划副本。每帧先推进接近/持续阶段，感知处理后在 `finishFrame()` 再校验和结算，确保最后一帧仍能被目击。中断清理 ongoing act 与队列预约。现有闸机可执行；栏杆/扶梯/扶手已由 IV2-14/15 提供几何与结算；前置条件不满足时明确失败。
+
 `contest`（`src/sim/actions/contest.ts`）推荐公式，概率夹在 [0.05, 0.95]，用每局初始化时创建并保留的 `contestRng = rng.fork("contest")` 连续抽样（每次判定调用 `contestRng.next()`，不得重新 fork）：
 
 ```
@@ -483,11 +487,13 @@ export interface NpcResponse {
 
 模拟器只执行与 `holdings`、goal 一致的决定；`flee` / `call_guard` 等价于让该 NPC 进入红色并选定对应反应。现有 `CutInDialogueRequest` / `NpcReply` 在一个里程碑内保留并由 `yield` 适配。
 
+模拟侧 `pendingDialogue` 保存到达后构造的请求，`dialogue.apply(response)` 再校验距离、持有物与轮数后结算；等待时 Engine.step 不推进世界时间。请求和回复历史由模拟器保存，单 NPC 最多三轮。交易所有物品转移原子完成；任何容量/持有校验失败均不交换。威胁在请求产生时登记 danger 行为，与回复是否同意无关。Runner 的网络编排由 IV2-10 接入。
+
 ### C7. 角色工具（新增 / 变更）
 
 | 工具 | 参数 | 执行 |
 |---|---|---|
-| `traverse` | `route: "stairs" \| "escalator"` | 替代 `descend_stairs`（旧名保留为别名） |
+| `traverse` | `route: "stairs" \| "escalator"` | 公开替代 `descend_stairs`；`walking?: boolean` 仅用于扶梯；旧名只在内部历史适配保留 |
 | `observe` | `targetId` | 1 s；返回目标详细外观、可见行为、持有的可见物品 |
 | `take` | `itemId` | 可及范围内的地面物品或取物点库存 |
 | `give` | `itemId`, `npcId` | 交付；对方是否收下由对话 / 规则决定 |
@@ -527,6 +533,36 @@ GameReport.boss?: { t: number; instruction: string; plan: ActionPlan; outcomes: 
 | `POST /api/boss/interpret` | `{ sessionId, instruction, context: BossContext }` | `ActionPlan & { debug }` | 无模型时 200 返回关键词解析结果 |
 | `POST /api/npc/respond` | `{ sessionId, request: NpcDialogueRequest }` | `NpcResponse & { debug }` | 无模型 503，客户端走离线启发式 |
 | `POST /api/session` | 增加 `loadout?: { backpack: boolean }` | 不变 | 校验同 `settings` 风格 |
-| `/api/creative/classify`、`/api/npc/negotiate` | 不变 | 不变 | 保留到 IV2-19 再移除 |
+| `/api/creative/classify`、`/api/npc/negotiate` | 已移除 | HTTP 404 | IV2-19 完成；调用方迁移到 `/api/boss/interpret`、`/api/npc/respond` |
 
 `BossContext`：角色位置与持有物、视野内人物（含 id、外观、位置、持有可见物品）、可见物品与取物点、设施状态、玩家原始指令。Boss 只需要能把指令中的指代（“那位穿红衣服的乘客”）解析到 id；隐藏性格不提供给 Boss，以免 Boss 依据性格替角色挑软柿子。
+
+### IV2-09 接口补充（实现同步）
+
+BossContext 共享可见位置、人物外观/队列、物品 id 与设施；导航节点是公开固定知识。模型不得补造 id。严格 JSON Schema 的可选字段以 null 返回，服务端转为省略后校验。ActionPlan / NpcResponse 可附 debug、model、usage 元数据，不影响模拟器结算。新接口必须使用 session 绑定的同一角色模型配置；旧协商接口已在 IV2-19 移除；历史报告和模拟动作通过内部适配读取。错误计划降级关键词；不可用的在线 NPC 答复不授予许可。
+
+### 第二阶段集成补充（IV2-13–19，2026-10-31）
+
+由当前串行集成人依据用户“完成整个第二阶段”授权落实：`loadout?: { backpack: boolean }` 独立于固定难度 settings；省略默认有包。`traverse` 增加可选 `walking`，仅扶梯使用，站立 10 秒、步行 5 秒，楼梯保持 6 秒。内部继续兼容 `stairs` 活动标签，以可选 route/duration/end 表示两条路线，旧报告不需迁移。
+
+C5 `strike` 增加设施分支 `{ op: "strike", facilityId: string, itemId?: string, aim: "hurt" }`，与 npcId 分支互斥；Boss 仅能引用可见设施，模拟器再次验证距离与状态后结算损坏。环境脚本新增 power（区域、持续时间）及 damage（设施 id），统一发出世界事件。断电视距系数 0.4，恢复后为 1；视觉与保安/NPC 连续追踪采用同一系数。以上扩展为原方案已有行为提供缺失表达能力，不允许模型直接提交世界状态。
+
+安检起始调参：背包 +2 秒，每件 inspect 物品 +2 秒；没收物品移交到通道保管点并记录转移。安检后设置公开饮水架（免费），避免将未实现的收费流程伪装成售货机。时间参数最终以 IV2-18 的实际验证为准。
+
+公开取物点 `spot` 引用与导航点一样按 layout 白名单校验，Boss 提示提供固定 id/坐标；可见物品 id 仍只允许 context 中实体。
+
+C9 增量：报告还保存 `loadout`、`interactionDialogues`、`calls` 与 `operationUsage`。后者按 decision/retry/interpret/npc_respond 等操作累计调用、输入/输出 token、现实耗时及 unknownUsage，供应商未返回用量时不伪装为完整零费用。具体类型见 shared/types。
+
+IV2-18 实测修复：`observe` 按 C7 消耗 1 秒并唤醒下一次决策，继续保持排队/移动状态；仅返回手持可见物品。Boss 提示重复给出闭合输出结构和 vault 示例，避免将翻闸误译为重复 approach。
+
+IV2-18 兼容修复（先记录契约）：现有 OpenAI 兼容端对 Boss 的嵌套 anyOf 多分支原语持续只生成首个 approach 分支，显式 vault/strike 请求亦如此。传输 schema 改为单一闭合 step 对象（op 枚举、其余字段 nullable），解码后去除 null，仍用原 isPlanStep/引用校验执行。不改变运行时 ActionPlan；人物/设施 strike 互斥校验保持。授权依据为本任务真实验收发现缺陷的修复范围。
+
+BossContext.people 补充可选 `holding: ItemKind[]`，只列手中可见物品，旧调用省略仍兼容。用于落实 C10 可见持物，不暴露口袋/背包内容；对应真实抢票 probe 仅安排公开手持车票。
+
+### 与最新 main 的集成（IV2-PR-001）
+
+本节更新此前基线说明：保留 main `331bdec` 已合入的可选时限与统一 Responses 接口，默认时限为用户选定的 150 秒；`settings` 可选择 60–300 秒整数，初始额外客流仍固定 3 人，背包继续走独立 `loadout`。角色、Boss、NPC 使用创建对局时绑定的同一模型、地址、凭据、思考档位及总输出预算；独立 `NPC_*` 配置停用。
+
+地图沿用上游 90 米站厅，楼梯入口 `(61,9)`、扶梯入口 `(61,22)`，入口侧边导航点 `(61,20.8)`，出口 x=73。扶梯使用上游 `TransitSystem` 的 FIFO 候梯、1 秒放行和并行乘坐，活动类型为 `escalator`，含 duration/remaining；站立 10 秒、步行 5 秒指无阻挡的乘坐时间，排队和物理阻挡另计。侧出按现位置转入楼梯，碰撞失败恢复乘梯；旧 `stairs` 扩展字段及报告继续兼容。模拟器夹具注入场景时不生成额外商业/扶梯背景客流，常规对局保留上游客流。
+
+保留正式站厅与角色素材、相机和失败复盘；新增物品、警戒、断电展示及交互报告。旧 HTTP/工具入口仍移除，公开动作使用 `act`、`talk`、`traverse`；内部历史适配只供旧调用与报告。此次消费者、软件/浏览器和离线结果见 [集成验证](../validation/IV2-PR-001.md)。历史真实模型证据不能视作 Responses 集成版复验。

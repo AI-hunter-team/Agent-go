@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
+import { setImmediate as yieldEventLoop } from "node:timers/promises";
 import type { Agent } from "../src/agent/agent";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { GameRunner } from "../src/agent/runner";
@@ -19,11 +20,14 @@ test.each([1, 2, 3, 4, 5, 6])("presentation-driven seed %i has the same report a
   const options = { now: () => 0, runId: `seed-${seed}` };
   const baseline = new GameRunner(new Engine(seed), new HeuristicAgent(), offlineClassifier, options);
   await baseline.runToEnd();
+  // Keep Vitest's worker RPC responsive between the CPU-heavy simulations.
+  await yieldEventLoop();
   const session = new GameSession(seed);
   session.start(new HeuristicAgent(), offlineClassifier, options);
   session.setSpeed(4);
   let loops = 0;
   while (session.runner!.phase !== "ended" && loops++ < 10000) {
+    if (loops % 250 === 0) await yieldEventLoop();
     if (session.runner!.pending) await session.runner!.pending;
     else {
       session.tick(0.016);

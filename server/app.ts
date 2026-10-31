@@ -1,3 +1,7 @@
+import { resolveLoadout } from "../src/shared/interaction";
+import type { ActionPlan, BossContext, NpcDialogueRequest, NpcResponse } from "../src/shared/types";
+import { bossContextValid, validatePlan } from "./boss";
+import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDialogue";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { extname, resolve } from "node:path";
 import { countChars, guidanceError } from "../src/shared/guidance";
@@ -11,7 +15,7 @@ import type {
   NormalizedGuidance,
   Observation,
 } from "../src/shared/types";
-import { classifyByKeywords } from "../src/sim/intent";
+import { parsePlan } from "../src/sim/intent";
 import type { Session, SessionStore } from "./sessions";
 import { DebugLogger, traceOperation } from "./debug";
 import { ModelConfigError, ModelConfigStore } from "./modelConfig";
@@ -26,22 +30,16 @@ export interface LlmService {
   decide(session: Session, turn: AgentTurn): Promise<DecisionResult>;
   normalize(text: string): Promise<NormalizedGuidance>;
   classify(intent: string, observation: Observation): Promise<CreativeClassification>;
+  interpret?(instruction: string, context: BossContext): Promise<ActionPlan>;
+  respond?(request: NpcDialogueRequest): Promise<NpcResponse>;
   negotiate?(request: CutInDialogueRequest): Promise<NpcReply>;
-}
-
-/** Developer-owned NPC model; never resolved from a browser's Agent config. */
-export interface NpcService {
-  readonly model: string;
-  negotiate(request: CutInDialogueRequest): Promise<NpcReply>;
 }
 
 export interface AppDeps {
   llm: LlmService | null;
-  npcLlm?: NpcService | null;
   sessions: SessionStore;
   debugLogger?: DebugLogger;
   modelParameters?: Record<string, unknown>;
-  npcModelParameters?: Record<string, unknown>;
   modelConfigs?: ModelConfigStore;
   frontendDir?: string;
 }
@@ -49,32 +47,10 @@ export interface AppDeps {
 type Handler = (req: Request, res: Response) => Promise<void> | void;
 const wrap = (h: Handler) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(h(req, res)).catch(next);
 
-const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const boundedText = (value: unknown, max: number): value is string => typeof value === "string" && Boolean(value.trim()) && countChars(value) <= max;
+const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
+const boundedText = (value: unknown, max: number): value is string => typeof value === "string" && !!value.trim() && countChars(value) <= max;
 
-function npcRequestError(value: unknown): string | null {
-  if (!isObject(value)) return "缺少 NPC 对话请求";
-  if (!boundedText(value.message, 200)) return "对话 message 必须是 1–200 字的非空字符串";
-  const npc = value.npc;
-  if (!isObject(npc)) return "缺少 npc 信息";
-  if (!boundedText(npc.id, 80) || !boundedText(npc.facility, 80)) return "npc.id 和 npc.facility 必须是 1–80 字的非空字符串";
-  if (!boundedText(npc.trait, 200) || !boundedText(npc.temperament, 500)) return "npc.trait 或 npc.temperament 缺失或超长";
-  if (!Number.isSafeInteger(npc.queuePosition) || !Number.isSafeInteger(npc.queueLength)
-    || (npc.queuePosition as number) < 1 || (npc.queueLength as number) < 1
-    || (npc.queuePosition as number) > (npc.queueLength as number)) return "排队位置和队长必须为正整数，且位置不能超过队长";
-  if (!Array.isArray(value.history) || value.history.length > 3) return "history 必须是至多 3 条的数组";
-  if (!value.history.every((item) => isObject(item) && boundedText(item.message, 200) && boundedText(item.reply, 500) && typeof item.accepted === "boolean")) {
-    return "history 中每条记录须包含有效的 message、reply 和布尔值 accepted";
-  }
-  return null;
-}
-
-function npcFailure(reason: string, model: string | null): NpcReply {
-  return { accepted: false, reply: "暂时无法答复，请保持原来的排队位置。", reason, source: "error", model, usage: null };
-}
-
-/** 装配独立 Agent/NPC 路由，并把 Agent 配置固定到每局会话。 */
-export function createApp({ llm, npcLlm = null, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, npcModelParameters = {}, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
+export function createApp({ llm, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
@@ -184,8 +160,10 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
     if (settings && settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
       return void res.status(400).json({ error: `每条初始开放队列固定额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
     }
+    let loadout;
+    try { loadout = resolveLoadout(req.body?.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
     const binding = runtime(req);
-    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings);
+    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings, loadout);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
     void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });
@@ -207,56 +185,41 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
     }),
   );
 
-  app.post(
-    "/api/npc/negotiate",
-    wrap(async (req, res) => {
-      const error = npcRequestError(req.body);
-      if (error) return void res.status(400).json({ error });
-      const sessionId = req.body?.sessionId;
-      const session = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
-      if (sessionId && !session) return void res.status(404).json({ error: "会话不存在或已结束" });
-      if (!session) return void res.status(403).json(npcFailure("NPC 对话需要有效的对局会话。", null));
-      forSession(req, session);
-      if (!npcLlm) return void res.status(503).json(npcFailure("开发者未配置模型，NPC 未答复，未获得插队许可。", null));
+  app.post("/api/boss/interpret", wrap(async (req, res) => {
+    const session = sessions.get(req.body?.sessionId);
+    if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
+    const binding = forSession(req, session);
+    const { instruction, context } = req.body;
+    if (!boundedText(instruction, 200) || !bossContextValid(context)) return void res.status(400).json({ error: "行动或可见上下文无效" });
+    assertSafeText(JSON.stringify({ instruction, context }));
+    const { value, debug } = await traceOperation({ operation: "interpret", runId: session.runId, sessionId: session.id }, { instruction, context, modelParameters: binding.parameters }, debugLogger, async () => {
       try {
-        const request: CutInDialogueRequest = { npc: req.body.npc, message: req.body.message, history: req.body.history };
-        const { value: reply, debug } = await traceOperation({ operation: "negotiate", runId: session.runId, sessionId: session.id }, { request, modelParameters: npcModelParameters }, debugLogger, () => npcLlm.negotiate(request));
-        res.status(reply.source === "error" ? 502 : 200).json(debugLogger.clean({ ...reply, debug }));
-      } catch (error) {
-        res.status(502).json(debugLogger.clean(npcFailure(`NPC 对话失败，未获得插队许可：${error instanceof Error ? error.message : String(error)}`, npcLlm.model)));
-      }
-    }),
-  );
-
-  app.post(
-    "/api/creative/classify",
-    wrap(async (req, res) => {
-      const { intent, observation } = req.body ?? {};
-      if (typeof intent !== "string" || !intent.trim()) return void res.status(400).json({ error: "缺少 intent" });
-      if (intent.length > 1000) return void res.status(400).json({ error: "intent 不能超过 1000 字符" });
-      assertSafeText(intent);
-      if (observation) assertSafeText(JSON.stringify(observation));
-      const sessionId = req.body?.sessionId;
-      const session = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
-      if (sessionId && !session) return void res.status(404).json({ error: "会话不存在或已结束" });
-      const { llm, parameters: modelParameters } = session ? forSession(req, session) : runtime(req);
-      if (!llm) return void res.json(classifyByKeywords(intent));
+        const plan = await binding.llm?.interpret?.(instruction, context);
+        if (plan) {
+          const valid = validatePlan(plan, context);
+          if (valid) return { ...valid, source: plan.source, usage: plan.usage, model: plan.model };
+        }
+      } catch (error) { if (error instanceof SafetyError) throw error; }
+      return parsePlan(instruction, context);
+    });
+    res.json({ ...value, debug });
+  }));
+  app.post("/api/npc/respond", wrap(async (req, res) => {
+    const session = sessions.get(req.body?.sessionId);
+    if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
+    const binding=forSession(req, session);
+    const request = req.body?.request;
+    if (!dialogueRequestValid(request)) return void res.status(400).json({ error: "NPC 对话资料无效" });
+    assertSafeText(JSON.stringify(request));
+    if (!binding.llm?.respond) return void res.status(503).json({...responseFailure(),model:null,usage:null});
+    const { value, debug } = await traceOperation({ operation: "npc_respond", runId: session.runId, sessionId: session.id }, { request, modelParameters: binding.parameters }, debugLogger, async () => {
       try {
-        const { value, debug } = await traceOperation({ operation: "classify", runId: session?.runId ?? runId(req.body?.runId), sessionId: session?.id ?? null }, { intent, observation, modelParameters }, debugLogger, async () => {
-          try { return await llm.classify(intent, observation as Observation); }
-          catch (error) {
-            if (error instanceof SafetyError) throw error;
-            return { ...classifyByKeywords(intent), error: error instanceof Error ? error.message : String(error) };
-          }
-        });
-        res.json({ mechanic: value.mechanic, reason: value.reason, source: value.source, debug });
-      } catch (e) {
-        if (e instanceof SafetyError) throw e;
-        console.warn("classify failed, using keywords:", e);
-        res.json(classifyByKeywords(intent));
-      }
-    }),
-  );
+        const response = await binding.llm!.respond!(request);
+        return { ...(validateResponse(response, request) ?? responseFailure()), source: response.source, usage: response.usage, model: response.model };
+      } catch { return responseFailure(); }
+    });
+    res.status(value.source === "error" ? 502 : 200).json(debugLogger.clean({ ...value, debug }));
+  }));
 
   app.post("/api/session/:id/report", wrap(async (req, res) => {
     const session = sessions.get(req.params.id);

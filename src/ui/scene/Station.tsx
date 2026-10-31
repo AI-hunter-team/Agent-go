@@ -1,12 +1,13 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { DoubleSide, Group } from "three";
+import { BufferGeometry, Float32BufferAttribute, DoubleSide, Group, Mesh, PointLight } from "three";
 import { makeMaterials, setFacilityState, setGateProgress } from "../../assets/station-kit/index";
-import { FACILITIES, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
+import { FACILITIES, GATE_X, SECURITY_X, STAIRS_X, PLATFORM_X, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
 import { createSignTexture, SIGN_FACE } from "../../assets/station-kit/signs";
 import { createFloorReflection, disposeFloorReflection } from "../../assets/station-kit/reflection";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 import { CONVEYOR } from "../../sim/facilityGeometry";
+import { platformElevation } from "../presentation";
 import type { GameSession } from "../gameSession";
 import { batchStation, disposeBatches, loadStationKit, type StationKit } from "./stationAssets";
 import { devicePosition, deviceYaw, stationPlacements } from "./stationLayout";
@@ -115,5 +116,34 @@ export const Station = memo(function Station({ session, overview, standard, redu
     });
     return () => { active = false; };
   }, [onAssetError]);
-  return kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : <StationFallback session={session} reducedMotion={reducedMotion} />;
+  return <><OutageOverlay session={session} />{kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : <StationFallback session={session} reducedMotion={reducedMotion} />}</>;
 });
+
+function OutageOverlay({ session }: { session: GameSession }) {
+  const refs = useRef<(Mesh | null)[]>([]), lights = useRef<(PointLight | null)[]>([]);
+  const zones = useMemo(() => {
+    const bounds = [0, SECURITY_X, GATE_X, STAIRS_X, PLATFORM_X, WIDTH];
+    return bounds.slice(0, -1).map((left, i) => {
+      const right = bounds[i + 1], geometry = new BufferGeometry();
+      // Follow the existing descent surface so darkness also covers the slope.
+      const xs = [left, STAIRS_TOP.x, STAIRS_BOTTOM.x, right].filter((x, j, all) => x >= left && x <= right && all.indexOf(x) === j).sort((a,b) => a-b);
+      const positions: number[] = [], indices: number[] = [];
+      for (const x of xs) positions.push(x, platformElevation(x) + .03, 0, x, platformElevation(x) + .03, HEIGHT);
+      for (let j = 0; j < xs.length - 1; j++) indices.push(j*2,j*2+1,j*2+2,j*2+1,j*2+3,j*2+2);
+      geometry.setAttribute("position", new Float32BufferAttribute(positions, 3)); geometry.setIndex(indices);
+      return { x: (left + right) / 2, geometry };
+    });
+  }, []);
+  useEffect(() => () => zones.forEach(z => z.geometry.dispose()), [zones]);
+  useFrame(() => zones.forEach((z, i) => {
+    const dark = session.engine.world.lightAt({ x: z.x, y: 15 }) < 1;
+    if (refs.current[i]) refs.current[i]!.visible = dark;
+    if (lights.current[i]) lights.current[i]!.intensity = dark ? 0 : 60;
+  }));
+  return <group name="outage-overlay">
+    {zones.map((z,i) => <pointLight key={`light${i}`} ref={l => {lights.current[i]=l;}} position={[z.x,4,15]} intensity={60} distance={24} decay={2}/>)}
+    {zones.map((z,i) => <mesh key={i} ref={m => {refs.current[i]=m;}} geometry={z.geometry}>
+      <meshBasicMaterial color="#121a22" transparent opacity={.65} side={DoubleSide} depthWrite={false}/>
+    </mesh>)}
+  </group>;
+}

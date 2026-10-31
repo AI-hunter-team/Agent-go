@@ -3,7 +3,8 @@ import { useFrame } from "@react-three/fiber";
 import { Color, Object3D, type InstancedMesh } from "three";
 import type { GameSession } from "../gameSession";
 import { sampleActor } from "../presentation";
-import { box, colors, materials, sphere } from "./resources";
+import { box, materials, sphere } from "./resources";
+import { passengerAppearance } from "./passengerAppearance";
 
 /** 用两个实例批次绘制所有普通乘客，保留人数、位置和类型颜色，省去肢体装饰。 */
 export function SimpleCrowd({ session, capacity }: { session: GameSession; capacity: number }) {
@@ -22,7 +23,7 @@ export function SimpleCrowd({ session, capacity }: { session: GameSession; capac
       object.position.set(pose.x, pose.y + 0.65, pose.z);
       object.scale.set(0.38, 1.2, 0.28);
       object.updateMatrix(); bodies.current.setMatrixAt(index, object.matrix);
-      color.set(actor.kind === "elderly" ? colors.ochre : actor.kind === "luggage" ? colors.sage : actor.kind === "hurried" ? colors.brick : colors.grey);
+      color.set(passengerAppearance(actor.kind, actor.id).coat);
       bodies.current.setColorAt(index, color);
       object.position.y = pose.y + 1.5;
       object.scale.set(0.15, 0.2, 0.15);

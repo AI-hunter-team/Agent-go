@@ -5,14 +5,15 @@ import { ATTRACTIONS, BOARDING_INTERVAL, ESCALATOR_SECONDS, ESCALATOR_APPROACH, 
 import { nearestNode } from "./nav";
 import { PROFILES, RULES, multiplierOf } from "./scenario";
 import { round1, type Facility, type Person, type World } from "./world";
+import { BAG_CAPACITY } from "./content/items";
 
 /** The player character's sight: 360°, limited range, blocked by walls and pillars. */
-export function playerCanSee(from: Vec, to: Vec): boolean {
-  return dist(from, to) <= RULES.visionRange && lineOfSight(from, to, SIGHT_OCCLUDERS);
+export function playerCanSee(from: Vec, to: Vec, lightAt: (pos: Vec) => number = () => 1): boolean {
+  return dist(from, to) <= RULES.visionRange * Math.min(lightAt(from), lightAt(to)) && lineOfSight(from, to, SIGHT_OCCLUDERS);
 }
 
 export function visibleFacilities(world: World, from: Vec): Facility[] {
-  return [...world.facilities.values()].filter((f) => playerCanSee(from, f.def.pos));
+  return [...world.facilities.values()].filter((f) => playerCanSee(from, f.def.pos, world.lightAt));
 }
 
 function traitOf(p: Person | undefined): string {
@@ -33,7 +34,7 @@ function observeFacility(world: World, f: Facility, from: Vec): FacilityObservat
   const base = PROFILES.normal[f.def.kind];
   const serving = f.serving ? world.persons.get(f.serving.personId) : undefined;
   const visibleQueue = f.queue.map((id) => world.persons.get(id)).filter(
-    (person): person is Person => Boolean(person && playerCanSee(from, person.pos)),
+    (person): person is Person => Boolean(person && playerCanSee(from, person.pos, world.lightAt)),
   );
   return {
     id: f.def.id,
@@ -45,7 +46,7 @@ function observeFacility(world: World, f: Facility, from: Vec): FacilityObservat
     queueLength: visibleQueue.length,
     queue: visibleQueue.map(traitOf),
     people: visibleQueue.filter((p) => !p.isPlayer).map((p) => ({ id: p.id, trait: traitOf(p), distance: round1(dist(from, p.pos)) })),
-    serving: f.serving && serving && playerCanSee(from, serving.pos) ? traitOf(serving) + (f.serving.recheck ? "（复检中）" : "") : null,
+    serving: f.serving && serving && playerCanSee(from, serving.pos, world.lightAt) ? traitOf(serving) + (f.serving.recheck ? "（复检中）" : "") : null,
     note: f.note,
   };
 }
@@ -70,7 +71,11 @@ export function describeActivity(world: World, p: Person): string {
     case "creative":
       return a.mechanic === "jump_gate" ? "正在翻越闸机" : `正在插队到 ${a.facility}`;
     case "stairs":
-      return `正在下楼梯（剩余 ${round1(a.remaining)} 秒）`;
+      return `正在${a.route === "escalator" ? "下行扶梯" : "下楼梯"}（剩余 ${round1(a.remaining)} 秒）`;
+    case "reacting":
+      return ({ glance: "看了一眼", murmur: "小声议论", complain: "抱怨", argue: "争执", expel: "驱赶插队者", keep_distance: "向旁边让开", flee: "惊慌后退", confront: "上前阻拦", report: "朝保安走去" } as Record<string,string>)[a.reaction] ?? "停下观察";
+    case "acting":
+      return `正在执行 ${a.op}`;
     case "to_escalator": return "正在走向扶梯队尾";
     case "escalator_queue": return `正在候梯（第 ${world.transit.queue.indexOf(p.id) + 1} 位）`;
     case "escalator": return `正在乘扶梯（剩余 ${round1(a.remaining)} 秒）`;
@@ -87,6 +92,9 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
   return {
     t: round1(world.t),
     self: {
+      inventory: world.items.holdings(p.id).map((i) => ({ id: i.id, kind: i.kind, slot: world.items.slot(i) })),
+      action: p.activity.kind === "acting" ? {op:p.activity.op,progress:p.activity.progress} : null,
+      bag: { has: Boolean(world.items.bag(p.id)), used: world.items.bagUsed(p.id), capacity: BAG_CAPACITY },
       position: { x: round1(p.pos.x), y: round1(p.pos.y) },
       zone: ZONE_LABEL[zoneOf(p.pos)],
       nearestNode: node ? `${node.id}（${node.label}）` : "无",
@@ -98,6 +106,13 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       elapsed: round1(world.t),
       timeLeft: round1(Math.max(0, world.timeLimitSeconds - world.t)),
     },
+    items: world.items.visibleItems(p.pos, world.lightAt),
+    people: [...world.persons.values()].filter((other) => !other.isPlayer && playerCanSee(p.pos, other.pos, world.lightAt)).map((other) => ({
+      id: other.id, look: other.persona ? `${other.persona.look.build}，${other.persona.look.outfit}，${other.persona.look.manner}` : traitOf(other),
+      distance: round1(dist(p.pos,other.pos)), doing: other.incapacitated ? "倒地不动" : describeActivity(world,other),
+      towardYou: other.activity.kind === "reacting" && other.activity.subjectId === p.id ? describeActivity(world,other) : null,
+      holding: world.items.holdings(other.id).filter((i) => world.items.slot(i) === "hand").map((i) => i.kind),
+    })),
     facilities: visibleFacilities(world, p.pos).map((f) => observeFacility(world, f, p.pos)),
     attractions: ATTRACTIONS.filter(a => p.screened && !p.passedGate && playerCanSee(p.pos, a.approach)).map(a => ({
       id: a.id, label: a.label, cue: a.cue, distance: round1(dist(p.pos, a.approach)), approach: { ...a.approach }, canLinger: dist(p.pos, a.approach) <= 2.5,
@@ -108,9 +123,10 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
         queueLength: world.transit.queue.filter(id => { const person = world.persons.get(id); return person && playerCanSee(p.pos, person.pos); }).length, boardingInterval: BOARDING_INTERVAL },
     ].filter(r => p.passedGate && playerCanSee(p.pos, r.position)).map(r => ({ ...r, position: { ...r.position }, distance: round1(dist(p.pos, r.position)) })),
     guards: guards.guards
-      .filter((g) => playerCanSee(p.pos, g.pos))
+      .filter((g) => playerCanSee(p.pos, g.pos, world.lightAt))
       .map((g) => ({
         id: g.def.id,
+        doing: g.incapacitated > 0 ? "倒地不动" : g.mode === "watch" ? "盯着目标" : g.mode === "investigate" ? "前往动静处查看" : "巡逻",
         position: { x: round1(g.pos.x), y: round1(g.pos.y) },
         facing: `面朝${compass(g.facing)}`,
         distance: round1(dist(p.pos, g.pos)),

@@ -20,10 +20,6 @@ services:
       AGENT_MODEL: "${AGENT_MODEL:-deepseek-flash}"
       OPENAI_REASONING_EFFORT: "${OPENAI_REASONING_EFFORT:-none}"
       OPENAI_STREAM: "${OPENAI_STREAM:-1}"
-      NPC_PROVIDER: "${NPC_PROVIDER:-responses}"
-      NPC_MODEL: "${NPC_MODEL:-}"
-      NPC_OPENAI_BASE_URL: "${NPC_OPENAI_BASE_URL:-https://api.deepseek.com}"
-      NPC_OPENAI_API_KEY: "${NPC_OPENAI_API_KEY:-}"
       DECISION_MAX_TOKENS: "${DECISION_MAX_TOKENS:-4096}"
       DEBUG_LOG_ENABLED: "${DEBUG_LOG_ENABLED:-1}"
       DEBUG_LOG_DIR: /app/logs

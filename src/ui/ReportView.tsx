@@ -1,3 +1,5 @@
+import { EVENT_LABEL, LEVEL_LABEL } from "./interactionLabels";
+import { ITEM_DEFS } from "../sim/content/items";
 import { useState } from "react";
 import type { GameReport, TimeBreakdown } from "../shared/types";
 import { MECHANIC_NAME } from "./format";
@@ -98,6 +100,13 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
       </p>
 
       {!!report.npcTotals?.calls && <p className="small">NPC 沟通 {report.npcTotals.calls} 次 · 输入 {report.npcTotals.inputTokens} / 输出 {report.npcTotals.outputTokens} token · 现实等待 {report.npcTotals.realSeconds} 秒（另计）</p>}
+      {report.operationUsage && <details><summary>分操作调用与用量</summary>{Object.entries(report.operationUsage).map(([op, row]) => <p key={op}>{op}：{row.calls} 次 · 输入 {row.inputTokens} / 输出 {row.outputTokens} token · {row.realSeconds.toFixed(1)} 秒 · {row.unknownUsage} 次未返回用量</p>)}</details>}
+      {!!report.worldEvents?.length && <details><summary>交互事件与因果链（{report.worldEvents.length}）</summary>{report.worldEvents.map(e => <p key={e.id}>{e.t.toFixed(1)}s · {e.id} {EVENT_LABEL[e.kind]} · {e.actorId ?? "环境"} → {e.targetId ?? "周围"}{e.causeId ? ` · 起因 ${e.causeId}` : ""}</p>)}</details>}
+      {!!report.alerts?.length && <details><summary>警戒变化</summary>{report.alerts.map((a,i) => <p key={i}>{a.t.toFixed(1)}s {a.observerId} 对 {a.subjectId}：{LEVEL_LABEL[a.from]} → {LEVEL_LABEL[a.to]} · {a.cause}</p>)}</details>}
+      {!!report.items?.length && <details><summary>物品流转</summary>{report.items.map((a,i) => <p key={i}>{a.t.toFixed(1)}s {ITEM_DEFS[a.kind].label}（{a.itemId}）：{a.from} → {a.to} · {a.how}</p>)}</details>}
+      {!!report.boss?.length && <details><summary>Boss 计划与执行结果</summary>{report.boss.map((a,i) => <div key={i}><p>{a.t.toFixed(1)}s 「{a.instruction}」· {a.plan.summary}（{a.plan.source}）</p>{a.outcomes.map((r,j) => <p key={j}>{r.ok ? "完成" : "失败"}：{r.text} · {r.eventIds.join("、")}</p>)}</div>)}</details>}
+      {!!report.interactionDialogues?.length && <details><summary>自由对话</summary>{report.interactionDialogues.map((a,i) => <p key={i}>{a.t.toFixed(1)}s 对 {a.request.npc.id}：「{a.request.message}」→「{a.response.reply}」· {a.response.decision}</p>)}</details>}
+      {report.personas && <details><summary>乘客人设（复盘可见）</summary>{Object.entries(report.personas).map(([id,p]) => <p key={id}>{id} · {p.look.outfit} · 胆量 {p.traits.courage.toFixed(2)} / 公平 {p.traits.fairness.toFixed(2)} / 赶时间 {p.situation.hurry.toFixed(2)}</p>)}</details>}
       <DebugPanel report={report} />
 
       {report.guidance && (
