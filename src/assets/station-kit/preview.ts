@@ -20,6 +20,7 @@ interface Entry {
 }
 interface Manifest { assets: Entry[]; materials: { file: string }[]; }
 type View = "scene" | "asset" | "materials";
+// 获取预览页面中已约定存在的控件。
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const base = new URL("/assets/station-kit/", location.origin).href;
 const prototypes = new Map<string, Group>(), materialPool = new Map<string, MeshStandardMaterial>();
@@ -58,6 +59,7 @@ composer.addPass(new RenderPass(scene, camera));
 const ssao = new SSAOPass(scene, camera, 1, 1, 16);
 ssao.kernelRadius = 0.45; ssao.minDistance = 0.0015; ssao.maxDistance = 0.015;
 composer.addPass(ssao); composer.addPass(new OutputPass());
+// 提供只读场景快照，供素材浏览器检查核对实际加载的实例。
 Object.assign(window, { stationKitInspect: () => {
   const hinges: number[] = [], indicators: string[] = []; let meshes = 0, ceilingPanels = 0, reflections = 0;
   content.traverse((node) => {
@@ -67,13 +69,18 @@ Object.assign(window, { stationKitInspect: () => {
     if (node.userData.role === "gateHinge") hinges.push(node.rotation.y);
     if (node instanceof Mesh && node.userData.role === "statusIndicator") indicators.push((node.material as MeshStandardMaterial).name);
   });
-  return { mode, selected, layout, cameraView, state, opening, meshes, hinges, indicators, ceilingPanels, reflections, contactShadows: ssao.enabled, gpuGeometries: renderer.info.memory.geometries, cameraPosition: camera.position.toArray() };
+  const guides = content.children.filter((node) => String(node.userData.previewAssetId).startsWith("route-") || node.userData.previewAssetId === "marking-arrow")
+    .map((node) => ({ id: node.userData.previewAssetId as string, x: node.position.x, z: node.position.z, rotation: node.rotation.y }));
+  const securityOpenings = content.children.filter((node) => node.userData.previewAssetId === "portal").map((node) => node.position.x);
+  return { mode, selected, layout, cameraView, state, opening, meshes, hinges, indicators, ceilingPanels, reflections, contactShadows: ssao.enabled, gpuGeometries: renderer.info.memory.geometries, cameraPosition: camera.position.toArray(), guides, securityOpenings };
 } });
+// 克隆已加载的素材，并应用位置、朝向及当前设施状态。
 function add(id: string, x = 0, z = 0, rotation = 0, y = 0) {
   const proto = prototypes.get(id); if (!proto) throw new Error("Missing model: " + id);
-  const clone = proto.clone(true); clone.position.set(x, y, z); clone.rotation.y = rotation; content.add(clone);
+  const clone = proto.clone(true); clone.userData.previewAssetId = id; clone.position.set(x, y, z); clone.rotation.y = rotation; content.add(clone);
   setFacilityState(clone, state, stateMaterials); setGateProgress(clone, opening); return clone;
 }
+// 将动态文字绘制到悬挂标牌上。
 function sign(text: string, x: number, z: number, y = 2.9, width = 2.8, rotation = 0) {
   const item = add("sign-panel", x, z, rotation, y); item.scale.x = width / 2.8;
   const canvas = document.createElement("canvas"); canvas.width = Math.round(1024 * width / 2.8); canvas.height = 160;
@@ -83,6 +90,7 @@ function sign(text: string, x: number, z: number, y = 2.9, width = 2.8, rotation
   const panel = new Mesh(new PlaneGeometry(2.6, 0.39), new MeshBasicMaterial({ map: texture, toneMapped: false }));
   panel.position.set(0, 0.25, 0.067); panel.userData.previewOnly = true; item.add(panel);
 }
+// 移除当前展示，并释放预览临时创建的几何、纹理和反射资源。
 function clearContent() {
   content.traverse((node) => {
     if (node instanceof Reflector) { node.dispose(); node.geometry.dispose(); return; }
@@ -94,6 +102,7 @@ function clearContent() {
   });
   content.clear();
 }
+// 创建室内地面的柔化反射层。
 function floorReflection() {
   const shader = {
     name: "SoftTerrazzoReflection",
@@ -120,6 +129,7 @@ function floorReflection() {
   };
   content.add(mirror);
 }
+// 在柱体正面添加动态检票方向标识。
 function columnSign(pillar: Group) {
   const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 1024;
   const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#303630"; ctx.fillRect(0, 0, 512, 1024);
@@ -129,6 +139,39 @@ function columnSign(pillar: Group) {
   const panel = new Mesh(new PlaneGeometry(0.65, 1.5), new MeshBasicMaterial({ map, toneMapped: false }));
   panel.position.set(0, 2.0, 1.024); panel.userData.previewOnly = true; pillar.add(panel);
 }
+// 根据本布局的安检开口拼接直段、转角、分流与方向箭头。
+function buildGuideRoutes(openings: number[]) {
+  const leftX = openings[0], rightX = openings[openings.length - 1];
+  if (layout === "straight") {
+    for (const z of [7.5, 4.5, 1.5, -1.5, -4.5, -7.5]) add("route-straight", leftX, z);
+    for (const z of [6, -0.2, -8.2]) add("marking-arrow", leftX, z);
+    return;
+  }
+  const entryX = leftX + 3, forkZ = layout === "dogleg" ? 4.5 : 1.5;
+  for (let z = 7.5; z > forkZ; z -= 3) add("route-straight", entryX, z);
+  add("route-split", entryX, forkZ);
+  add("route-turn", leftX, forkZ, Math.PI / 2);
+  add("route-turn", rightX, forkZ, Math.PI);
+  // 较宽的绕柱布局需要在分流与右侧弯道之间补上横向直段。
+  for (let x = entryX + 3; x < rightX; x += 3) add("route-straight", x, forkZ, Math.PI / 2);
+  for (let z = forkZ - 3; z >= -7.5; z -= 3) add("route-straight", leftX, z);
+  let exitX = rightX;
+  if (layout === "dogleg") {
+    for (const z of [1.5, -1.5]) add("route-straight", rightX, z);
+    // 穿过右侧开口后向内回折，避开下游柱体并朝向闸机。
+    exitX = rightX - 3;
+    add("route-turn", rightX, -4.5, Math.PI * 1.5);
+    add("route-turn", exitX, -4.5, Math.PI / 2);
+    add("route-straight", exitX, -7.5);
+    add("marking-arrow", rightX, -0.2);
+  } else {
+    for (const z of [-1.5, -4.5, -7.5]) add("route-straight", rightX, z);
+  }
+  add("marking-arrow", entryX, 6);
+  add("marking-arrow", leftX, -0.2);
+  add("marking-arrow", exitX, -8.2);
+}
+// 使用当前布局组装站厅建筑、设备、导向和室内照明。
 function buildRoom() {
   const overview = cameraView === "overview";
   for (let x = -7.5; x <= 7.5; x += 3) for (let z = -13.5; z <= 7.5; z += 3) {
@@ -153,10 +196,7 @@ function buildRoom() {
   if (layout === "dogleg") add("partition", 0, -5);
   for (let i = 0; i < 5; i++) add("fare-gate", 1.2 + i * 1.4, -10.5);
   for (const x of [-7.5, -4.5, -1.5]) add("partition", x, -10.5);
-  for (const z of [7.5, 4.5]) add("route-straight", -1.5, z);
-  add("route-split", -1.5, 1.5); add("route-turn", -4.5, 1.5, Math.PI / 2); add("route-turn", 1.5, 1.5, Math.PI);
-  for (const x of [-4.5, 1.5]) for (const z of [-1.5, -4.5, -7.5]) add("route-straight", x, z);
-  add("marking-arrow", -1.5, 6); add("marking-arrow", -4.5, -0.2); add("marking-arrow", 1.5, -8.2);
+  buildGuideRoutes(openings);
   sign("自助购票", -8.0, 0.8, 2.65, 3.9, Math.PI / 2);
   sign("↑  安全检查", -1.5, -1.24, 2.7, layout === "split" ? 8.8 : 5.8);
   sign("↑  检票口", 4, -10.3, 2.65, 5.5);
@@ -169,6 +209,7 @@ function buildRoom() {
     floorReflection();
   }
 }
+// 将共享材质展示为同一光照下的球体样本。
 function buildMaterialDisplay() {
   const names = ["kit.terrazzo.ivory", "kit.terrazzo.sage", "kit.plaster.ivory", "kit.coating.ochre", "kit.coating.charcoal", "kit.paint.brick"];
   names.forEach((name, i) => {
@@ -178,6 +219,7 @@ function buildMaterialDisplay() {
     const base = new Mesh(new CylinderGeometry(1.16, 1.16, 0.2, 48), stateMaterials.pale); base.position.set(x, 0.1, z); base.receiveShadow = true; base.userData.previewGeometry = true; content.add(base);
   });
 }
+// 根据当前展示模式恢复相机与观察目标。
 function resetCamera() {
   if (mode === "scene" && cameraView === "interior") { camera.position.set(-5.9, 1.62, 8.4); controls.target.set(-2.4, 1.7, -9); camera.fov = 68; }
   else if (mode === "scene") { camera.position.set(19, 17, 27); controls.target.set(0, 0.8, -3); camera.fov = 45; }
@@ -192,6 +234,7 @@ function resetCamera() {
   ssao.setSize(Math.max(1, stage.clientWidth * renderer.getPixelRatio()), Math.max(1, stage.clientHeight * renderer.getPixelRatio()));
   controls.update();
 }
+// 重建所选视图，并同步素材信息、下载链接和控件状态。
 function refresh() {
   if (!manifest) return;
   clearContent();
@@ -223,6 +266,7 @@ element<HTMLInputElement>("surface-detail").addEventListener("change", (event) =
 element("reset").addEventListener("click", resetCamera);
 renderer.setAnimationLoop(() => { controls.update(); composer.render(); });
 
+// 加载清单和全部 GLB，核对尺寸后启用素材预览。
 async function init() {
   const response = await fetch(base + "manifest.json"); if (!response.ok) throw new Error("Asset manifest HTTP " + response.status);
   manifest = await response.json() as Manifest; validation.expected = manifest.assets.length;
