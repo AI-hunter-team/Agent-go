@@ -13,6 +13,17 @@ const inspect = (e: Engine, mode: "glance" | "linger", attraction = "TOYS") =>
 const steps = (e: Engine, n: number) => { for (let i = 0; i < n; i++) e.step(); };
 
 describe("optional attention", () => {
+  test("an occupied attraction approach can be reached without waiting for its patron to leave", () => {
+    const e = inHall();
+    const patron = [...e.world.persons.values()].find(p => !p.isPlayer && p.pos.x === 30.5 && p.pos.y === 4.5)!;
+    expect(patron.activity.kind).toBe("waiting");
+    expect(e.applyAction({ type: "move_to", target: "TOYS", reason: "看看玩具" }).ok).toBe(true);
+    steps(e, 100);
+    expect(patron.activity.kind).toBe("waiting");
+    expect(e.player.activity.kind).toBe("idle");
+    expect(e.takeTriggers().some(t => t.kind === "arrived")).toBe(true);
+    expect(inspect(e, "linger").ok).toBe(true);
+  });
   test("seeing an attraction triggers once and never reduces ordinary walking speed", () => {
     const e = inHall();
     e.applyAction({ type: "move_to", target: "CONC_N", reason: "赶路" });

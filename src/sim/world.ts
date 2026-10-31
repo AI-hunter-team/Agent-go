@@ -315,7 +315,10 @@ export class World {
         const destination = a.path.at(-1);
         const atDescent = p.passedGate && !p.onPlatform && destination
           && [STAIRS_TOP, ESCALATOR_TOP].some(top => dist(top, destination) < 1e-6 && dist(p.pos, top) <= STAIRS_REACH - .08);
-        if (atDescent || this.followPath(p, a.path, stride)) {
+        const atAttraction = p.isPlayer && p.screened && !p.passedGate && destination
+          && ATTRACTIONS.some(item => dist(item.approach, destination) < 1e-6 && dist(p.pos, item.approach) <= 2.5
+            && lineOfSight(p.pos, item.approach, SIGHT_OCCLUDERS));
+        if (atDescent || atAttraction || this.followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
           this.personEvent(p, "arrived", `已到达${a.label}`);
         }
