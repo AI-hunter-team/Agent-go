@@ -81,7 +81,7 @@ export function useJourney(interval: number) {
   const watching = flow.stage === "watch" && !ended;
   const working = flow.stage === "planning" || flow.stage === "launch";
   const report = ended && runner ? runner.report() : null;
-  const review = useMemo(() => ended && runner?.engine.status === "failed" ? new ReviewSession(runner.report(), Api) : null, [ended, runner]);
+  const review = useMemo(() => ended && runner?.engine.status === "failed" ? new ReviewSession(runner.report(), Api.forReview(runner.report())) : null, [ended, runner]);
   const preserveRun = () => {
     if (session.runner?.phase === "ended") setPreviousRun({ generation: session.generation, runner: session.runner, engine: session.engine, review });
   };
@@ -258,6 +258,7 @@ export function useJourney(interval: number) {
     const p = preparation.current,
       prepared = flow.prepared;
     const effectiveGuidance = kind === "llm" ? p!.input.guidance : "";
+    const reviewRunId = p?.input.runId ?? crypto.randomUUID();
     const journey: JourneyMetadata = {
       sceneId: "metro",
       sceneName: "地铁末班车",
@@ -269,6 +270,7 @@ export function useJourney(interval: number) {
       preparationMs: p?.durationMs ?? 0,
     };
     try {
+      if (kind === "offline") void Api.bindReview(reviewRunId).catch(() => undefined);
       const agent =
         kind === "llm"
           ? await RemoteAgent.create(
@@ -288,7 +290,7 @@ export function useJourney(interval: number) {
         agent,
         epoch,
         opts: {
-          runId: p?.input.runId,
+          runId: reviewRunId,
           guidance: effectiveGuidance,
           normalizedGuidance: prepared?.normalized ?? null,
           journey,
@@ -318,10 +320,13 @@ export function useJourney(interval: number) {
   });
   const edit = (text?: string) => {
     preserveRun();
-    if (text !== undefined) setGuidance(text);
+    if (text !== undefined) {
+      setGuidance(text);
+      setKind("llm");
+    }
     invalidate();
     session.preview(seed, settings, { backpack });
-    navigate(kind === "offline" ? "plan" : "guidance");
+    navigate(text !== undefined || kind === "llm" ? "guidance" : "plan");
   };
   const retry = (options: { sameScenario?: boolean; twoDimensional?: boolean } = {}) => {
     if (working || watching) return;

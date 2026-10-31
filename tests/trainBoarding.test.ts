@@ -12,6 +12,19 @@ function tick(world: World, director: NpcDirector, count: number) {
 }
 
 describe("NPC train boarding", () => {
+  test("a walking NPC boards on entering its assigned door threshold before the exact waypoint", () => {
+    const world = new World(1);
+    const director = new NpcDirector(world, buildScenario(1, { extraQueuePeople: 0 }), false);
+    const passenger = world.addPerson("normal", { x: 74, y: 7.4 }, { hasTicket: true });
+    passenger.screened = passenger.passedGate = passenger.onPlatform = true;
+    passenger.boardingDoor = 0;
+    passenger.activity = { kind: "walking", path: [{ x: 74.5, y: 7 }], label: "列车车门" };
+
+    director.step();
+
+    expect(world.persons.has(passenger.id)).toBe(false);
+  });
+
   test("NPCs leave the platform after reaching a train door", () => {
     const world = new World(1);
     const director = new NpcDirector(world, buildScenario(1, { extraQueuePeople: 0 }), false);

@@ -13,10 +13,13 @@ const attentionDone = new WeakSet<Session>();
 const llm: LlmService = {
   model: "浏览器验收伪模型（无费用）",
   async prepareJourney(input) {
-    await delay(400);
-    if (input.guidance.includes("FAIL-NORMALIZE")) throw new Error("模拟规划失败");
-    return { understanding: input.autonomous ? "自主选择通行策略" : input.guidance,
-      actions: ["观察可见队列", "比较等待与行走耗时后行动"], adjustment: "遇到故障重新选择路线" };
+    await delay(200);
+    if (input.guidance.includes("FAIL-NORMALIZE")) throw new Error("模拟整理失败");
+    return {
+      understanding: input.autonomous ? "无费用验收：自主比较通道并前往站台。" : `无费用验收：按玩家指导行动。${input.guidance}`,
+      actions: ["观察售票机并比较总耗时", "买票后选择合适的安检通道", "通过闸机后下楼抵达站台"],
+      adjustment: "发现通道停用或排队变慢时重新比较可见选项。",
+    };
   },
   /** 生成固定的赛前指导，支持故障验收开关。 */
   async review(input) {

@@ -246,6 +246,10 @@ export class World {
     if (p.isPlayer) this.notifyPlayer(kind, text);
   }
 
+  private npcEvent(kind: TriggerKind, text: string) {
+    this.log(kind, text, false);
+  }
+
   // ------------------------------------------------------------ actions
 
   /** Walk to a point. Returns an error message when it cannot be reached on foot. */
@@ -291,6 +295,16 @@ export class World {
       const i = f.queue.indexOf(p.id);
       if (i >= 0) f.queue.splice(i, 1);
     }
+  }
+
+  /** Remove an NPC after it reaches the train frontage. */
+  boardNpc(p: Person) {
+    if (p.isPlayer || !p.onPlatform) return false;
+    this.removeFromQueue(p);
+    p.activity = { kind: "done" };
+    this.npcEvent("arrived", "NPC 已登车，离开站台");
+    this.persons.delete(p.id);
+    return true;
   }
 
   queuePosition(p: Person): { facility: Facility; index: number } | null {

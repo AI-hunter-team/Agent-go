@@ -21,6 +21,7 @@ const server = app.listen(port, host, () => {
   console.log(`Server listening on http://${host}:${port}`);
   console.log(llm ? `Model agent enabled: ${llm.model}` : "No model credentials: offline agent only");
   console.log("Boss and NPC dialogue use each session’s bound model configuration");
+  console.log("Review uses the run’s user model when configured, otherwise the server default");
   console.log(debugLogger.enabled ? "Debug JSONL logging enabled" : "Debug file logging disabled");
 });
 

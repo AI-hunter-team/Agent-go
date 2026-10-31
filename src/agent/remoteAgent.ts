@@ -16,6 +16,24 @@ import type { Agent, Classifier, Interpreter, NpcResponder } from "./agent";
 let activeModelToken: string | null = null;
 const sessionTokens = new Map<string, string | null>();
 const tokenUsers = new Map<string, number>();
+const sessionReviews = new Map<string, string>();
+interface ReviewBinding {
+  resolve(): Promise<string | undefined>;
+  dispose?(): Promise<void>;
+}
+const reportReviews = new Map<string, ReviewBinding>();
+
+function rememberReview(runId: string | undefined, token: string | ReviewBinding | undefined) {
+  if (!runId || !token) return;
+  const previous = reportReviews.get(runId);
+  if (previous) void previous.dispose?.();
+  if (!previous && reportReviews.size >= 100) {
+    const oldest = reportReviews.keys().next().value!;
+    void reportReviews.get(oldest)?.dispose?.();
+    reportReviews.delete(oldest);
+  }
+  reportReviews.set(runId, typeof token === "string" ? { resolve: () => Promise.resolve(token) } : token);
+}
 
 /** 仅撤销已没有对局使用的旧配置，避免换模型中断旧局。 */
 async function discardUnused(token: string | null): Promise<void> {
@@ -37,7 +55,7 @@ function sessionToken(sessionId?: string): string | null | undefined {
 }
 
 /** 统一调用本地业务 API，凭据由服务端临时 token 引用。 */
-async function api<T>(path: string, init: { method?: string; body?: unknown; configToken?: string | null; signal?: AbortSignal } = {}): Promise<T> {
+async function api<T>(path: string, init: { method?: string; body?: unknown; configToken?: string | null; reviewToken?: string; signal?: AbortSignal } = {}): Promise<T> {
   const token = init.configToken === undefined ? activeModelToken : init.configToken;
   let res: Response;
   let text: string;
@@ -45,7 +63,7 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
     res = await fetch(path, {
       signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-      headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}) },
+      headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}), ...(init.reviewToken ? { "x-review-config": init.reviewToken } : {}) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
     text = await res.text();
@@ -66,11 +84,61 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
   return data as T;
 }
 
+/** 使用本局开局配置；没有本局用户配置时由服务端提供默认模型。 */
+function reviewClient(reviewToken?: string) {
+  const binding = { configToken: null, reviewToken };
+  return {
+    reviewStatus: () => api<{ available: boolean }>("/api/review/status", binding),
+    review: (input: ReviewInput) => api<ReviewResult>("/api/review", { body: { input }, ...binding }),
+    draftGuidance: (guidance: string, strategies: ReviewStrategy[]) => api<DraftResult>("/api/review/guidance", { body: { guidance, strategies }, ...binding }),
+  };
+}
+
+function reportReviewClient(report: GameReport) {
+  const binding = (report.debug?.runId && reportReviews.get(report.debug.runId)) || { resolve: () => Promise.resolve(undefined) };
+  return {
+    reviewStatus: async () => reviewClient(await binding.resolve()).reviewStatus(),
+    review: async (input: ReviewInput) => reviewClient(await binding.resolve()).review(input),
+    draftGuidance: async (guidance: string, strategies: ReviewStrategy[]) => reviewClient(await binding.resolve()).draftGuidance(guidance, strategies),
+  };
+}
+
 export const Api = {
+  ...reviewClient(),
+  forReview: reportReviewClient,
+  /** 离线开局只冻结已存在的用户配置；没有用户配置时无需联网。 */
+  bindReview: async (runId: string) => {
+    const token = activeModelToken;
+    if (!token) return;
+    tokenUsers.set(token, (tokenUsers.get(token) ?? 0) + 1);
+    let pending: Promise<string | undefined> | null = null;
+    let reviewToken: string | undefined;
+    let released = false;
+    const release = async () => {
+      if (released) return;
+      released = true;
+      await releaseToken(token);
+    };
+    const binding: ReviewBinding = {
+      // 失败保留开局配置供显式重试；并发复盘共享同一次绑定，不使用后来配置。
+      resolve: () => {
+        if (reviewToken) return Promise.resolve(reviewToken);
+        if (!pending) pending = api<{ reviewToken: string | null }>("/api/review/binding", { method: "POST", configToken: token })
+          .then(async result => {
+            if (!result.reviewToken) throw new Error("本局模型配置绑定失败，请重试连接复盘服务");
+            reviewToken = result.reviewToken;
+            await release();
+            return reviewToken;
+          }).finally(() => { pending = null; });
+        return pending;
+      },
+      dispose: release,
+    };
+    rememberReview(runId, binding);
+    await binding.resolve();
+  },
   prepareJourney: (input: JourneyInput, signal?: AbortSignal) => api<JourneyPreparation>("/api/journey/prepare", { body: input, signal }),
-  /** 验证凭据并获取模型列表。 */
-  review: (input: ReviewInput) => api<ReviewResult>("/api/review", { body: { input } }),
-  draftGuidance: (guidance: string, strategies: ReviewStrategy[]) => api<DraftResult>("/api/review/guidance", { body: { guidance, strategies } }),
+  /** 验证局内模型凭据并获取模型列表。 */
   verifyModel: (baseUrl: string, apiKey: string) => api<{ token: string; baseUrl: string; models: string[] }>("/api/model/verify", { body: { baseUrl, apiKey }, configToken: null }),
   /** 释放尚未使用的配置；活跃对局的凭据保留到局后。 */
   discardModel: (token: string) => discardUnused(token),
@@ -98,19 +166,24 @@ export const Api = {
     const token = activeModelToken;
     if (token) tokenUsers.set(token, (tokenUsers.get(token) ?? 0) + 1);
     try {
-      const result = await api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings, loadout, ...prepared }, configToken: token });
+      const result = await api<{ sessionId: string; reviewToken?: string }>("/api/session", { body: { guidance, normalized, runId, settings, loadout, ...prepared }, configToken: token });
       sessionTokens.set(result.sessionId, token);
+      if (result.reviewToken) sessionReviews.set(result.sessionId, result.reviewToken);
+      rememberReview(runId, result.reviewToken);
       return result;
     } catch (error) { await releaseToken(token); throw error; }
   },
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn }, configToken: sessionToken(sessionId) }),
   interpret: (sessionId: string, instruction: string, context: import("../shared/types").BossContext) => api<import("../shared/types").ActionPlan>("/api/boss/interpret", { body: {sessionId,instruction,context}, configToken: sessionToken(sessionId) }),
   respond: (sessionId: string, request: import("../shared/types").NpcDialogueRequest) => api<import("../shared/types").NpcResponse>("/api/npc/respond", {body:{sessionId,request}, configToken: sessionToken(sessionId)}),
-  saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report }, configToken: sessionToken(sessionId) }),
+  saveReport: (sessionId: string, report: GameReport) => {
+    rememberReview(report.debug?.runId, sessionReviews.get(sessionId));
+    return api<void>(`/api/session/${sessionId}/report`, { body: { report }, configToken: sessionToken(sessionId) });
+  },
   deleteSession: async (sessionId: string) => {
     const token = sessionToken(sessionId);
     try { return await api<null>(`/api/session/${sessionId}`, { method: "DELETE", configToken: token }); }
-    finally { sessionTokens.delete(sessionId); await releaseToken(token ?? null); }
+    finally { sessionTokens.delete(sessionId); sessionReviews.delete(sessionId); await releaseToken(token ?? null); }
   },
 };
 

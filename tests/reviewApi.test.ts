@@ -2,19 +2,24 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, expect, test, vi } from "vitest";
 import { createApp, type LlmService } from "../server/app";
+import { ModelConfigStore } from "../server/modelConfig";
+import { jsonResponse, response, toolCall } from "./responsesSupport";
 import { SessionStore } from "../server/sessions";
 import { ReviewFailure, buildReviewInput } from "../src/shared/review";
 import { analysis, failedReport } from "./reviewFixture";
 
 let server: Server;
-afterEach(() => server?.close());
-async function start(llm: LlmService | null) {
+afterEach(() => { server?.close(); vi.restoreAllMocks(); });
+async function start(llm: LlmService | null, reviewLlm?: LlmService | null, modelConfigs?: ModelConfigStore) {
   const sessions = new SessionStore();
-  server = createApp({ llm, sessions }).listen(0, "127.0.0.1");
+  server = createApp({ llm, reviewLlm, sessions, modelConfigs }).listen(0, "127.0.0.1");
   await new Promise(r => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { sessions, call: async (path: string, body: unknown) => {
-    const response = await fetch(base + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return { sessions, status: async (token?: string, reviewToken?: string) => {
+    const r = await fetch(base + "/api/review/status", { headers: { ...(token ? { "x-model-config": token } : {}), ...(reviewToken ? { "x-review-config": reviewToken } : {}) } });
+    return { status: r.status, body: await r.json() };
+  }, call: async (path: string, body: unknown, token?: string, reviewToken?: string) => {
+    const response = await fetch(base + path, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}), ...(reviewToken ? { "x-review-config": reviewToken } : {}) }, body: JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
   } };
 }
@@ -73,4 +78,76 @@ test("model errors are safe and retryable; invalid review evidence cannot render
   expect((await call("/api/review", { input })).status).toBe(200);
   llm.review.mockResolvedValue({ ...meta, analysis: { ...analysis, turningPoints: [{ ...analysis.turningPoints[0], t: 999 }] } });
   expect((await call("/api/review", { input })).status).toBe(502);
+});
+
+
+test("server review and draft are available when no user model was configured", async () => {
+  const reviewer = fake();
+  const { call, status } = await start(null, reviewer);
+  expect(await status()).toEqual({ status: 200, body: { available: true } });
+  const input = buildReviewInput(failedReport());
+  expect((await call("/api/review", { input })).status).toBe(200);
+  expect((await call("/api/review/guidance", { guidance: "稳妥通关", strategies: [analysis.strategies[0]] })).status).toBe(200);
+  expect(reviewer.review).toHaveBeenCalledWith(input);
+  expect(reviewer.draftGuidance).toHaveBeenCalledWith("稳妥通关", [analysis.strategies[0]]);
+});
+
+test("review uses the developer's reviewer instead of the game's default model", async () => {
+  const gameplay = fake(); const reviewer = fake();
+  const { call } = await start(gameplay, reviewer);
+  expect((await call("/api/review", { input: buildReviewInput(failedReport()) })).status).toBe(200);
+  expect(reviewer.review).toHaveBeenCalledTimes(1);
+  expect(gameplay.review).not.toHaveBeenCalled();
+});
+
+test("a report without either a user model or a server fallback returns unavailable", async () => {
+  const { call, status } = await start(fake(), null);
+  expect(await status()).toEqual({ status: 200, body: { available: false } });
+  const r = await call("/api/review", { input: buildReviewInput(failedReport()) });
+  expect(r.status).toBe(503);
+  expect(r.body.error).toContain("复盘服务暂不可用");
+  expect((await call("/api/review/guidance", { guidance: "", strategies: [analysis.strategies[0]] })).status).toBe(503);
+});
+
+
+test("review and draft keep the user's start-of-run model after switching models and disposing the session", async () => {
+  const requests: string[] = [];
+  const modelConfigs = new ModelConfigStore(async (url, init) => {
+    if (String(url).endsWith("/models")) return Response.json({ data: [{ id: "start-model" }, { id: "later-model" }] });
+    const body = JSON.parse(String(init?.body));
+    if (body.tool_choice === "required") return Response.json(response({ model: body.model, output: [toolCall('{"seconds":1,"reason":"验证"}', undefined, "wait")] }));
+    requests.push(body.model);
+    const result = body.text.format.name === "round_review" ? analysis : { guidance: "保持原目标，比较队列耗时。" };
+    return Response.json(jsonResponse(result, { model: body.model }));
+  });
+  const config = await modelConfigs.verify("https://user-model.test", "test-user-key");
+  await modelConfigs.enable(config.token, "start-model");
+  const fallback = fake();
+  const { call, status, sessions } = await start(null, fallback, modelConfigs);
+  const offline = await call("/api/review/binding", {}, config.token);
+  expect(offline.status).toBe(200);
+  expect(typeof offline.body.reviewToken).toBe("string");
+  const started = await call("/api/session", { guidance: "", normalized: null, runId: "bound-review-run" }, config.token);
+  expect(started.status).toBe(200);
+  expect(typeof started.body.reviewToken).toBe("string");
+  await modelConfigs.enable(config.token, "later-model");
+  sessions.delete(started.body.sessionId);
+  modelConfigs.delete(config.token);
+  // SessionStore disposal does not discard the short-lived review capability.
+  // The run's LLM instance is pinned independently of the editable page config.
+  const capability = started.body.reviewToken;
+  expect(await status(undefined, capability)).toEqual({ status: 200, body: { available: true } });
+  const result = await call("/api/review", { input: buildReviewInput(failedReport()) }, undefined, capability);
+  expect(result.status).toBe(200);
+  expect(result.body.model).toBe("start-model");
+  const drafted = await call("/api/review/guidance", { guidance: "", strategies: [analysis.strategies[0]] }, undefined, capability);
+  expect(drafted.status).toBe(200);
+  expect(drafted.body.model).toBe("start-model");
+  expect(await status(undefined, offline.body.reviewToken)).toEqual({ status: 200, body: { available: true } });
+  expect(requests).toEqual(["start-model", "start-model"]);
+  expect(fallback.review).not.toHaveBeenCalled();
+  expect(fallback.draftGuidance).not.toHaveBeenCalled();
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 30 * 60_000 + 1);
+  expect((await status(undefined, capability)).status).toBe(410);
+  expect(fallback.review).not.toHaveBeenCalled();
 });

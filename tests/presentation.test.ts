@@ -3,6 +3,22 @@ import { Engine } from "../src/sim/engine";
 import { captureScene, PresentationBuffer, sampleActor } from "../src/ui/presentation";
 import { STAIRS_TOP, STAIRS_BOTTOM } from "../src/sim/layout";
 
+test("consecutive lines from one NPC replace its bubble without dropping other speakers or history", () => {
+  const engine = new Engine(1);
+  engine.world.t = 11;
+  engine.world.log("speech", "p2：我在等人。", true);
+  for (let i = 0; i < 10; i++) {
+    engine.world.t = 11 + i / 10;
+    engine.world.log("speech", `p1：第${i + 1}句`, true);
+  }
+  const snapshot = captureScene(engine);
+  expect(snapshot.speech).toEqual([
+    { speakerId: "p2", text: "我在等人。", t: 11 },
+    { speakerId: "p1", text: "第10句", t: 11.9 },
+  ]);
+  expect(engine.world.events.filter(event => event.kind === "speech")).toHaveLength(11);
+});
+
 test("snapshots are copies, and rendering cannot change world facts", () => {
   const engine = new Engine(1);
   const before = JSON.stringify([...engine.world.persons.values()]);

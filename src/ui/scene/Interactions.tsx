@@ -43,7 +43,7 @@ export function AlertBadge({id,session,messageMode="full",thought}:{id:string;se
   });
   return <group ref={group}><Html center style={{pointerEvents:"none"}} zIndexRange={[20,0]}>
     <div ref={badge} style={{display:"none",width:22,height:22,padding:5,border:"1px solid",borderRadius:"50%",boxShadow:"0 1px 4px #292d2a"}}><i style={{display:"block"}} /></div>
-    <div ref={speech} data-speaker={id==="player"?"agent":"npc"} className={`scene-message ${id==="player"?"scene-message-player":""}`} style={{display:"none"}}>
+    <div ref={speech} data-actor-id={id} data-speaker={id==="player"?"agent":"npc"} className={`scene-message ${id==="player"?"scene-message-player":""}`} style={{display:"none"}}>
       <svg className="scene-message-speech" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 18 0Z"/><path d="M6 10h10M6 14h6"/></svg>
       <svg className="scene-message-thought" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M8 17a5 5 0 0 1-3-9 6 6 0 0 1 11-3 5 5 0 0 1 3 9 4 4 0 0 1-5 3Z"/><circle cx="5" cy="20" r="1"/><path d="M9 10h.01M13 10h.01M17 10h.01"/></svg>
       <div className="scene-message-copy">

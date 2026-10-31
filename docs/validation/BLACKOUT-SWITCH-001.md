@@ -8,7 +8,7 @@
 | 相关模拟/工具/展示测试 | 通过 | `npm test -- --run tests/engine.test.ts tests/promptsTools.test.ts tests/phase2Flow.test.ts tests/presentation.test.ts`，49 tests |
 | 生产构建 | 通过 | `npm run build` |
 | Diff 空白 | 通过 | `git diff --check` |
-| 完整测试 | 待合入后复跑 | 当前基线包含大量架构变更，本轮先完成受影响测试；未将局部通过冒充完整通过 |
+| 完整测试 | 部分受限 | 受影响 49 tests 通过；完整 `npm test -- --run` 受沙箱端口权限及既有 5 秒 API 测试超时影响，未将局部通过冒充完整通过 |
 | 浏览器实际验收 | 未运行 | 未启动浏览器/真实模型 |
 
 ## 核对结论
@@ -20,4 +20,4 @@
 
 ## 限制
 
-暂无专用电闸资产，按用户要求使用方盒子占位。完整测试和浏览器实际验收需在 PR 合入最新主分支后继续执行。
+暂无专用电闸资产，按用户要求使用方盒子占位。PR #45 与 follow-up PR #48 均已合入；本次 follow-up 修复了回退场景的重复渲染。浏览器实际验收未运行。

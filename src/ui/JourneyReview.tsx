@@ -36,7 +36,6 @@ export interface JourneyReviewProps {
   open: boolean;
   onClose: () => void;
   previous?: boolean;
-  modelAvailable?: boolean;
   onRetry?: () => void;
   onSameScenario?: () => void;
   onEdit?: (guidance?: string) => void;
@@ -46,7 +45,7 @@ export interface JourneyReviewProps {
 }
 
 /** 一次只展示一种阅读目的；长记录不会推走下一局操作。 */
-export function JourneyReview({ report, engine, review, open, onClose, previous = false, modelAvailable = false, onRetry, onSameScenario, onEdit, onConfigureModel, onLobby, onPrevious }: JourneyReviewProps) {
+export function JourneyReview({ report, engine, review, open, onClose, previous = false, onRetry, onSameScenario, onEdit, onConfigureModel, onLobby, onPrevious }: JourneyReviewProps) {
   const [tab, setTab] = useState<ReviewTab>("result");
   const [filter, setFilter] = useState<DecisionFilter>("all");
   const [selected, setSelected] = useState<number | null>(null);
@@ -108,7 +107,7 @@ export function JourneyReview({ report, engine, review, open, onClose, previous 
                 <details className="review-raw"><summary>查看实际输入、模型返回与调用详情（{decisionAttempts(report, decision).length} 次）</summary>{decisionAttempts(report, decision).length ? <DecisionTrace attempts={decisionAttempts(report, decision)} /> : <p>这份报告未保存原始调用记录。{decision.thinking}</p>}</details>
               </section>}
             </div>
-            {review && onEdit && <div className="review-ai"><FailureReview session={review} report={report} modelAvailable={modelAvailable} onAdopt={onEdit} onConfigureModel={onConfigureModel} /></div>}
+            {review && onEdit && <div className="review-ai"><FailureReview session={review} report={report} onAdopt={onEdit} active={open} /></div>}
             {previous && review?.state.review && <section className="review-ai"><h3>已生成的策略建议</h3><p>{review.state.review.analysis.summary}</p><p>{review.state.review.analysis.primaryCause}</p>{review.state.review.analysis.strategies.map(strategy => <details key={strategy.id}><summary>{strategy.title}</summary><p>{strategy.change}</p><p>{strategy.reason}</p></details>)}</section>}
             <div className="review-data"><button aria-expanded={showData} onClick={() => setShowData(v => !v)}>{showData ? "收起完整数据" : "查看完整数据与世界记录"}</button><p className="muted">包含赛后全局信息、物品、人设和接口诊断，不能视为角色当时已知。</p>{showData && <ReportSummary report={report} mode="data" />}</div>
           </>}

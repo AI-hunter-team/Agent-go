@@ -69,7 +69,7 @@ export class NpcDirector {
 
     for (const p of [...w.persons.values()]) {
       if (!p.isPlayer && p.activity.kind === "to_queue" && w.facility(p.activity.facility)?.status !== "open") p.activity = { kind: "idle" };
-      if (p.isPlayer || p.incapacitated || p.activity.kind !== "idle") continue;
+      if (p.isPlayer || p.incapacitated || (p.activity.kind !== "idle" && !p.onPlatform)) continue;
       this.decide(p);
     }
   }
@@ -98,12 +98,11 @@ export class NpcDirector {
     const w = this.world;
     if (p.passedGate && !p.onPlatform) return; // World owns the landing/stairs connection.
     if (p.onPlatform) {
-      // NPCs board as soon as they reach the lower platform. Their door
-      // assignment is retained for the boarding event while the passenger is
-      // removed before it can obstruct the stairs, escalator, or doorway.
-      if (p.boardingDoor === undefined) this.boardingDoor(p);
-      p.activity = { kind: "done" };
-      w.persons.delete(p.id);
+      // Keep each NPC assigned to a stable door and remove it only after it
+      // reaches the corresponding boarding threshold.
+      const door = this.boardingDoor(p);
+      if (p.pos.x >= TRAIN_BOARDING_X - 0.8 && Math.abs(p.pos.y - door.y) <= 0.65) w.boardNpc(p);
+      else if (p.activity.kind !== "walking" || p.activity.label !== "列车车门") w.walkTo(p, door, "列车车门");
       return;
     }
     // World owns NPC route selection after the gate; never send them back to a gate.

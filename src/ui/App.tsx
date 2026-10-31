@@ -162,7 +162,7 @@ export function App() {
   };
   const broadcast = useBroadcast(session, watching);
   const won = report?.status === "success";
-  const recordExpanded = recordState?.generation === session.generation ? recordState.expanded : !mobile;
+  const recordExpanded = recordState?.generation === session.generation ? recordState.expanded : false;
   const expandedReview = !!report && (reviewState?.generation === session.generation ? reviewState.expanded : true);
   const messageMode: HeadMessageMode = watching ? recordExpanded ? "icons" : "full" : thought ? "icons" : "hidden";
   optionsRef.current = {
@@ -319,7 +319,7 @@ export function App() {
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="muted">
-                  {ended ? "连接模型用于主动生成复盘，或为下一局选择模型。" : "画面设置立即生效；模型与开局条件用于下一局。"}
+                  {ended ? "本局复盘沿用开局绑定模型；此处配置用于下一局。" : "画面设置立即生效；模型与开局条件用于下一局。"}
                 </Dialog.Description>
                 <div className="drawer-body">
                   <details open>
@@ -830,7 +830,7 @@ export function App() {
         )}
         {report && (
           <>
-          <div className={styles.endActions} aria-label="本局结束操作">
+          <div className={styles.endActions} aria-label="本局结束操作" hidden={expandedReview}>
             <button ref={reviewTrigger} aria-expanded={expandedReview} onClick={() => {
               if (expandedReview) closeReview();
               else setReviewState({ generation: session.generation, expanded: true });
@@ -840,8 +840,8 @@ export function App() {
           <JourneyReview key={session.generation} report={report} engine={session.engine} review={j.review} open={expandedReview} onClose={closeReview}
             onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
             onSameScenario={() => j.retry({ sameScenario: true, twoDimensional: renderer === "2d" })}
-            onEdit={text => { j.edit(text); if (kind === "offline") j.setDrawer(true); }}
-            onConfigureModel={() => j.setDrawer(true)} modelAvailable={health.llm} onLobby={j.returnLobby} onPrevious={j.previousRun ? openPrevious : undefined} />
+            onEdit={text => { j.edit(text); if (kind === "offline" && text === undefined) j.setDrawer(true); }}
+            onConfigureModel={() => j.setDrawer(true)} onLobby={j.returnLobby} onPrevious={j.previousRun ? openPrevious : undefined} />
           </>
         )}
         {j.previousRun && previousReport && <>

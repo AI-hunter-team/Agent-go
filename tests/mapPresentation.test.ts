@@ -24,7 +24,7 @@ test("journey and reports name escalator travel and voluntary attention", () => 
   const report = failedReport();
   report.timeBreakdown.escalator = 4;
   report.timeBreakdown.distraction = 3;
-  const html = renderToStaticMarkup(createElement(ReportSummary, { report, onRetry: () => {}, onEdit: () => {} }));
+  const html = renderToStaticMarkup(createElement(ReportSummary, { report }));
   expect(html).toContain("乘扶梯");
   expect(html).toContain("关注设施");
 });

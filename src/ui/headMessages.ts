@@ -46,13 +46,12 @@ export function getSessionHeadMessage(session: GameSession, actorId: string, mod
   let utterance: HeadMessageInput["utterance"];
   const current = lastDialogueFor(session.runner?.interactionDialogues, actorId);
   const legacy = lastDialogueFor(session.runner?.dialogues, actorId);
-  if (legacy && (actorId === "player" || actorId === legacy.request.npc.id && legacy.response)) {
-    utterance = { t: legacy.t, text: actorId === "player" ? legacy.request.message : legacy.response!.reply };
-  }
-  if (current && (actorId === "player" || actorId === current.request.npc.id) && (!utterance || current.t >= utterance.t)) {
-    utterance = { t: current.t, text: actorId === "player" ? current.request.message : current.response.reply };
-  }
+  const dialogue = current && (!legacy || current.t >= legacy.t) ? current : legacy;
   const pending = session.engine.executor.pendingDialogue;
+  // A conversation has one active speaker: the question, then the replacement reply.
+  if (pending?.request.npc.id === actorId || actorId !== "player" && dialogue && !dialogue.response) return null;
+  if (actorId === "player" && !pending && dialogue?.response && session.engine.t >= dialogue.t && session.engine.t - dialogue.t <= 4) return null;
+  if (dialogue) utterance = { t: dialogue.t, text: actorId === "player" ? dialogue.request.message : dialogue.response!.reply };
   if (actorId === "player" && pending) utterance = { t: session.engine.t, text: pending.request.message };
   return getHeadMessage({ actorId, t: session.engine.t, mode, speech: session.presentation.current.speech, utterance,
     phase: actorId === "player" ? phase : null,
