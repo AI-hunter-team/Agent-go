@@ -1,6 +1,6 @@
 import { countChars } from "../shared/guidance";
 import { GUIDANCE_MAX_CHARS, type NormalizedGuidance } from "../shared/types";
-import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import type { GameSettings } from "../shared/gameSettings";
 import { randomSeed } from "./seed";
 
 export type AgentChoice = "llm" | "offline";
@@ -12,6 +12,8 @@ interface SetupProps {
   onAgentKind: (k: AgentChoice) => void;
   seed: number;
   onSeed: (s: number) => void;
+  settings: Readonly<GameSettings>;
+  onTimeLimit: (seconds: number) => void;
   guidance: string;
   onGuidance: (g: string) => void;
   busy: string | null;
@@ -19,7 +21,7 @@ interface SetupProps {
   onConfigureModel: () => void;
 }
 
-/** 展示开局表单，将角色模式、指导和种子交回主界面处理。 */
+/** 展示开局表单，将截止时间、角色模式、指导和种子交回主界面处理。 */
 export function SetupPanel(p: SetupProps) {
   const chars = countChars(p.guidance);
   const over = chars > GUIDANCE_MAX_CHARS;
@@ -27,8 +29,18 @@ export function SetupPanel(p: SetupProps) {
     <section className="card setup" aria-busy={p.busy !== null}>
       <h2>出发之前</h2>
       <p className="muted setup-goal">
-        {`唯一目标：限时 ${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台；角色依据你的指导自主选择方案，结果由环境判定。`}
+        {`唯一目标：限时 ${p.settings.timeLimitSeconds} 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台；角色依据你的指导自主选择方案，结果由环境判定。`}
       </p>
+
+      <div className="field">
+        <label htmlFor="game-deadline">截止时间</label>
+        <select id="game-deadline" value={p.settings.timeLimitSeconds} disabled={p.busy !== null} onChange={(e) => p.onTimeLimit(Number(e.target.value))}>
+          <option value={120}>2 分钟</option>
+          <option value={180}>3 分钟</option>
+          <option value={240}>4 分钟</option>
+          <option value={300}>5 分钟</option>
+        </select>
+      </div>
 
       <div className="field" role="group" aria-label="角色驱动方式">
         <span>角色由谁驱动</span>
@@ -75,7 +87,7 @@ export function SetupPanel(p: SetupProps) {
         <small className="muted">新局默认随机生成，也可手动填写。相同种子固定初始条件，角色行动会影响后续演化。</small>
       </div>
 
-      <div className="setup-action"><p className="small muted">{`本局规则固定：${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒，每条初始开放队列额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人。`}</p>
+      <div className="setup-action"><p className="small muted">{`每条初始开放队列额外 ${p.settings.extraQueuePeople} 人。`}</p>
       <button className="primary" disabled={over || p.busy !== null} onClick={p.onPrepare}>
         {p.busy ?? (p.agentKind === "llm" && p.guidance.trim() ? "整理指导" : "准备开局")}
       </button>
