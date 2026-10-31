@@ -169,5 +169,6 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
 
 export function debugLoggerFromEnv(env: NodeJS.ProcessEnv = process.env) {
   return new DebugLogger(env.DEBUG_LOG_ENABLED !== "0", env.DEBUG_LOG_DIR || "logs",
-    [env.OPENAI_API_KEY, env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN].filter((v): v is string => Boolean(v)));
+    [env.OPENAI_API_KEY, env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN,
+      env.NPC_OPENAI_API_KEY, env.NPC_ANTHROPIC_API_KEY, env.NPC_ANTHROPIC_AUTH_TOKEN].filter((v): v is string => Boolean(v)));
 }

@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { DebugLogger, debugFetch, redactDebug, traceOperation } from "../server/debug";
+import { DebugLogger, debugFetch, debugLoggerFromEnv, redactDebug, traceOperation } from "../server/debug";
 
 const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map((d) => rm(d, { recursive: true, force: true }))); });
@@ -10,6 +10,10 @@ async function directory() { const dir = await mkdtemp(join(tmpdir(), "agent-deb
 const details = { operation: "decide" as const, runId: "run-1", sessionId: "session-1" };
 
 describe("debug persistence and redaction", () => {
+  test("redacts developer NPC credentials even inside unstructured error messages", () => {
+    const logger = debugLoggerFromEnv({ NPC_OPENAI_API_KEY: "npc-openai-secret", NPC_ANTHROPIC_API_KEY: "npc-anthropic-secret", NPC_ANTHROPIC_AUTH_TOKEN: "npc-auth-secret" });
+    expect(logger.clean("npc-openai-secret npc-anthropic-secret npc-auth-secret")).toBe("[REDACTED] [REDACTED] [REDACTED]");
+  });
   test("redacts nested credentials, bearer values and private reasoning", () => {
     const text = JSON.stringify(redactDebug({ authorization: "credential", apiKey: "custom", nested: ["Bearer topsecret", "custom credential"], thinking: "private chain", signature: "sig", thinkingTokens: 10 }, ["custom credential"]));
     expect(text).not.toMatch(/topsecret|custom credential|private chain|credential|"sig"/);

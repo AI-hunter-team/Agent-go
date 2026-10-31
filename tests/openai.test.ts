@@ -201,6 +201,8 @@ test("compatible NPC calls retain paid usage on refusal, malformed output and tr
     expect(result.output?.content).toEqual([response.choices[0].message]);
     expect(requests).toHaveLength(1);
     expect(requests[0].body.response_format.json_schema.name).toBe("npc_reply");
+    expect(requests[0].body.reasoning_effort).toBe("low");
+    expect(requests[0].body).not.toHaveProperty("thinking");
     expect(requests[0].body.messages[0].content).toContain(SAFETY_SYSTEM_PROMPT);
   }
 });

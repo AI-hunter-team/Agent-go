@@ -375,7 +375,7 @@ PORT=8787
 ### 接口与报告入口
 
 - §10 之外，页面模型配置使用 `POST /api/model/verify`、`POST /api/model/enable`、`DELETE /api/model/config`；配置通过 `x-model-config` 关联当前页面，开局会话绑定所用模型。使用和有效期见 [README 模型配置](../README.md#接入真实模型)，完整校验及错误语义以 [app.ts](../server/app.ts) 为准。
-- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史及可选 sessionId，复用会话或当前页面模型，支持 Anthropic 与 OpenAI 兼容接口；无模型返回 503、模型失败返回 502，均不授予插队许可。客户端提供的上下文不是服务端权威世界。
+- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史和必需的 sessionId；验证对局所属页面后，仅调用开发者以 `NPC_*` 环境变量配置的独立模型，支持 Anthropic 与 OpenAI 兼容接口。页面自定义模型只驱动 Agent；无 NPC 模型返回 503、模型失败返回 502，均不授予插队许可或回退到 Agent。客户端提供的上下文不是服务端权威世界。配置与迁移见 [README](../README.md#接入真实模型)。
 - `POST /api/session/:id/report` 上传已结束且 runId 匹配的报告，然后删除会话；记录标为 `clientReported`，不是防作弊证明。Debug 与脱敏边界见 [Debug 日志](Debug日志.md)。
 - [共享类型](../src/shared/types.ts)中轨迹点的可选 `t` 兼容旧报告；完整报告增加逐次决策调用 `attempts`、NPC 对话 `dialogues`、独立用量 `npcTotals` 与可选下楼耗时 `stairs`。只保存 API 实际返回的思考/内容块，不推测未公开推理；迟到响应仅记录，不执行。角色决策与 NPC token 分列，并非包含赛前辅助请求的全局账单。见[调用记录设计](superpowers/specs/2026-10-30-decision-trace-design.md)。
 
