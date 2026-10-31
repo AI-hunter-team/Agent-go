@@ -26,6 +26,8 @@ export function describeAction(a: AgentAction | null): string {
       return `向 ${a.npcId} 请求让位`;
     case "wait":
       return `等待 ${a.seconds} 秒`;
+    case "operate_switch":
+      return "操作墙边电闸";
     case "attempt_creative":
       return `尝试：${a.intent}`;
   }

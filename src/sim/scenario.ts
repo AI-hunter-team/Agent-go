@@ -29,6 +29,7 @@ export const RULES = {
   jumpGateDistance: 1.7,
   jumpGateSeconds: 2.5,
   maxWaitSeconds: 20,
+  blackoutSeconds: 20,
 } as const;
 
 export const DECISION_LIMITS = {

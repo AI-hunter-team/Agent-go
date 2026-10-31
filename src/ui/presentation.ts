@@ -3,6 +3,7 @@ import type { Engine } from "../sim/engine";
 import { STAIRS_TOP, STAIRS_BOTTOM } from "../sim/layout";
 import type { ReplayFrame } from "../replay/trajectory";
 import { RULES } from "../sim/scenario";
+import { round1 } from "../sim/world";
 
 export type Motion = "idle" | "walk" | "interact" | "jump";
 export interface ActorFrame {
@@ -31,6 +32,7 @@ export interface SceneSnapshot {
   readonly actors: ReadonlyMap<string, ActorFrame>;
   readonly facilities: readonly FacilityFrame[];
   readonly path: readonly { readonly x: number; readonly z: number }[];
+  readonly blackout: { readonly active: boolean; readonly remaining: number };
 }
 export interface ViewOptions {
   showVision: boolean;
@@ -85,6 +87,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     actors,
     path: Object.freeze((engine.player.activity.kind === "walking" || engine.player.activity.kind === "to_queue" ? engine.player.activity.path : []).map((point) => Object.freeze({ x: point.x, z: point.y }))),
     facilities: Object.freeze([...engine.world.facilities.values()].map((f) => Object.freeze({ id: f.def.id, kind: f.def.kind, status: f.status, queue: f.queue.length, serving: f.serving !== null }))),
+    blackout: Object.freeze({ active: engine.world.blackoutUntil > engine.t, remaining: Math.max(0, round1(engine.world.blackoutUntil - engine.t)) }),
   });
 }
 

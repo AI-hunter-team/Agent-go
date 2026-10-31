@@ -15,6 +15,16 @@ function runUntilTrigger(e: Engine, maxSeconds = 200) {
 }
 
 describe("engine", () => {
+  test("only an explicit switch action starts a timed blackout", () => {
+    const e = new Engine(1);
+    expect(e.observe().blackout?.active).toBe(false);
+    e.player.pos = { x: 4, y: 28 };
+    expect(e.applyAction({ type: "operate_switch", reason: "主动拉下电闸" })).toMatchObject({ ok: true });
+    expect(e.observe().blackout).toMatchObject({ active: true, remaining: 20, canOperate: true });
+    expect(e.applyAction({ type: "operate_switch", reason: "重复操作" })).toMatchObject({ ok: false });
+    for (let i = 0; i < 201; i++) e.step();
+    expect(e.observe().blackout?.active).toBe(false);
+  });
   test("starts with a start trigger and only the nearby end of the ticket bank visible", () => {
     const e = new Engine(1);
     expect(e.takeTriggers().map((t) => t.kind)).toEqual(["start"]);

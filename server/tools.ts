@@ -38,6 +38,7 @@ export const AGENT_TOOLS = [
   tool("wait", "等待若干秒（1–20）后重新评估。行走、排队或办理时保持当前动作；无短时机策略时优先 20 秒以减少无效轮询，到达、办理完成和设施变化等事件仍会提前唤起。", {
     seconds: { type: "integer", description: "1 到 20 之间的整数" },
   }),
+  tool("operate_switch", "走到公开地图中的墙边电闸附近后操作电闸。只有 Agent 主动调用才会触发车站熄灯；熄灯持续一段有限时间。", {}),
   tool("traverse", "过闸后从楼梯或扶梯到下层站台，先靠近入口。", {route:{type:"string",enum:["stairs","escalator"]},walking:{type:"boolean",description:"扶梯上是否步行；楼梯忽略"}}),
   tool("observe", "观察可见人物的外观和表现，不提供隐藏性格。", {targetId:{type:"string"}}),
   tool("take", "靠近并拿取可见物品。", {itemId:{type:"string"}}),
@@ -56,7 +57,7 @@ export function parseToolUse(name: string, input: unknown): { action: AgentActio
     inspect_attraction:["attraction","mode","reason"],
     act:["instruction","reason"], talk:["npcId","message","goal","offerItemId","reason"], traverse:["route","walking","reason"], observe:["targetId","reason"], take:["itemId","reason"], give:["itemId","npcId","reason"], drop:["itemId","mode","reason"],
     move_to: ["target", "reason"], join_queue: ["facility", "reason"], leave_queue: ["reason"],
-    wait: ["seconds", "reason"],
+    wait: ["seconds", "reason"], operate_switch: ["reason"],
   };
   if (!Object.hasOwn(allowed, name)) return { error: "未知工具，未执行" };
   if (Object.keys(i).some((key) => !allowed[name].includes(key))) return { error: "工具含有未授权参数，未执行" };
@@ -87,6 +88,8 @@ export function parseToolUse(name: string, input: unknown): { action: AgentActio
       return { error: "join_queue 的 facility 无效" };
     case "leave_queue":
       return { action: { type: "leave_queue", reason: why } };
+    case "operate_switch":
+      return { action: { type: "operate_switch", reason: why } };
     case "inspect_attraction":
       if (typeof i.attraction === "string" && ATTRACTIONS.some(a => a.id === i.attraction) && (i.mode === "glance" || i.mode === "linger"))
         return { action: { type: "inspect_attraction", attraction: i.attraction, mode: i.mode, reason: why } };
