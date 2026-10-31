@@ -1,5 +1,5 @@
 import { Component, Suspense, memo, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei/core/Gltf";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Box3, Vector3, type Group, type MeshBasicMaterial, type Object3D, type SkinnedMesh } from "three";
@@ -11,6 +11,7 @@ import { createAvatarRootMotionGuard } from "./avatarRootMotion";
 import { createProceduralLocomotion } from "./proceduralLocomotion";
 import { AvatarAnimator } from "./avatarAnimator";
 import { getScenePerformance } from "./scenePerformance";
+import { CharacterClick, type CaptureTarget } from "./characterClick";
 
 const blobModels = new Map<string, { users: number; scene: Object3D }>();
 export class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
@@ -124,24 +125,30 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
   const root = useRef<Group>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const ring = useRef<MeshBasicMaterial>(null);
-  const pointer = useRef<{ x: number; y: number; id: number; dragged: boolean } | null>(null);
+  const pointer = useRef(new CharacterClick());
   const performance = getScenePerformance(session);
+  const canvas = useThree((state) => state.gl.domElement);
+  // R3F 会在原生 pointercancel 时清理悬停，不转发该事件给组；在画布上释放手势。
+  useEffect(() => {
+    if (kind !== "player") return;
+    const cancel = (event: PointerEvent) => pointer.current.cancel(event);
+    canvas.addEventListener("pointercancel", cancel);
+    return () => { canvas.removeEventListener("pointercancel", cancel); pointer.current.reset(); };
+  }, [canvas, kind]);
   // 更换主角资源时立即撤销旧动作能力，加载失败的模型不会保留旧舞蹈状态。
   useEffect(() => { if (kind === "player") performance.setAsset(assetUrl); }, [kind, performance, assetUrl]);
   /** 记录命中主角的按下位置，保持原有相机拖动传播。 */
   function down(event: ThreeEvent<PointerEvent>) {
-    if (kind !== "player" || event.button !== 0) return;
-    pointer.current = { x: event.clientX, y: event.clientY, id: event.pointerId, dragged: false };
+    if (kind !== "player") return;
+    pointer.current.down({ pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, button: event.button, target: event.target as unknown as CaptureTarget });
   }
   /** 拖动超过六像素即取消本次点选，回到起点也不会误触。 */
   function move(event: ThreeEvent<PointerEvent>) {
-    const start = pointer.current;
-    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) start.dragged = true;
+    pointer.current.move(event);
   }
   /** 只在短距离点击结束时问候；胜利和重复点击由展示状态统一拒绝。 */
   function up(event: ThreeEvent<PointerEvent>) {
-    const start = pointer.current; pointer.current = null;
-    if (start && start.id === event.pointerId && !start.dragged && Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) performance.greet(reducedMotion);
+    if (pointer.current.up(event)) performance.greet(reducedMotion);
   }
   useFrame(() => {
     if (!root.current) return;
@@ -153,7 +160,7 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
     if (ring.current) { ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
   });
   const placeholder = <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />;
-  return <group ref={root} name={`actor-${id}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { pointer.current = null; }}>
+  return <group ref={root} name={`actor-${id}`} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
     {kind === "player" && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
       <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial ref={ring} color="#315c65" transparent opacity={0.65} depthWrite={false} />
     </mesh>}
