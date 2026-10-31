@@ -50,7 +50,7 @@ describe("IV2 phase 2 world flows",()=>{
   const e=createFixtureEngine();e.player.pos={x:24.5,y:15};expect(plan(e,{op:"vault",obstacle:"railing"}).ok).toBe(false);
  });
  test.each([[false,10],[true,5]] as const)("escalator walking=%s takes %s seconds",(walking,seconds)=>{
-  const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};expect(e.applyAction({type:"traverse",route:"escalator",walking,reason:""}).ok).toBe(true);run(e,seconds-.1);expect(e.player.onPlatform).toBe(false);run(e,.2);expect(e.status).toBe("success");expect(e.player.pos.y).toBe(20);
+  const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};expect(e.applyAction({type:"traverse",route:"escalator",walking,reason:""}).ok).toBe(true);run(e,seconds-.1);expect(e.player.onPlatform).toBe(false);run(e,.2);expect(e.status).toBe("success");expect(e.player.pos.y).toBe(ESCALATOR_TOP.y);
  });
  test("mid-escalator side exit continues stairs; slide reaches platform in 2 seconds",()=>{
   const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};e.applyAction({type:"traverse",route:"escalator",reason:""});run(e,3);
@@ -62,7 +62,7 @@ describe("IV2 phase 2 world flows",()=>{
   const observer={id:"n",role:"npc" as const,pos:{x:30,y:5},facing:0};expect(e.perception.canSee(observer,{x:38,y:5})).toBe(true);run(e,.1);expect(e.perception.canSee(observer,{x:38,y:5})).toBe(false);run(e,1.1);expect(e.perception.canSee(observer,{x:38,y:5})).toBe(true);expect(e.events.events.map(e=>e.kind)).toEqual(["power_out","power_restored"]);
  });
  test("facility strike interrupts service through a causal damage event",()=>{
-  const e=createFixtureEngine(); const f=e.world.facility("TVM-2")!; e.player.pos={x:12,y:12}; const p=e.world.addPerson("normal",f.def.head); f.serving={personId:p.id,remaining:100,recheck:false};p.activity={kind:"service",facility:f.def.id};
+  const e=createFixtureEngine(); const f=e.world.facility("TVM-2")!; e.player.pos={...f.def.head}; const p=e.world.addPerson("normal",f.def.head); f.serving={personId:p.id,remaining:100,recheck:false};p.activity={kind:"service",facility:f.def.id};
   expect(plan(e,{op:"strike",facilityId:f.def.id,aim:"hurt"}).ok).toBe(true);run(e,2);expect(f.status).toBe("broken");expect(f.serving).toBeNull();expect(e.events.events.find(v=>v.kind==="facility_damaged")?.causeId).toBe(e.events.events.find(v=>v.kind==="strike")?.id);
  });
  test("reports archive departed personas and freeze copies; replay filters future facts",()=>{
@@ -85,10 +85,10 @@ describe("IV2 phase 2 world flows",()=>{
 });
 test("side exit collision emits an affecting cause and resumes escalator without overlap",()=>{
  const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};e.applyAction({type:"traverse",route:"escalator",reason:""});run(e,3);
- const p=e.world.addPerson("normal",{x:e.player.pos.x,y:19});p.activity={kind:"waiting",remaining:20};
+ const p=e.world.addPerson("normal",{x:e.player.pos.x,y:ESCALATOR_TOP.y-1});p.activity={kind:"waiting",remaining:20};
  expect(plan(e,{op:"vault",obstacle:"escalator_side"}).ok).toBe(true);run(e,1);
  expect(e.events.events.find(v=>v.kind==="collision")).toMatchObject({severity:"affecting",targetId:p.id,causeId:expect.any(String)});
- expect(e.player.activity).toMatchObject({kind:"stairs",route:"escalator"});expect(e.player.pos.y).toBe(20);
+ expect(e.player.activity).toMatchObject({kind:"escalator"});expect(e.player.pos.y).toBe(ESCALATOR_TOP.y);
 });
 test("completed Boss outcomes remain attached to their original plan",()=>{
  const e=createFixtureEngine();const r=new GameRunner(e,new HeuristicAgent(),async()=>{throw Error("unused")});

@@ -35,9 +35,9 @@ describe("navigation", () => {
 
   test("the upper landing and stairs are distinct from the lower platform", () => {
     expect(zoneOf({ x: 45.4, y: 15 })).toBe("landing");
-    expect(zoneOf({ x: 52, y: 15 })).toBe("stairs");
-    expect(zoneOf({ x: 57, y: 15 })).toBe("platform");
-    expect(nearestNode({ x: 45.4, y: 25 })?.id).toBe("STAIRS_TOP");
+    expect(zoneOf({ x: 66, y: 15 })).toBe("stairs");
+    expect(zoneOf({ x: 75, y: 15 })).toBe("platform");
+    expect(nearestNode({ x: 45.4, y: 25 })?.id).toBe("LANDING_S");
     expect(findPath({ x: 45.4, y: 25 }, nodeById("STAIRS_TOP")!.pos)).not.toBeNull();
     expect(findPath(nodeById("STAIRS_TOP")!.pos, nodeById("PLATFORM")!.pos)).toBeNull();
   });
@@ -48,8 +48,8 @@ describe("sight", () => {
     expect(lineOfSight({ x: 22, y: 15 }, { x: 30, y: 15 }, SIGHT_OCCLUDERS)).toBe(true);
   });
 
-  test("security wall blocks sight elsewhere", () => {
-    expect(lineOfSight({ x: 22, y: 10 }, { x: 30, y: 10 }, SIGHT_OCCLUDERS)).toBe(false);
+  test("security railings permit sight outside the service openings", () => {
+    expect(lineOfSight({ x: 22, y: 10 }, { x: 30, y: 10 }, SIGHT_OCCLUDERS)).toBe(true);
   });
 
   test("pillars block sight", () => {

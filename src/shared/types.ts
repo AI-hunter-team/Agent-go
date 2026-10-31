@@ -6,6 +6,7 @@ import type {
   ItemObservation, ItemTransfer, Persona, PersonObservation, WorldEvent,
 } from "./interaction";
 export type * from "./interaction";
+import type { DraftResult, ReviewAttempt, ReviewResult, WorldReviewSnapshot } from "./review";
 
 export interface Vec {
   x: number;
@@ -25,6 +26,8 @@ export type AgentAction = import("./interaction").InteractionAction
   | { type: "leave_queue"; reason: string }
   | { type: "wait"; seconds: number; reason: string }
   | { type: "descend_stairs"; reason: string }
+  | { type: "take_escalator"; reason: string }
+  | { type: "inspect_attraction"; attraction: string; mode: "glance" | "linger"; reason: string }
   | { type: "request_cut_in"; npcId: string; message: string; reason: string }
   | { type: "attempt_creative"; intent: string; reason: string };
 
@@ -66,7 +69,8 @@ export type TriggerKind =
   | "fallback"
   | "action_interrupted"
   | "noticed"
-  | "spoken_to";
+  | "spoken_to"
+  | "attraction_seen";
 
 export interface Trigger {
   kind: TriggerKind;
@@ -121,6 +125,30 @@ export interface Observation {
   self: SelfObservation;
   facilities: FacilityObservation[];
   guards: GuardObservation[];
+  /** Optional for recordings made before the commercial hall iteration. */
+  attractions?: AttractionObservation[];
+  routes?: RouteObservation[];
+}
+
+export interface AttractionObservation {
+  id: string;
+  label: string;
+  cue: string;
+  distance: number;
+  approach: Vec;
+  canLinger: boolean;
+}
+
+export interface RouteObservation {
+  id: "stairs" | "escalator";
+  label: string;
+  node: string;
+  position: Vec;
+  distance: number;
+  travelSeconds: number;
+  /** Visible waiting passengers only; never a hidden global count. */
+  queueLength: number;
+  boardingInterval: number;
 }
 
 /** One decision request: what changed, how the last action went, and what is visible now. */
@@ -245,6 +273,8 @@ export interface TimeBreakdown {
   creative: number;
   idle: number;
   stairs?: number;
+  escalator?: number;
+  distraction?: number;
 }
 
 export interface TrailPoint extends Vec {
@@ -261,6 +291,13 @@ export interface GameReport {
   interactionDialogues?: { t: number; request: import("./interaction").NpcDialogueRequest; response: import("./interaction").NpcResponse }[];
   calls?: { decisions: number; boss: number; npc: number };
   operationUsage?: Record<string, { calls: number; inputTokens: number; outputTokens: number; unknownUsage: number; realSeconds: number }>;
+  /** Global history, exposed only after the run ends. Older reports may omit it. */
+  worldSnapshots?: WorldReviewSnapshot[];
+  review?: ReviewResult;
+  reviewDraft?: DraftResult;
+  reviewDraftHistory?: DraftResult[];
+  reviewAttempts?: ReviewAttempt[];
+  selectedStrategyIds?: string[];
   /** Missing only on recordings made before configurable difficulty. */
   settings?: GameSettings;
   loadout?: import("./interaction").Loadout;

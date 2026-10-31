@@ -33,3 +33,12 @@
 - 未运行：浏览器、真实模型、Docker 本地冒烟、Khronos 重跑；人工处理仅为文档冲突，UI 和资产未新增改动，沿用原 PR 已记录的实际验收范围。Docker/跨平台以当前集成提交的远端结果为准。
 - 原工作区及自定义角色工作区没有被切换、安装或改写；当前任务记录仅写入临时 worktree，临时目录在交付后归档。
 - 已合入：最终状态/提交/CI 以原 PR 为准。本地证据为提交前快照；不部署、不付费调用。
+
+## 最终远端交付（2026-10-31）
+
+- 集成提交 `57c2c4128aafe2c6708a60dbb6c0e0af0fe5ecef` 已普通 git push 成功。
+- [CI run 41167893406](https://github.com/AI-hunter-team/Agent-go/actions/runs/41167893406)：Ubuntu 首次通过；Windows 首次仅 heuristicAgent 的多局模拟用例超过 5000ms（5226ms），其余 415 项通过。GitHub 插件未提供日志正文，改用 `gh run view --log-failed` 核实；只重试 Windows job 一次，随后完整通过。没有改测试、断言或时限。
+- [Compose run 41167893363](https://github.com/AI-hunter-team/Agent-go/actions/runs/41167893363) 通过。
+- 原 PR 已确认 closed / merged，合并提交为 `9fe6c940b1d12ed98516752402d6da3765639826`；fetch 后比较集成提交与实际合并提交的代码树，差异为空。
+- 交付时保留上文所有本地超时记录，不能据重试通过承诺耗时稳定。结果和构建保存于原目录 `artifacts/pr18-merge/`；后续归档本任务临时 worktree，其他在途开发工作区不动。
+- 归档未完成：`archive_worktree` 拒绝移除当前聊天主目录；`attach_worktree` 也不能定位到未托管的原目录。保留隐藏临时 worktree，不通过手工删除绕过主目录保护。该限制不影响已完成的远端合并或保存的构建。

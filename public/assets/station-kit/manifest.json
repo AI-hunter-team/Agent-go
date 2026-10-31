@@ -11,8 +11,19 @@
     2,
     2
   ],
-  "showroomCeilingMetres": 4.25,
-  "structuralFrameHeightMetres": 4.2,
+  "pillarHeightMetres": 5.95,
+  "showroomCeilingMetres": 6,
+  "structuralFrameHeightMetres": 5.95,
+  "railing": {
+    "heightMetres": 1.1,
+    "straightModuleMetres": 3,
+    "maximumBalusterSpacingMetres": 0.14,
+    "connectionAnchors": [
+      "anchor_start",
+      "anchor_end"
+    ],
+    "passage": "Blocks walking, permits sight; preserve post thickness when fitting spans."
+  },
   "gateAnimation": {
     "nodeRoles": "gateHinge",
     "property": "rotation.y",
@@ -333,11 +344,11 @@
       "id": "portal",
       "label": "门洞模块",
       "category": "architecture",
-      "description": "3m 模数；2m 净宽，2.75m 净高。",
+      "description": "3m 模数；2m 净宽，5.25m 净高。",
       "state": "open",
       "file": "models/portal.glb",
-      "bytes": 783328,
-      "sha256": "7fff4d7b7c2a5309506db5e40a5ad1b03626ba5676922ac8e88ef625fb1211ce",
+      "bytes": 783352,
+      "sha256": "dbea2ce0766ccf0517ebe5915c93ae7428ca2fa2075f89b7afc2e7a7b80a0b2d",
       "bounds": {
         "min": [
           -1.5,
@@ -346,12 +357,12 @@
         ],
         "max": [
           1.5,
-          3.499999993443489,
+          5.999999993443489,
           0.20000000298023224
         ],
         "size": [
           3,
-          3.499999992847443,
+          5.999999992847442,
           0.4000000059604645
         ]
       },
@@ -376,11 +387,11 @@
       "id": "pillar",
       "label": "方柱",
       "category": "architecture",
-      "description": "2×2m 占地，3.5m 高。",
+      "description": "2×2m 占地，5.95m 高。",
       "state": "open",
       "file": "models/pillar.glb",
-      "bytes": 776780,
-      "sha256": "7a967f0b278e33c7ec20a226a41a990a88c91b8178d4b891f2725f615122ad1a",
+      "bytes": 776772,
+      "sha256": "b90d3ccc79b68fbb0ce503ada920e6049e436b509d63ae28f3d63dcc81212518",
       "bounds": {
         "min": [
           -1,
@@ -389,12 +400,12 @@
         ],
         "max": [
           1,
-          3.499999993443489,
+          5.949999993443489,
           1.0109999996125698
         ],
         "size": [
           2,
-          3.499999992847443,
+          5.9499999928474425,
           2.0109999996125696
         ]
       },
@@ -589,25 +600,25 @@
       "id": "security-arch",
       "label": "安检门",
       "category": "facility",
-      "description": "约1.9m 宽、2.5m 高；状态灯独立。",
+      "description": "2m 净宽、2.5m 高，匹配既有安检通道；状态灯独立。",
       "state": "open",
       "file": "models/security-arch-open.glb",
-      "bytes": 348696,
-      "sha256": "eba81a6bc31a69d3725379055f43bad7ade82ef884078966427886f4e48673ce",
+      "bytes": 348808,
+      "sha256": "67b5cc006004d802fdd6e0ac6514f0b738665e9d5b28ebf7dae612376a4bd176",
       "bounds": {
         "min": [
-          -0.9499999994039535,
-          0,
+          -1.2200000286102295,
+          3.337860099428269e-8,
           -0.20999999344348907
         ],
         "max": [
-          0.9499999994039535,
+          1.2200000286102295,
           2.500000003576279,
           0.2439999996125698
         ],
         "size": [
-          1.899999998807907,
-          2.500000003576279,
+          2.440000057220459,
+          2.4999999701976776,
           0.45399999305605887
         ]
       },
@@ -650,25 +661,25 @@
       "id": "security-arch",
       "label": "安检门",
       "category": "facility",
-      "description": "约1.9m 宽、2.5m 高；状态灯独立。",
+      "description": "2m 净宽、2.5m 高，匹配既有安检通道；状态灯独立。",
       "state": "closed",
       "file": "models/security-arch-closed.glb",
-      "bytes": 348644,
-      "sha256": "db669300ff2c77c5563a10959615db66877efdf6938e30fb538839a0a6de6cda",
+      "bytes": 348756,
+      "sha256": "71e400bdfa1934f6c1051b8d48c48663513d4879648c3a64165331fc2c82de89",
       "bounds": {
         "min": [
-          -0.9499999994039535,
-          0,
+          -1.2200000286102295,
+          3.337860099428269e-8,
           -0.20999999344348907
         ],
         "max": [
-          0.9499999994039535,
+          1.2200000286102295,
           2.500000003576279,
           0.2439999996125698
         ],
         "size": [
-          1.899999998807907,
-          2.500000003576279,
+          2.440000057220459,
+          2.4999999701976776,
           0.45399999305605887
         ]
       },
@@ -711,25 +722,25 @@
       "id": "security-arch",
       "label": "安检门",
       "category": "facility",
-      "description": "约1.9m 宽、2.5m 高；状态灯独立。",
+      "description": "2m 净宽、2.5m 高，匹配既有安检通道；状态灯独立。",
       "state": "broken",
       "file": "models/security-arch-broken.glb",
-      "bytes": 348700,
-      "sha256": "960e86bab5ad6221e551cc57fdfc5a113091089af64ee582055758ff7a437349",
+      "bytes": 348812,
+      "sha256": "a363305b02a95f77083f9a86136f6b16c87baedb168131afa89f660eadef96e9",
       "bounds": {
         "min": [
-          -0.9499999994039535,
-          0,
+          -1.2200000286102295,
+          3.337860099428269e-8,
           -0.20999999344348907
         ],
         "max": [
-          0.9499999994039535,
+          1.2200000286102295,
           2.500000003576279,
           0.2439999996125698
         ],
         "size": [
-          1.899999998807907,
-          2.500000003576279,
+          2.440000057220459,
+          2.4999999701976776,
           0.45399999305605887
         ]
       },
@@ -776,20 +787,20 @@
       "state": "open",
       "file": "models/fare-gate-open.glb",
       "bytes": 351796,
-      "sha256": "404a233a59bd32740f0b7234a0ecb976aac3e73a871d156646d5eb4573f3536b",
+      "sha256": "4cc57c6aeaf9ea8148a6c8445f4bc49465b07c1e3e76f54482395f71844c56de",
       "bounds": {
         "min": [
-          -0.5949999967217445,
+          -0.6149999997019768,
           2.8610229518832853e-8,
           -0.5249999761581421
         ],
         "max": [
-          0.5949999967217445,
+          0.6149999997019768,
           1.093000000268221,
           0.5585000001862646
         ],
         "size": [
-          1.189999993443489,
+          1.2299999994039537,
           1.0929999716579915,
           1.0834999763444066
         ]
@@ -839,20 +850,20 @@
       "state": "closed",
       "file": "models/fare-gate-closed.glb",
       "bytes": 351744,
-      "sha256": "543b278a1957d73822f33d34c1cb047f6ee3df2c41cd443298c65f0f87179073",
+      "sha256": "39ab565751199096815707124bf3a6eff9760fb560769d5e926d7d878a8b1d25",
       "bounds": {
         "min": [
-          -0.5949999967217445,
+          -0.6149999997019768,
           2.8610229518832853e-8,
           -0.5249999761581421
         ],
         "max": [
-          0.5949999967217445,
+          0.6149999997019768,
           1.093000000268221,
           0.5585000001862646
         ],
         "size": [
-          1.189999993443489,
+          1.2299999994039537,
           1.0929999716579915,
           1.0834999763444066
         ]
@@ -902,20 +913,20 @@
       "state": "broken",
       "file": "models/fare-gate-broken.glb",
       "bytes": 351800,
-      "sha256": "77f45f432824f8c20224426bf875adfef575e12f7eb4f227dc2e7c89b80441d1",
+      "sha256": "081c857d69157b1907cf0cb450043aa9471aa8018151a069d8f2ecccb8c28d08",
       "bounds": {
         "min": [
-          -0.5949999967217445,
+          -0.6149999997019768,
           2.8610229518832853e-8,
           -0.5249999761581421
         ],
         "max": [
-          0.5949999967217445,
+          0.6149999997019768,
           1.093000000268221,
           0.5585000001862646
         ],
         "size": [
-          1.189999993443489,
+          1.2299999994039537,
           1.0929999716579915,
           1.0834999763444066
         ]
@@ -1113,11 +1124,11 @@
       "id": "structural-frame",
       "label": "圆角结构框",
       "category": "architecture",
-      "description": "6m 跨度、4.2m 高；两倍地面模数。",
+      "description": "6m 跨度、5.95m 高；两倍地面模数。",
       "state": "open",
       "file": "models/structural-frame.glb",
       "bytes": 388864,
-      "sha256": "811af97df5b5a4dc46b6f3d8182c28766c952656c4e8e5c9be997b4e39f0fd52",
+      "sha256": "fd89b39a0f48f9d7e3432941bfc69f709463e7c1fc5dc37aef741c3083bfc677",
       "bounds": {
         "min": [
           -3.009999990463257,
@@ -1126,12 +1137,12 @@
         ],
         "max": [
           3.009999990463257,
-          4.210000038146973,
+          5.960000038146973,
           0.17000001668930054
         ],
         "size": [
           6.019999980926514,
-          4.220000037923455,
+          5.970000037923455,
           0.3400000184774399
         ]
       },
@@ -1349,25 +1360,25 @@
       "id": "ceiling-fascia",
       "label": "顶面侧封板",
       "category": "architecture",
-      "description": "3m 长、0.7m 高；衔接基础墙与高顶。",
+      "description": "3m 长、2.5m 高；衔接基础墙与高顶。",
       "state": "open",
       "file": "models/ceiling-fascia.glb",
-      "bytes": 443668,
-      "sha256": "442e5b5c2055b8d56d24c0857cbb50768fe42e234a8b7f435be3135833c4f2eb",
+      "bytes": 443640,
+      "sha256": "6e375d3598cd7acaa70ec320a4a359952380ed285d983007ef90809d35d53c6b",
       "bounds": {
         "min": [
           -1.5,
-          5.960464455334602e-9,
+          0,
           -0.20000000298023224
         ],
         "max": [
           1.5,
-          0.6999999940395355,
+          2.5,
           0.20000000298023224
         ],
         "size": [
           3,
-          0.699999988079071,
+          2.5,
           0.4000000059604645
         ]
       },
@@ -1377,6 +1388,162 @@
         "kit.plaster.ivory"
       ],
       "anchors": []
+    },
+    {
+      "id": "railing-straight",
+      "label": "金属栏杆直段",
+      "category": "barrier",
+      "description": "3m 模数，1.1m 高；横杆与立杆可按间隔重排。",
+      "state": "open",
+      "file": "models/railing-straight.glb",
+      "bytes": 333928,
+      "sha256": "73b06dbe43bd0b17c72d5025ec2ed654c6d60457c93795f391ecd291d31848a1",
+      "bounds": {
+        "min": [
+          -1.5,
+          0,
+          -0.08
+        ],
+        "max": [
+          1.5,
+          1.0999999999999999,
+          0.08
+        ],
+        "size": [
+          3,
+          1.0999999999999999,
+          0.16
+        ]
+      },
+      "meshCount": 28,
+      "triangles": 336,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.metal.satin"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            -1.42,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            1.42,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "railing-corner",
+      "label": "金属栏杆转角",
+      "category": "barrier",
+      "description": "1.5×1.5m 的 90° 转角，共用转角柱。",
+      "state": "open",
+      "file": "models/railing-corner.glb",
+      "bytes": 334468,
+      "sha256": "a8ecb19a4177b656684c4a366cc6e342c38afd77ecec0c9a1ca07bf7dc8a3056",
+      "bounds": {
+        "min": [
+          -0.75,
+          0,
+          -0.75
+        ],
+        "max": [
+          0.75,
+          1.0999999999999999,
+          0.75
+        ],
+        "size": [
+          1.5,
+          1.0999999999999999,
+          1.5
+        ]
+      },
+      "meshCount": 31,
+      "triangles": 372,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.metal.satin"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            0.67,
+            0,
+            -0.67
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            -0.67,
+            0,
+            0.67
+          ]
+        }
+      ]
+    },
+    {
+      "id": "railing-end",
+      "label": "金属栏杆端柱",
+      "category": "barrier",
+      "description": "0.16m 柱脚，1.1m 高；供收口及连接。",
+      "state": "open",
+      "file": "models/railing-end.glb",
+      "bytes": 330212,
+      "sha256": "ff7f9e06dac9095ca2f24aa73fdc7780be765958ea1fad6bd336b6fd52466e1e",
+      "bounds": {
+        "min": [
+          -0.08,
+          0,
+          -0.08
+        ],
+        "max": [
+          0.08,
+          1.0999999999999999,
+          0.08
+        ],
+        "size": [
+          0.16,
+          1.0999999999999999,
+          0.16
+        ]
+      },
+      "meshCount": 3,
+      "triangles": 36,
+      "materialSlots": [
+        "kit.coating.charcoal",
+        "kit.coating.ochre",
+        "kit.metal.satin"
+      ],
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
     }
   ]
 }

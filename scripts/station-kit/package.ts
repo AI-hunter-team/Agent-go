@@ -15,7 +15,7 @@ await mkdir(target, { recursive: true });
 await mkdir(join(target, "preview"), { recursive: true });
 await cp(join(root, "dist/station-kit-preview/index.html"), join(target, "preview/index.html"));
 await cp(join(root, "dist/station-kit-preview/assets"), join(target, "preview/assets"), { recursive: true });
-for (const relative of ["src/assets/station-kit", "scripts/station-kit", "design/station-kit", "docs/tasks/ASSET-KIT-001.md", "docs/validation/ASSET-KIT-001.md", "docs/validation/ASSET-KIT-001-V2.md"]) {
+for (const relative of ["src/assets/station-kit", "src/assets/metro-railings", "scripts/station-kit", "scripts/metro-railings", "design/station-kit", "design/metro-railings", "docs/tasks/ASSET-KIT-001.md", "docs/tasks/METRO-RAILING-001.md", "docs/validation/ASSET-KIT-001.md", "docs/validation/ASSET-KIT-001-V2.md", "docs/validation/METRO-RAILING-001.md"]) {
   await mkdir(dirname(join(target, "source", relative)), { recursive: true });
   await cp(join(root, relative), join(target, "source", relative), { recursive: true });
 }

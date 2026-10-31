@@ -3,25 +3,34 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei/core/Gltf";
 import { useAnimations } from "@react-three/drei/core/useAnimations";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { Box3, Vector3, type Group } from "three";
+import { Box3, Vector3, type Group, type Object3D, type SkinnedMesh } from "three";
 import type { GameSession } from "../gameSession";
 import { sampleActor, type ActorFrame, type Motion } from "../presentation";
 import { box, coat, cylinder, materials, sphere } from "./resources";
+import { disposeAvatar, findAvatarClip } from "../avatarModel";
+import { createAvatarRootMotionGuard } from "./avatarRootMotion";
+import { createProceduralLocomotion } from "./proceduralLocomotion";
 
-const CLIPS: Record<Motion, string> = { idle: "Idle", walk: "Walk", interact: "Interact", jump: "Jump" };
+const blobModels = new Map<string, { users: number; scene: Object3D }>();
 export class ModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
   state = { failed: false };
+  /** 加载失败时只让主角回退为几何角色。 */
   static getDerivedStateFromError() { return { failed: true }; }
+  /** 将错误反馈给显示设置，便于重新导入或恢复默认。 */
   componentDidCatch(error: Error) { this.props.onError(`模型加载失败，已使用几何角色：${error.message}`); }
+  /** 渲染正常模型或回退角色。 */
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
+/** 加载并适配带骨骼的角色，将游戏动作映射为模型动画。 */
 function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; session: GameSession; actorId: string; reducedMotion: boolean }) {
   // Local uncompressed GLB/glTF needs no external Draco or font CDN.
   const { scene, animations } = useGLTF(url, false, false);
   const model = useMemo(() => {
     const result = clone(scene);
     result.traverse((object) => { if ("isMesh" in object) { object.castShadow = true; object.receiveShadow = true; } });
+    // 克隆后先更新整棵骨架，再求包围盒；否则部分导出资产会尺寸错误并偏离脚下位置。
+    result.updateMatrixWorld(true);
     return result;
   }, [scene]);
   const fitting = useMemo(() => {
@@ -31,24 +40,56 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
     const scale = 1.7 / Math.max(0.01, size.y);
     return { scale, position: [-center.x * scale, -bounds.min.y * scale, -center.z * scale] as [number, number, number] };
   }, [model]);
-  const { actions, mixer } = useAnimations(animations, model);
-  const last = useRef("");
+  const generated = useMemo(() => !findAvatarClip(animations, "walk") ? createProceduralLocomotion(model).filter((clip) => !findAvatarClip(animations, clip.name.toLowerCase() as Motion)) : [], [animations, model]);
+  const availableAnimations = useMemo(() => [...animations, ...generated], [animations, generated]);
+  const { actions, mixer } = useAnimations(availableAnimations, model);
+  const clips = useMemo(() => Object.fromEntries((["idle", "walk", "interact", "jump"] as Motion[]).map((motion) => [motion, findAvatarClip(availableAnimations, motion)])) as Record<Motion, string>, [availableAnimations]);
+  const constrainRootMotion = useMemo(() => createAvatarRootMotionGuard(model), [model]);
+  const last = useRef({ key: "", name: "" });
   const root = useRef<Group>(null);
   useFrame(() => {
     mixer.timeScale = session.frozen || reducedMotion ? 0 : session.speed;
     const motion = session.presentation.current.actors.get(actorId)?.motion ?? "idle";
-    const name = actions[CLIPS[motion]] ? CLIPS[motion] : actions.Idle ? "Idle" : "";
-    if (name !== last.current) {
-      if (last.current) actions[last.current]?.fadeOut(0.15);
-      if (name) actions[name]?.reset().fadeIn(0.15).play();
-      last.current = name;
+    const name = clips[motion] || clips.idle || clips.walk || availableAnimations[0]?.name || "";
+    const animated = !!clips[motion] || !!clips.idle;
+    const key = `${motion}:${name}`;
+    if (key !== last.current.key) {
+      if (last.current.name && last.current.name !== name) actions[last.current.name]?.fadeOut(0.16);
+      if (name) {
+        const action = actions[name];
+        action?.reset().setEffectiveWeight(1).play();
+        if (action) {
+          if (last.current.name && !session.frozen && !reducedMotion) action.fadeIn(0.16);
+          else action.stopFading();
+          action.paused = !animated;
+        }
+      }
+      last.current = { key, name };
     }
-    if (root.current) root.current.position.y = !actions[CLIPS[motion]] && motion === "walk" && !reducedMotion ? Math.abs(Math.sin(session.visualTime * 8)) * 0.035 : 0;
-  }, -1);
-  useEffect(() => () => { mixer.stopAllAction(); mixer.uncacheRoot(model); }, [mixer, model]);
+    // 模型 Y 才是竖直方向；骨架父节点可旋转，不能直接冻结骨骼局部 X/Z。
+    constrainRootMotion();
+    if (root.current) root.current.position.y = (!clips.walk || generated.length > 0) && motion === "walk" && !reducedMotion ? Math.abs(Math.sin(session.visualTime * Math.PI * 2)) * 0.025 : 0;
+  });
+  useEffect(() => {
+    const cached = blobModels.get(url) ?? { users: 0, scene };
+    if (url.startsWith("blob:")) { cached.users++; blobModels.set(url, cached); }
+    return () => {
+      mixer.stopAllAction(); mixer.uncacheRoot(model);
+      model.traverse((object) => { if ("isSkinnedMesh" in object) (object as SkinnedMesh).skeleton.dispose(); });
+      if (!url.startsWith("blob:")) return;
+      cached.users--;
+      // 新局会重挂载同一主角，等待挂载完成再释放已无人使用的模型。
+      queueMicrotask(() => {
+        if (cached.users === 0 && blobModels.get(url) === cached) {
+          disposeAvatar(cached.scene); useGLTF.clear(url); blobModels.delete(url);
+        }
+      });
+    };
+  }, [mixer, model, scene, url]);
   return <group ref={root}><group position={fitting.position} scale={fitting.scale}><primitive object={model} dispose={null} /></group></group>;
 }
 
+/** 绘制 NPC 及模型暂不可用时的程序角色。 */
 function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: ActorFrame["kind"]; session: GameSession; actorId: string; reducedMotion: boolean }) {
   const legs = [useRef<Group>(null), useRef<Group>(null)];
   const arms = [useRef<Group>(null), useRef<Group>(null)];
@@ -85,7 +126,8 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
   </group>;
 }
 
-export const Character = memo(function Character({ id, kind, session, assetUrl, onAssetError, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; onAssetError: (message: string) => void; reducedMotion: boolean }) {
+/** 插值角色位置与方向，为主角和保安应用各自的模型及额外朝向。 */
+export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string) => void; reducedMotion: boolean }) {
   const root = useRef<Group>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   useFrame(() => {
@@ -101,8 +143,8 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
     {kind === "player" && <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
       <ringGeometry args={[0.34, 0.39, 32]} /><meshBasicMaterial color="#315c65" transparent opacity={0.65} depthWrite={false} />
     </mesh>}
-    {kind === "player" && assetUrl ? <ModelBoundary key={assetUrl} fallback={placeholder} onError={onAssetError}>
-      <Suspense fallback={placeholder}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} /></Suspense>
+    {(kind === "player" || kind === "guard") && assetUrl ? <ModelBoundary key={assetUrl} fallback={placeholder} onError={onAssetError}>
+      <Suspense fallback={placeholder}><group rotation={[0, assetRotation * Math.PI / 180, 0]}><ImportedModel url={assetUrl} session={session} actorId={id} reducedMotion={reducedMotion} /></group></Suspense>
     </ModelBoundary> : placeholder}
   </group>;
 });

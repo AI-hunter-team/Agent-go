@@ -1,6 +1,7 @@
 import type { FacilityKind } from "../shared/types";
 import { dist } from "./geometry";
-import { ENTRANCE, SECURITY_X, queueSlot } from "./layout";
+import { ATTRACTIONS, ENTRANCE, SECURITY_X, queueSlot } from "./layout";
+import { Rng } from "./rng";
 import { RULES, multiplierOf, type NpcSpawn, type Scenario, type ScriptedEvent } from "./scenario";
 import type { Person, World } from "./world";
 import { clearOfPeople, clearOfScenery, personRadius } from "./movement";
@@ -17,11 +18,18 @@ export class NpcDirector {
   constructor(
     private world: World,
     scenario: Scenario,
+    backgroundCrowd = true,
   ) {
     this.spawns = [...scenario.spawns].sort((a, b) => a.t - b.t);
     this.events = [...scenario.events].sort((a, b) => a.t - b.t);
     for (const [id, status] of Object.entries(scenario.initialStatus)) world.setStatus(id, status, "故障");
     this.placeStartingCrowd();
+    const localCrowd = new Rng(scenario.seed ^ 0x3e17591);
+    for (const attraction of (backgroundCrowd ? ATTRACTIONS : []).filter(a => a.kind !== "information")) {
+      const p = world.addPerson("normal", { x: attraction.approach.x + 1.3, y: attraction.approach.y }, { hasTicket: true });
+      p.screened = true;
+      p.activity = { kind: "waiting", remaining: localCrowd.range(20, 60) };
+    }
   }
 
   private placeStartingCrowd() {
@@ -60,7 +68,8 @@ export class NpcDirector {
     while (this.events.length && this.events[0].t <= w.t) this.apply(this.events.shift()!);
 
     for (const p of [...w.persons.values()]) {
-      if (p.isPlayer || p.incapacitated > 0 || p.activity.kind !== "idle") continue;
+      if (!p.isPlayer && p.activity.kind === "to_queue" && w.facility(p.activity.facility)?.status !== "open") p.activity = { kind: "idle" };
+      if (p.isPlayer || p.incapacitated || p.activity.kind !== "idle") continue;
       this.decide(p);
     }
   }
@@ -93,6 +102,8 @@ export class NpcDirector {
       else w.walkTo(p, { x: 55, y: p.pos.y }, "站台深处");
       return;
     }
+    // World owns NPC route selection after the gate; never send them back to a gate.
+    if (p.passedGate) return;
     const stage: FacilityKind = !p.hasTicket ? "tvm" : !p.screened ? "security" : "gate";
     let best: { id: string; cost: number } | null = null;
     for (const f of w.facilities.values()) {

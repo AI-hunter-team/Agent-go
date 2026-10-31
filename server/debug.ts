@@ -1,4 +1,5 @@
-import { SseDecoder } from "./chatStream";
+import { SseDecoder } from "./responsesStream";
+import { responseStopReason, responseUsage } from "./responsesTypes";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, stat } from "node:fs/promises";
@@ -6,10 +7,14 @@ import { join } from "node:path";
 import type { ModelCallDebug, OperationDebug } from "../src/shared/debug";
 
 const context = new AsyncLocalStorage<OperationDebug>();
+/** 计算非负耗时。 */
 const elapsed = (start: number) => Math.max(0, performance.now() - start);
+/** 只记录真实数值，缺失字段保留未知。 */
 const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+/** 只接收字符串诊断字段。 */
 const string = (value: unknown) => typeof value === "string" ? value : null;
 
+/** 脱敏凭据与推理内容，保留计数和公开诊断信息。 */
 export function redactDebug(value: unknown, secrets: string[] = [], depth = 0): unknown {
   if (depth > 30) return "[depth limit]";
   if (typeof value === "string") {
@@ -18,8 +23,11 @@ export function redactDebug(value: unknown, secrets: string[] = [], depth = 0): 
     return text.replace(/\bBearer\s+[^\s"']+/gi, "Bearer [REDACTED]").replace(/\bsk-[\w-]{16,}/g, "[REDACTED]");
   }
   if (Array.isArray(value)) return value.map((v) => redactDebug(v, secrets, depth + 1));
+  if (value && typeof value === "object" && ["reasoning", "reasoning_text"].includes(String((value as { type?: unknown }).type))) {
+    return { type: (value as { type: string }).type, content: "[REDACTED]" };
+  }
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, v]) => [key,
-    /authorization|api.?key|auth.?token|password|cookie|secret|signature|^thinking$|reasoning_content/i.test(key)
+    /authorization|api.?key|auth.?token|password|cookie|secret|signature|encrypted_content|^thinking$|reasoning_content/i.test(key)
       ? "[REDACTED]" : redactDebug(v, secrets, depth + 1),
   ]));
   return value;
@@ -29,10 +37,13 @@ export function redactDebug(value: unknown, secrets: string[] = [], depth = 0): 
 export class DebugLogger {
   private queue: Promise<void> = Promise.resolve();
   private part = 0;
+  /** 配置日志目录、敏感值和轮转大小。 */
   constructor(readonly enabled = true, private directory = "logs", private secrets: string[] = [], private maxBytes = 10 * 1024 * 1024) {}
 
+  /** 为 API 展示生成脱敏副本。 */
   clean<T>(value: T): T { return redactDebug(value, this.secrets) as T; }
 
+  /** 串行写入脱敏事件，日志故障不影响游戏。 */
   write(event: Record<string, unknown>): Promise<void> {
     if (!this.enabled) return Promise.resolve();
     const line = JSON.stringify(redactDebug({ version: 1, timestamp: new Date().toISOString(), ...event }, this.secrets)) + "\n";
@@ -46,9 +57,11 @@ export class DebugLogger {
     return this.queue;
   }
 
+  /** 为当前轮转片段生成文件名。 */
   private filename() { return join(this.directory, `debug-${new Date().toISOString().slice(0, 10)}-${process.pid}-${this.part}.jsonl`); }
 }
 
+/** 将一次业务操作与其上游请求关联，并记录实际模型参数。 */
 export async function traceOperation<T>(
   details: Pick<OperationDebug, "operation" | "runId" | "sessionId">,
   input: unknown,
@@ -84,11 +97,11 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     const call: ModelCallDebug = {
       id: randomUUID(), endpoint: `${url.origin}${url.pathname}`, model: string(params.model),
-      maxOutputTokens: number(params.max_completion_tokens ?? params.max_tokens),
-      effort: string(params.reasoning_effort ?? params.output_config?.effort),
-      messageCount: Array.isArray(params.messages) ? params.messages.length : 0,
-      requestBytes: Buffer.byteLength(body), tools: (params.tools ?? []).map((t: any) => t.function?.name ?? t.name),
-      toolChoice: params.tool_choice ?? null, schema: string(params.response_format?.json_schema?.name ?? params.output_config?.format?.type),
+      maxOutputTokens: number(params.max_output_tokens),
+      effort: string(params.reasoning?.effort),
+      messageCount: (Array.isArray(params.input) ? params.input.length : typeof params.input === "string" ? 1 : 0) + (params.instructions ? 1 : 0),
+      requestBytes: Buffer.byteLength(body), tools: (params.tools ?? []).map((t: any) => t.name),
+      toolChoice: params.tool_choice ?? null, schema: string(params.text?.format?.name),
       streaming: params.stream === true, firstBodyByteMs: null,
       status: null, providerRequestId: null, returnedModel: null, stopReason: null, usage: null,
       waitHeadersMs: 0, readBodyMs: 0, totalMs: 0, error: null,
@@ -103,16 +116,15 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
       call.status = response.status;
       call.providerRequestId = response.headers.get("x-request-id") ?? response.headers.get("request-id");
       if (!response.ok) call.error = `HTTP ${response.status}`;
+      /** 从完整响应提取有界元数据，绝不保存供应商原始错误文字。 */
       const record = (data: any) => {
+        if (!data || typeof data !== "object") return;
         call.returnedModel = string(data.model) ?? call.returnedModel;
-        call.stopReason = string(data.choices?.[0]?.finish_reason ?? data.stop_reason) ?? call.stopReason;
-        const u = data.usage;
-        call.usage = u ? {
-          inputTokens: u.prompt_tokens ?? (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
-          outputTokens: u.completion_tokens ?? u.output_tokens ?? 0,
-          thinkingTokens: u.completion_tokens_details?.reasoning_tokens ?? u.output_tokens_details?.thinking_tokens ?? null,
-          cacheReadTokens: u.prompt_tokens_details?.cached_tokens ?? u.cache_read_input_tokens ?? 0,
-        } : call.usage;
+        call.stopReason = string(responseStopReason(data)) ?? call.stopReason;
+        call.usage = responseUsage(data) ?? call.usage;
+        if (Array.isArray(data.output)) call.toolCallCount = data.output.filter((item: any) => item?.type === "function_call").length;
+        if (data.status === "failed" || data.error) call.error = "模型接口返回失败";
+        if (data.status === "incomplete") call.error = "模型响应不完整";
       };
       if (response.headers.get("content-type")?.includes("text/event-stream") && response.body) {
         call.streaming = true;
@@ -120,20 +132,20 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
         call.streamSummary = summary;
         const parser = new SseDecoder((data) => {
           summary.events++;
-          if (data === "[DONE]") { summary.doneReceived = true; return; }
           try {
             const chunk = JSON.parse(data);
-            summary.usageReceived ||= Boolean(chunk.usage);
-            for (const choice of Array.isArray(chunk.choices) ? chunk.choices : []) {
-              if (Array.isArray(choice.delta?.tool_calls)) summary.toolCallDeltas += choice.delta.tool_calls.length;
-              if (typeof choice.delta?.content === "string") summary.contentChars += choice.delta.content.length;
-            }
-            record(chunk);
+            if (chunk.type === "response.function_call_arguments.delta") summary.toolCallDeltas++;
+            if (chunk.type === "response.output_text.delta" && typeof chunk.delta === "string") summary.contentChars += chunk.delta.length;
+            summary.doneReceived ||= ["response.completed", "response.incomplete", "response.failed"].includes(chunk.type);
+            summary.usageReceived ||= Boolean(chunk.response?.usage);
+            record(chunk.response);
           } catch { /* Metadata never changes stream behavior. */ }
         });
         const reader = response.body.getReader();
+        /** 更新累计读取时长，不延迟流式透传。 */
         const finish = () => { call.readBodyMs = elapsed(received!); call.totalMs = elapsed(start); };
         const body = new ReadableStream<Uint8Array>({
+          /** 读取一个分块并原样传递，同时提取诊断。 */
           async pull(controller) {
             try {
               const next = await reader.read();
@@ -148,6 +160,7 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
               finish(); controller.error(error);
             }
           },
+          /** 终态事件后及时释放上游连接。 */
           async cancel(reason) { try { await reader.cancel(reason); } finally { finish(); reader.releaseLock(); } },
         });
         return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
@@ -167,6 +180,7 @@ export function debugFetch(fetcher: typeof fetch = fetch): typeof fetch {
   }) as typeof fetch;
 }
 
+/** 从环境配置日志；仍脱敏遗留凭据，避免升级时意外泄露。 */
 export function debugLoggerFromEnv(env: NodeJS.ProcessEnv = process.env) {
   return new DebugLogger(env.DEBUG_LOG_ENABLED !== "0", env.DEBUG_LOG_DIR || "logs",
     [env.OPENAI_API_KEY, env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN,

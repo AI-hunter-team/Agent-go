@@ -4,6 +4,8 @@
 
 文档身份：§1–13 保留开发前设计，§14 为原二维 MVP 实现核对；§15 是后续 3D 展示升级说明；[§16](#16-当前集成差异pr-remaining-001) 记录已合入 PR #8 的楼梯、NPC 协商、回放与报告差异。原规则及历史验收不由展示升级覆盖；当前源码和验证状态见 [文档导航](README.md)及[路线图](ROADMAP.md)。
 
+2026-10-31 后续变更：模型协议、默认模型、思考档位、预算和配置接口以 [§17](#17-responses-与思考设置responses-001) 为现行说明。此前章节的 Chat Completions、Anthropic 和独立 1024 思考预算保留为历史，不再作为当前接入方式。
+
 ## 1. 目标与范围
 
 在浏览器中跑通一局完整体验：**填写指导 → 指导整理 → 角色在二维地铁站中自主完成“买票 → 安检 → 过闸机” → 复盘**。
@@ -64,7 +66,7 @@ src/
   agent/        agent.ts heuristicAgent.ts remoteAgent.ts runner.ts
   ui/           App.tsx MapCanvas.tsx ControlPanel.tsx DecisionLog.tsx
                 ReportView.tsx render.ts format.ts styles.css main.tsx
-server/         index.ts app.ts sessions.ts prompts.ts tools.ts claude.ts structured.ts
+  server/         index.ts app.ts sessions.ts prompts.ts tools.ts responses.ts structured.ts
 tests/          *.test.ts
 docs/           产品/技术方案、导航/开发流程、路线图/工作记录、任务/验证及模板
 ```
@@ -377,7 +379,7 @@ PORT=8787
 ### 接口与报告入口
 
 - §10 之外，页面模型配置使用 `POST /api/model/verify`、`POST /api/model/enable`、`DELETE /api/model/config`；配置通过 `x-model-config` 关联当前页面，开局会话绑定所用模型。使用和有效期见 [README 模型配置](../README.md#接入真实模型)，完整校验及错误语义以 [app.ts](../server/app.ts) 为准。
-- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史和必需的 sessionId；验证对局所属页面后，仅调用开发者以 `NPC_*` 环境变量配置的独立模型，支持 Anthropic 与 OpenAI 兼容接口。页面自定义模型只驱动 Agent；无 NPC 模型返回 503、模型失败返回 502，均不授予插队许可或回退到 Agent。客户端提供的上下文不是服务端权威世界。配置与迁移见 [README](../README.md#接入真实模型)。
+- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史和必需的 sessionId；验证对局所属页面后，仅调用开发者以 `NPC_*` 环境变量配置的独立模型，现行协议与预算见 §17。页面自定义模型只驱动 Agent；无 NPC 模型返回 503、模型失败返回 502，均不授予插队许可或回退到 Agent。客户端提供的上下文不是服务端权威世界。配置与迁移见 [README](../README.md#接入真实模型)。
 - `POST /api/session/:id/report` 上传已结束且 runId 匹配的报告，然后删除会话；记录标为 `clientReported`，不是防作弊证明。Debug 与脱敏边界见 [Debug 日志](Debug日志.md)。
 - [共享类型](../src/shared/types.ts)中轨迹点的可选 `t` 兼容旧报告；完整报告增加逐次决策调用 `attempts`、NPC 对话 `dialogues`、独立用量 `npcTotals` 与可选下楼耗时 `stairs`。只保存 API 实际返回的思考/内容块，不推测未公开推理；迟到响应仅记录，不执行。角色决策与 NPC token 分列，并非包含赛前辅助请求的全局账单。见[调用记录设计](superpowers/specs/2026-10-30-decision-trace-design.md)。
 
@@ -385,3 +387,86 @@ PORT=8787
 
 - [TrajectoryReplay](../src/ui/TrajectoryReplay.tsx) 是独立二维历史地图，展示角色位置、已走路线和决策，支持播放、暂停、倍速、拖动与决策跳转；不倒退实时世界、不重建 NPC/设施历史，也不产生新的模型调用。旧报告缺失时间戳时按兼容逻辑播放。见[回放设计](superpowers/specs/2026-10-30-trajectory-replay-design.md)。
 - 主观战仍为同一模拟器驱动的 3D，会话模型隔离与 Debug 保留。集成软件检查、离线浏览器整局/回放/JSON 和远端 CI 的范围见集成报告及 PR；不据此宣布 Chrome、完整性能或真实模型整局验收通过。
+
+## 17. Responses 与思考设置（RESPONSES-001）
+
+身份：2026-10-31 本地实施说明，尚未提交或合入。用户确认实施完整迁移计划，并选择默认 DeepSeek Flash、页面四档思考、取消独立 1024 思考限制；授权与范围见[任务简报](tasks/RESPONSES-001.md)，验证见[验证报告](validation/RESPONSES-001.md)。本节取代前述模型协议及预算说明，不改变世界规则和计分。
+
+### 调用与预算
+
+- 所有模型请求统一由 [ResponsesLlmService](../server/responses.ts) 发出，包括角色决策、指导整理、创意分类、NPC 对话及启用探测。旧 Chat Completions、Anthropic 原生实现与 SDK 已移除；离线 Agent 保留。
+- 默认基础地址 `https://api.deepseek.com`、模型 `deepseek-flash`、`reasoning.effort=none`。请求采用 `instructions/input`、平铺 function 工具和 `text.format` JSON Schema，所有领域结果仍作本地校验。
+- `DECISION_MAX_TOKENS` 默认 4096，统一作为每个请求的 `max_output_tokens`，包括思考、文本及工具参数。完整动作可以含超过 1024 的思考 token；总输出超限、截断、拒绝或非法动作均不执行。
+- `DECISION_THINKING_TOKENS` 已停用，旧值不参与预算；启动时提示迁移。档位仅支持 `none/low/high/max`，不是精确长度限制。高档位可能触及总输出上限或 20 秒超时，不保证更好的成绩。
+- `AGENT_PROVIDER=responses` 是默认，旧值 `openai` 作为别名；`anthropic` 明确报迁移错误，不挪用凭据。`AGENT_FALLBACK` 已失效，无协议/模型自动回退和传输重试。
+- 主线 NPC 独立配置保留：`createNpcLlm` 只读取开发者的 `NPC_MODEL`、`NPC_OPENAI_BASE_URL` 和 `NPC_OPENAI_API_KEY`；不继承 Agent 凭据或页面档位。NPC 同样使用 Responses，关闭思考、非流式，沿用 `DECISION_MAX_TOKENS` 总预算；旧原生 Anthropic NPC 配置明确要求迁移。
+
+### 历史与流式
+
+- [SessionStore](../server/sessions.ts) 每局保存 Responses items，按原顺序重发完整历史；`function_call_output.call_id` 对应原工具调用。公开推理或不透明加密条目原样保留，空 assistant 不进入历史。
+- 请求设置 `store:false`，不使用 `previous_response_id` 或 Conversations。为兼容 OpenAI 请求 `reasoning.encrypted_content`；DeepSeek 对不支持的 include 忽略并使用其公开 reasoning content，依据[官方兼容说明](https://api-docs.deepseek.com/guides/responses_api/)。
+- DeepSeek 忽略禁止并行工具的参数，应用独立要求恰好一个工具。失败动作的每个可重放调用均得到明确“未执行”结果，不冒用上一个动作的执行结果；不完整或结构非法的条目不污染后续历史，原始输出仍留在报告。
+- [Responses SSE](../server/responsesStream.ts) 以 completed/incomplete/failed 终态携带的完整 response 为权威，不等待 DONE，不重复合并增量。断流、缺少终态和状态冲突均失败；终态失败的 usage 仍记录。
+
+### 页面配置和内部接口
+
+- `POST /api/model/enable { model, reasoningEffort? }`：缺省 none，合法值为 none/low/high/max；非法值返回 400，不调用模型。供应商拒绝档位/参数时探测失败返回 422，不降档、不覆盖旧配置。响应仍是 `{ llm: true, model }`。
+- 基础地址不自动补 /v1；服务端从原基础路径请求 /models 与 /responses。模型列表 404/405 时仍可手动填写模型 ID。
+- 页面思考强度显示关闭/低/高/最高，初始关闭；页面值独立于服务端 `OPENAI_REASONING_EFFORT`。总输出预算与流式开关继续来自环境配置。
+- 每局绑定创建时的模型实例和参数；重新启用同 token 或切换配置均不改变旧局。浏览器按会话保存配置 token 引用，旧凭据最后一局结束才释放；闲置 TTL 和跨配置隔离仍有效。
+- DecisionResult、NpcReply 等业务返回形状不变；`output.content` 是 Responses items，`stopReason` 保存终态或失败原因。Debug 记录真实生效的档位、预算、工具数量、返回用量；推理内容与凭据在服务端日志中脱敏。
+
+### 迁移与回退
+
+现有 .env 不自动改写。使用旧 Chat Completions 网关或 Anthropic 原生地址时，须自行提供支持 Responses 的地址和凭据；不能把 /models 成功视为 Responses 可用。正在旧进程内的会话不做协议转换，升级重启后重新开局。回退通过本任务代码变更恢复旧实现，不通过运行时隐式切换协议。
+
+## 18. 固定栏杆与正式站厅资产（STATION-INTEGRATION-001）
+
+身份：2026-10-31 的实现核对。提交与最终集成证据见 [PR #23](https://github.com/AI-hunter-team/Agent-go/pull/23)，授权与边界见[任务简报](tasks/STATION-INTEGRATION-001.md)，验证及环境见[报告](validation/STATION-INTEGRATION-001.md)。
+
+- 用户明确要求安检区和闸机区都使用通透固定栏杆。`SECURITY_BARRIERS` 与 `GATE_BARRIERS` 阻挡普通移动但允许视线通过；当前 `SIGHT_OCCLUDERS` 只含柱体。玩家观察与保安检测共用这一集合。§5–7 中“安检墙遮挡视线”的开发前描述不再代表当前实现；现有视距、视角、服务/违规和下楼结算规则不变。
+- 正式场景加载站厅 GLB，复用几何/材质并将重复静态部件批量绘制；设施快照独立驱动灯色、屏幕及双翼铰链。总览隐藏顶板和外围上部构件；跟随相机按栏杆实际高度、墙柱及顶板裁剪，支持下层站台。
+- 设备外观和占地约定集中在纯数值 [facilityGeometry.ts](../src/sim/facilityGeometry.ts)。售票机根节点沿+X偏移0.264m保留原有前缘；安检门按约2m通道净宽、闸机约1.01m净宽适配行李乘客；输送带保留。模拟器不读取 Three.js 对象或 GLB 来裁定世界。
+- 资源加载期间及失败时使用通透栏杆几何回退；失败只显示一条提示，可直接“重试三维素材”，不重置对局。角色正式美术和交互2.0仍独立。
+
+### 显示与建筑高度修正（STATION-DISPLAY-001）
+
+本地实现核对，尚未合入：用户在本聊天明确要求修复安检门顶部重叠、悬挂导视文字拉伸、统一样板间地板与反射，并将两处顶板提高至6m。范围和验证见[任务](tasks/STATION-DISPLAY-001.md)与[报告](validation/STATION-DISPLAY-001.md)。
+
+- `src/assets/station-kit/dimensions.ts` 为正式站厅、样板间、模型生成和相机碰撞提供同一高度基线。顶板6m，结构框/柱5.95m，基础墙3.5m、侧封板2.5m；下层站台仍为−2m。设备、角色、栏杆、标牌与交互位置不随建筑整体缩放。
+- 安检门立柱不再与横梁重叠，三状态GLB同步生成；导视牌和编号牌的文字纹理按最终显示面比例生成，长文案仅等比例调整字号。
+- 全部平层和踏面使用鼠尾草绿磨石；标准跟随视角按上下层分别设置柔和反射，反射通道排除全部反射面。低画质/总览禁用并释放反射资源，不新增连续绘制循环。样板间复用同一效果。
+- HTTP、动作、报告格式及模拟规则不变；本轮不证明真实模型或跨设备性能验收。
+- 楼梯追加：9m长、4m宽、2m落差的展示细化为20级（0.45m进深/0.10m高差），鼠尾草磨石踏面、每级两道3mm深灰凹槽、圆角踏鼻、封闭梯身与上下平台收口。正式/几何回退共用构造，合为2个静态网格；原端点、6秒规则和人物线性高度插值不变。A/B新栏杆仍由独立任务负责，未在本轮制作或接入。
+
+### 中国地铁栏杆组合（METRO-RAILING-001）
+
+本地实现核对，尚未合入。用户确认安检/闸机旁用A圆角不锈钢圆管和两道横杆，楼梯/洞口用B圆管扶手、细立柱、透明玻璃及夹具；随后要求本聊天制作。待STATION-DISPLAY-001完成并释放共享文件后，在独立工作区复制其完成快照，串行接入栏杆；未覆盖其原工作区。见[任务](tasks/METRO-RAILING-001.md)、[素材说明](../design/metro-railings/README.md)及[验证](validation/METRO-RAILING-001.md)。
+
+- 新增独立`metro-railings`清单与7GLB，基础站厅33GLB保留；旧密竖杆模型只作兼容数据。正式/样板间均改用新栏杆，楼梯踏面、20级结构、层高、反射、导视和安检修复继续沿用依赖任务。
+- 按长度重建柱、夹具、玻璃与曲管，保持50mm主杆、32mm横杆、160mm固定底座。斜段只升降基准和扶手，立柱竖直；正式楼梯底座贴合实际踏面，入口共用洞口角柱，避免双柱和悬空。
+- 模型只描述展示：原障碍/视线/服务净宽、楼梯0/−2m端点和6秒规则不变。玻璃采用alpha透明、关闭depthWrite、不投射实心阴影，保持每片独立排序；钢管等不透明部件合批。变长时生成的几何在视图切换/卸载后释放。
+
+## 19. 失败复盘与指导采纳（FAILURE-REVIEW-001）
+
+身份：本次聊天确认后新增的本地实现，未合入远端。需求与边界见[任务简报](tasks/FAILURE-REVIEW-001.md)，验证见[本地验证](validation/FAILURE-REVIEW-001.md)。本次允许赛后全局分析，不改变局内感知权限或清空运行记忆的规则。
+
+- `ReviewRecorder` 在开局、每 5 秒、决策及终局保存已发生的设施队列/服务状态、角色位置与保安位置，结束后才通过报告的可选 `worldSnapshots` 暴露；不记录未来脚本、未发生的服务抽样或原始模型推理。
+- `POST /api/review` 接收结束报告投影 `ReviewInput`，包含完整事件（保留 `playerVisible`）、决策时观察与动作/结果、耗时及快照。它不依赖已删除的局内 session，也不将全局资料写入新 session；客户端报告仍非服务端权威事实。
+- 复用当前主线 Responses 接口执行独立结构化调用。返回失败主因、次因、不确定性、关键转折及 2–3 条策略，校验时间范围、真实决策/事件引用、字段与长度。模型异常显示错误及重试入口，不以固定文案冒充模型复盘。
+- `POST /api/review/guidance` 仅接收原指导与玩家所选策略，返回 1–300 Unicode 字符草稿。玩家可编辑，显式采用后返回设置，清除旧整理与准备记录，再整理并确认开局。未选策略与完整复盘不自动注入下一局。
+- 每份终局报告有独立的 UI 控制器：自动调用去重，选择变化及生成期间的新编辑使旧草稿失效，迟到响应不覆盖当前选择或其他对局；终局内连接模型保留报告。JSON 导出增加可选 `review`、`selectedStrategyIds`、`reviewDraft`、`reviewDraftHistory` 和 `reviewAttempts`；后者保留成功及失败调用的独立用量，未返回时为未知，不计入原有局内统计。
+
+## 20. 商业大厅与楼梯扶梯地图迭代
+
+身份：用户确认地图后实施，并授权以 [PR #28](https://github.com/AI-hunter-team/Agent-go/pull/28) 集成到主线，接续 §19 的复盘功能；远端状态以该 PR 为准。范围及交接见 [MAP-ITERATION-001](tasks/MAP-ITERATION-001.md)，证据见[本地验证](validation/MAP-ITERATION-001.md)。本节覆盖 §16 中旧的 70×30 米单楼梯布局，历史验证保留原版本含义。
+
+- 地图为 90×30 米，安检 x=26、闸机 x=44。三台自动售票机在入口左侧靠墙并排 `(6,4)`、`(10,4)`、`(14,4)`，正面及队列朝向大厅。设施可选 `queueDirection` 驱动实际排队和三维地面标线，旧安检/闸机仍向西延伸队列。
+- 玩具售卖机、广告灯箱、花摊、悬挂信息屏、等候座椅全部在安检后、闸机前。占地与感知定义统一来自 [layout.ts](../src/sim/layout.ts)，实体设施影响步行，信息屏只给公开方向。忽略吸引物不影响步速；首次可见线索触发一次决策，不产生强制分心。
+- `inspect_attraction` 支持 `glance`（3 秒，已有路径以 55% 步速边走边看）和 `linger`（接近点 2.5 米内停留 6 秒）。有效移动、排队、已获许可的让位或其他合法开始的动作会结束关注并记录实际用时；无效请求保留原状态。每处结束关注后冷却 30 秒。没有交易或物品管理。
+- 北侧楼梯从 `(61,9)` 到 `(73,9)`，基础耗时 6 秒；南侧扶梯从 `(61,22)` 到 `(73,22)`，基础乘坐 4 秒、每 1 秒放行一名乘客，FIFO 候梯区最多 14 人。`take_escalator` 需通过闸机并到入口，候梯可离队，上扶梯后不能改向；程序控制实际 NPC 入队、移动和离开，初始人群与持续换乘流按种子生成。两路都以到达下层站台结算，普通寻路不能跨层。
+- 观察可选增加 `attractions` 和 `routes`，只包含当前可见对象/入口及可见候梯乘客；不提前给全局队列或未来状态。离线 Agent 到售票机前比较点读取可见队列，过闸后结合步行、候梯及下行成本选择路线。它始终不理解自然语言指导，也不证明真实模型会分心。
+- 报告可选分类 `distraction` 和 `escalator` 与既有分类互斥；候梯仍归排队。关注时长可能含减速行走，不等于净损失。事件记录开始、结束、打断和实际候梯时长；赛后快照可选增加 `transit` 队列与乘坐状态，只用于已结束对局的复盘。经验仍由玩家选择建议、编辑并采纳草稿进入下一局，不自动记忆。
+- 三维设施、NPC、两条下行、镜头取景、二维调试/回放与流程面板使用同一布局。旧报告缺失新增观察/时间/快照字段时兼容显示。尺寸、关注耗时与运输参数为试玩起点；当前 120 秒挑战保留，不能将旧地图成绩直接作为本版成绩。
+
+主线兼容补充：保留 Responses 模型、角色与正式站厅/栏杆；服务及扶梯移动均避让实际乘客，拥挤可能增加基础耗时。候梯位次按接受顺序保留并受前序实际位置约束；导航先到扶梯入口侧边，再走向自己的位次。120 秒默认及主线截止时间选项保持不变，详细集成证据见验证记录末节。

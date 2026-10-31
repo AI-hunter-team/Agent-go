@@ -27,7 +27,7 @@
 | 固定步长确定性模拟、单一事实来源 | `src/sim/engine.ts`、`world.ts` | 新子系统按固定顺序挂进 `Engine.step` |
 | 子弹时间与串行模型调用 | `src/agent/runner.ts` | 扩展到 Boss 与 NPC 对话 |
 | 视锥、视线遮挡 | `src/sim/geometry.ts` | 感知系统直接复用 |
-| 结构化输出、双供应商、调试追踪、安全包装 | `server/structured.ts`、`claude.ts`、`openai.ts`、`debug.ts`、`security.ts` | Boss / NPC 对话沿用同一模式 |
+| 结构化输出、Responses、调试追踪、安全包装 | `server/responses.ts`、`structured.ts`、`debug.ts`、`security.ts` | Boss / NPC 沿用局内绑定配置 |
 | NPC 插队协商（性格 + 三轮 + 只认模型明确同意） | `src/sim/negotiation.ts`、`runner.ts` | 泛化为通用 `talk` |
 | 3D 展示快照与插值 | `src/ui/presentation.ts`、`scene/*` | 增加状态点、圆环、物品、台词 |
 

@@ -53,10 +53,10 @@ describe("item possession", () => {
 
   test("visible items respect range, walls and containers", () => {
     const { items, p } = setup();
-    const near = items.spawn("snack", { type: "ground", pos: { x: 23, y: 10 } }, null);
-    const behind = items.spawn("snack", { type: "ground", pos: { x: 29, y: 10 } }, null);
+    const near = items.spawn("snack", { type: "ground", pos: { x: 33, y: 12 } }, null);
+    const behind = items.spawn("snack", { type: "ground", pos: { x: 39, y: 12 } }, null);
     const hidden = items.spawn("ticket", { type: "container", containerId: items.bag(p.id)!.id }, p.id);
-    const visible = items.visibleItems({ x: 23, y: 10 }).map((i) => i.id);
+    const visible = items.visibleItems({ x: 33, y: 12 }).map((i) => i.id);
     expect(visible).toContain(near.id);
     expect(visible).not.toContain(behind.id);
     expect(visible).not.toContain(hidden.id);

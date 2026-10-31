@@ -22,6 +22,7 @@ import { DECISION_LIMITS, RULES, DT } from "../sim/scenario";
 import type { Agent, Classifier, NpcNegotiator, Interpreter, NpcResponder } from "./agent";
 import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
 import { prepareCutIn } from "../sim/negotiation";
+import { ReviewRecorder } from "./reviewRecorder";
 
 export const BUDGETS = { decisions: 80, boss: 20, npc: 30 } as const;
 
@@ -67,6 +68,7 @@ export class GameRunner {
   private readonly now: () => number;
   private readonly debug: RunDebug;
   private active: { record: DebugAttempt; start: number } | null = null;
+  private readonly reviewRecorder = new ReviewRecorder();
 
   constructor(
     readonly engine: Engine,
@@ -78,9 +80,10 @@ export class GameRunner {
     this.now = opts.now ?? (() => performance.now());
     this.debug = {
       version: 1, runId: opts.runId ?? crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: null,
-      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: engine.settings.timeLimitSeconds, extraQueuePeople: engine.settings.extraQueuePeople, stepSeconds: DT, simulationRules: { ...RULES, timeLimit: engine.settings.timeLimitSeconds }, decisionLimits: { ...DECISION_LIMITS } },
+      parameters: { seed: engine.seed, agentKind: agent.kind, maxDecisions: this.maxDecisions, timeLimitSeconds: engine.settings.timeLimitSeconds, extraQueuePeople: engine.settings.extraQueuePeople, stepSeconds: DT, simulationRules: { ...RULES, timeLimit: engine.settings.timeLimitSeconds }, decisionLimits: { ...DECISION_LIMITS, maxDecisions: this.maxDecisions, boss: BUDGETS.boss, npc: BUDGETS.npc } },
       preparation: opts.preparation ?? { durationMs: 0, server: null }, attempts: [], summary: summarizeDebug([]),
     };
+    this.reviewRecorder.capture(engine);
   }
 
   start() {
@@ -104,6 +107,7 @@ export class GameRunner {
       if (this.engine.hasTriggers()) return this.beginDecision();
       if (i >= steps) return;
       this.engine.step();
+      this.reviewRecorder.capture(this.engine);
     }
   }
 
@@ -117,6 +121,7 @@ export class GameRunner {
   }
 
   private beginDecision() {
+    this.reviewRecorder.capture(this.engine, true);
     this.phase = "thinking";
     this.opts.onChange?.();
     this.pending = this.decide().finally(() => {
@@ -394,6 +399,7 @@ export class GameRunner {
   private finish() {
     if (this.phase === "ended") return;
     this.phase = "ended";
+    this.reviewRecorder.capture(this.engine, true);
     if (this.active) {
       this.active.record.durationMs = Math.max(0, this.now() - this.active.start);
       this.active.record.status = "cancelled";
@@ -430,6 +436,7 @@ export class GameRunner {
         row.unknownUsage += Number(!a.usage); row.realSeconds += (a.durationMs ?? 0) / 1000;
         return summary;
       }, {}),
+      ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot() } : {}),
       debug: this.snapshotDebug(),
       seed: e.seed,
       settings: { ...e.settings },
@@ -449,6 +456,8 @@ export class GameRunner {
         creative: round(tb.creative),
         idle: round(tb.idle),
         stairs: round(tb.stairs ?? 0),
+        escalator: round(tb.escalator ?? 0),
+        distraction: round(tb.distraction ?? 0),
       },
       violations: e.creative.violations.map((v) => ({ ...v })),
       decisions: this.decisions,

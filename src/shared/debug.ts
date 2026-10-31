@@ -1,7 +1,7 @@
 import type { AgentTurn, AgentAction, DecisionUsage, CreativeClassification } from "./types";
 
 export type AiStage = "ticket" | "security" | "gate" | "stairs";
-export type AiOperation = "decision" | "retry" | "classification" | "negotiation" | "interpret" | "npc_respond";
+export type AiOperation = "decision" | "retry" | "classification" | "negotiation" | "interpret" | "npc_respond" | "review" | "review_draft";
 
 export interface ModelCallDebug {
   id: string;
@@ -18,6 +18,8 @@ export interface ModelCallDebug {
   providerRequestId: string | null;
   returnedModel: string | null;
   stopReason: string | null;
+  /** 最终响应中的工具数量，旧报告可能没有此字段。 */
+  toolCallCount?: number;
   usage: DecisionUsage | null;
   /** Optional for compatibility with older report exports. First body chunk, not first token. */
   streaming?: boolean;
@@ -42,7 +44,7 @@ export interface OperationDebug {
   id: string;
   runId: string | null;
   sessionId: string | null;
-  operation: "normalize" | "decide" | "classify" | "negotiate" | "interpret" | "npc_respond";
+  operation: "normalize" | "decide" | "classify" | "negotiate" | "interpret" | "npc_respond" | "review" | "review_draft";
   startedAt: string;
   durationMs: number;
   calls: ModelCallDebug[];
@@ -91,7 +93,7 @@ export interface RunDebug {
 export function summarizeDebug(attempts: DebugAttempt[], preparationMs = 0): RunDebug["summary"] {
   const summary: RunDebug["summary"] = {
     aiWaitMs: 0, includingPreparationMs: preparationMs,
-    byOperationMs: { decision: 0, retry: 0, classification: 0, negotiation: 0, interpret: 0, npc_respond: 0 },
+    byOperationMs: { decision: 0, retry: 0, classification: 0, negotiation: 0, interpret: 0, npc_respond: 0, review: 0, review_draft: 0 },
     byStageMs: { ticket: 0, security: 0, gate: 0, stairs: 0 },
     providerWaitHeadersMs: 0, providerReadBodyMs: 0, otherMs: 0,
     measuredRequests: 0, unmeasuredRequests: 0, slowestAttempt: null,

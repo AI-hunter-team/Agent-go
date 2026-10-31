@@ -1,10 +1,11 @@
 import type { FacilityStatus, GameEvent, PassengerKind, Persona, Trigger, TriggerKind, Vec } from "../shared/types";
-import { angleTo, dist } from "./geometry";
+import { angleTo, dist, lineOfSight } from "./geometry";
 import { generatePersona } from "./persona";
-import { zoneOf, type Zone, ESCALATOR_TOP, ESCALATOR_BOTTOM, ESCALATOR_SECONDS, ESCALATOR_WALK_SECONDS, FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
+import { zoneOf, type Zone, GATE_X, WIDTH, ATTRACTIONS, SIGHT_OCCLUDERS, FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
-import { DT, INTERACTION_RULES, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
+import { DT, INTERACTION_RULES, PROFILES, RULES, STATUS_LABEL, multiplierOf } from "./scenario";
+import { TransitSystem } from "./transit";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
 import { DEFAULT_LOADOUT, resolveLoadout, type Loadout } from "../shared/interaction";
 import { ITEM_DEFS } from "./content/items";
@@ -22,6 +23,10 @@ export type Activity =
   | { kind: "stairs"; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
   | { kind: "reacting"; reaction: string; subjectId: string }
   | { kind: "acting"; op: string; progress: number }
+  | { kind: "to_escalator"; path: Vec[] }
+  | { kind: "escalator_queue"; joinedAt: number }
+  | { kind: "escalator"; remaining: number; duration?: number }
+  | { kind: "distracted"; attraction: string; remaining: number; elapsed: number; resume?: { path: Vec[]; label: string } }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
 
@@ -41,6 +46,9 @@ export interface Person {
   persona?: Persona;
   facing: number;
   incapacitated: number;
+  transitRoute?: "stairs" | "escalator";
+  attentionCooldown: Record<string, number>;
+  escalatorWalking?: boolean;
   /** Actual service durations, sampled once from the profile ranges. Hidden from the agent. */
   serviceTime: { tvm: number; security: number; gate: number };
 }
@@ -62,7 +70,7 @@ export class World {
   lightAt = (pos: Vec) => (this.outages.get(zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
   powerOut(zone: Zone, duration: number) {
     this.outages.set(zone, this.t + duration);
-    const x = { hall: 13, concourse: 35, landing: 46, stairs: 52, platform: 60 }[zone];
+    const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
     this.onWorldEvent?.({ t: this.t, kind: "power_out", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 12 });
     this.log("power_out", `${zone} 区域断电 ${duration} 秒，视距降低`, true);
   }
@@ -76,6 +84,7 @@ export class World {
   readonly items: ItemSystem;
   private readonly personaRng: Rng;
   private readonly wakeAt = new Map<string, number>();
+  readonly transit: TransitSystem;
   readonly persons = new Map<string, Person>();
   readonly personas: Record<string, Persona> = {};
   readonly facilities = new Map<string, Facility>();
@@ -115,27 +124,38 @@ export class World {
   }
 
   private queuePoint(f: Facility, ids: string[], slot: number, incoming: PassengerKind): Vec {
-    let x = f.def.head.x;
+    let offset = 0;
     for (let i = 1; i <= slot; i++) {
       const before = this.persons.get(ids[i - 1])?.kind ?? incoming;
       const next = this.persons.get(ids[i])?.kind ?? incoming;
-      x -= Math.max(QUEUE_SPACING, personRadius(before) + personRadius(next) + 0.02);
+      offset += Math.max(QUEUE_SPACING, personRadius(before) + personRadius(next) + 0.02);
     }
-    return { x, y: f.def.head.y };
+    const direction = f.def.queueDirection ?? { x: -1, y: 0 };
+    return { x: f.def.head.x + direction.x * offset, y: f.def.head.y + direction.y * offset };
   }
 
+  /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
   movePerson(p: Person, target: Vec, stride: number, detour = true): boolean {
-    const queues = [...this.facilities.values()].flatMap((f) => {
-      const people = [...f.queue, ...(f.serving ? [f.serving.personId] : [])].map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
+    const bodies = this.collisionBodies(p.id);
+    // Approach an occupied final queue slot directly, then wait instead of circling it.
+    // Safe forward progress still matters: stopping early can obstruct the surrounding traffic.
+    const occupiedArrival = p.activity.kind === "to_queue" && p.activity.path.length === 1
+      && dist(p.pos, target) <= personRadius(p.kind) + stride
+      && !clearOfPeople(target, target, personRadius(p.kind), bodies);
+    const memberships = [...this.facilities.values()].map(f => [...f.queue, ...(f.serving ? [f.serving.personId] : [])]);
+    memberships.push(this.transit.queue);
+    const queues = memberships.flatMap((ids) => {
+      const people = ids.filter(id => id !== p.id).map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
       if (people.length < 2) return [];
       const margin = personRadius(p.kind) + Math.max(...people.map((person) => personRadius(person.kind))) + 0.03;
       const minX = Math.min(...people.map((person) => person.pos.x)), maxX = Math.max(...people.map((person) => person.pos.x));
-      return [{ x: minX - margin, y: f.def.head.y - margin, w: maxX - minX + margin * 2, h: margin * 2 }];
+      const minY = Math.min(...people.map((person) => person.pos.y)), maxY = Math.max(...people.map((person) => person.pos.y));
+      return [{ x: minX - margin, y: minY - margin, w: maxX - minX + margin * 2, h: maxY - minY + margin * 2 }];
     });
-    const waypoint = detour ? detourAroundQueues(p.pos, target, queues) : target;
+    const waypoint = detour && !occupiedArrival ? detourAroundQueues(p.pos, target, queues, personRadius(p.kind)) : target;
     const before = { ...p.pos };
-    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), this.collisionBodies(p.id), detour);
-    if (dist(before, p.pos) > 1e-8) p.facing = angleTo(before, p.pos);
+    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour && !occupiedArrival);
+    if (dist(before,p.pos)>1e-8) p.facing=angleTo(before,p.pos);
     return dist(p.pos, target) < 1e-6;
   }
 
@@ -145,6 +165,7 @@ export class World {
     this.personaRng = this.rng.fork("persona");
     this.items = new ItemSystem((id) => this.persons.get(id), () => this.t);
     for (const spot of ITEM_SPOTS) for (const kind of spot.stock) this.items.spawn(kind, { type: "spot", spotId: spot.id }, null);
+    this.transit = new TransitSystem(this, seed);
     for (const def of FACILITIES) {
       this.facilities.set(def.id, { def, status: "open", note: null, queue: [], serving: null, pendingRecheck: null });
     }
@@ -173,6 +194,7 @@ export class World {
       facing: opts.facing ?? 0,
       incapacitated: 0,
       activity: { kind: "idle" },
+      attentionCooldown: {},
       serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
     };
     this.persons.set(person.id, person);
@@ -220,9 +242,10 @@ export class World {
 
   /** Walk to a point. Returns an error message when it cannot be reached on foot. */
   walkTo(p: Person, to: Vec, label: string): string | null {
-    if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
+    if (p.activity.kind === "stairs" || p.activity.kind === "escalator") return "正在下行，请等到达站台";
     const path = findPath(p.pos, to, personRadius(p.kind));
     if (!path) return `无法步行到达${label}：需要先通过安检或闸机`;
+    this.finishAttention(p, "主动恢复赶路");
     p.activity = { kind: "walking", path, label };
     return null;
   }
@@ -231,16 +254,22 @@ export class World {
   joinQueue(p: Person, facilityId: string): string | null {
     const f = this.facilities.get(facilityId);
     if (!f) return `不存在设施 ${facilityId}`;
-    if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
+    if (p.activity.kind === "stairs" || p.activity.kind === "escalator") return "正在下行，请等到达站台";
     if (p.activity.kind === "queued" || p.activity.kind === "service") return "已经在队伍中，需先离队";
     const tail = this.queueStandPoint(f, f.queue.length, p.kind);
     const path = findPath(p.pos, tail, personRadius(p.kind));
     if (!path) return `无法步行到达 ${facilityId} 的队尾：需要先通过安检或闸机`;
+    this.finishAttention(p, "转向排队");
     p.activity = { kind: "to_queue", facility: facilityId, path };
     return null;
   }
 
   leaveQueue(p: Person): string | null {
+    if (p.activity.kind === "escalator_queue" || p.activity.kind === "to_escalator") {
+      this.transit.remove(p);
+      p.activity = { kind: "idle" };
+      return null;
+    }
     if (p.activity.kind === "service") return "正在办理中，不能离队";
     if (p.activity.kind !== "queued") return "当前不在任何队伍中";
     this.removeFromQueue(p);
@@ -249,6 +278,7 @@ export class World {
   }
 
   removeFromQueue(p: Person) {
+    this.transit.remove(p);
     for (const f of this.facilities.values()) {
       const i = f.queue.indexOf(p.id);
       if (i >= 0) f.queue.splice(i, 1);
@@ -263,11 +293,12 @@ export class World {
     return null;
   }
 
-  /** The only connection from the upper landing to the lower platform. */
+  /** The stable-duration alternative to the queued escalator. */
   descendStairs(p: Person): string | null {
-    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs") return "当前行动尚未完成";
+    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs" || p.activity.kind === "escalator") return "当前行动尚未完成";
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
     if (dist(p.pos, STAIRS_TOP) > STAIRS_REACH) return "请先前往 STAIRS_TOP 下楼梯入口";
+    this.finishAttention(p, "选择楼梯");
     this.removeFromQueue(p);
     p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos } };
     return null;
@@ -275,12 +306,33 @@ export class World {
 
   traverse(p: Person, route: "stairs" | "escalator", walking = false): string | null {
     if (route === "stairs") return this.descendStairs(p);
-    if (["service", "creative", "acting", "stairs"].includes(p.activity.kind)) return "当前行动尚未完成";
-    if (!p.passedGate || p.onPlatform || dist(p.pos, ESCALATOR_TOP) > STAIRS_REACH) return "请先通过闸机并前往 ESCALATOR_TOP";
-    this.removeFromQueue(p);
-    const duration = walking ? ESCALATOR_WALK_SECONDS : ESCALATOR_SECONDS;
-    p.activity = { kind: "stairs", route, remaining: duration, duration, start: { ...p.pos }, end: ESCALATOR_BOTTOM };
+    if (["service", "creative", "acting", "stairs", "escalator"].includes(p.activity.kind)) return "当前行动尚未完成";
+    const error=this.transit.join(p);
+    if (error) return error;
+    p.escalatorWalking=walking;
     return null;
+  }
+
+  inspectAttraction(p: Person, id: string, mode: "glance" | "linger"): string | null {
+    const def = ATTRACTIONS.find(a => a.id === id);
+    if (!def || !["glance", "linger"].includes(mode)) return "无效的关注目标或方式";
+    if (!p.screened || p.passedGate || dist(p.pos, def.approach) > RULES.visionRange || !lineOfSight(p.pos, def.approach, SIGHT_OCCLUDERS)) return "只能关注当前可见、可达的大厅设施";
+    if (!["idle", "walking", "waiting"].includes(p.activity.kind)) return "当前活动不能关注设施，请先完成活动或离队";
+    if ((p.attentionCooldown[id] ?? 0) > this.t) return "刚刚已经关注过这里，先继续赶路";
+    if (mode === "linger" && dist(p.pos, def.approach) > 2.5) return `请先靠近 ${id} 再停留查看`;
+    const a = p.activity;
+    p.activity = { kind: "distracted", attraction: id, remaining: mode === "glance" ? 3 : 6, elapsed: 0,
+      ...(mode === "glance" && a.kind === "walking" ? { resume: { path: a.path.map(v => ({ ...v })), label: a.label } } : {}) };
+    if (p.isPlayer) this.log("attention_start", `选择${mode === "glance" ? "减速查看" : "停留欣赏"}${def.label}；可随时继续赶路`, true);
+    return null;
+  }
+
+  finishAttention(p: Person, reason: string) {
+    const a = p.activity;
+    if (a.kind !== "distracted") return;
+    p.attentionCooldown[a.attraction] = this.t + 30;
+    if (p.isPlayer) this.log("attention_end", `${reason}：关注 ${a.attraction}，实际活动 ${round1(a.elapsed)} 秒${a.resume ? "（含减速行走，并非全是净损失）" : ""}`, true);
+    p.activity = a.resume?.path.length ? { kind: "walking", ...a.resume } : { kind: "idle" };
   }
 
   setStatus(facilityId: string, status: FacilityStatus, note: string | null) {
@@ -317,7 +369,7 @@ export class World {
   stepPeopleAndFacilities(startsCaptured = false) {
     for (const [zone, until] of this.outages) if (until <= this.t) {
       this.outages.delete(zone);
-      const x = { hall: 13, concourse: 35, landing: 46, stairs: 52, platform: 60 }[zone];
+      const x = { hall: 13, concourse: 35, landing: (GATE_X+STAIRS_TOP.x)/2, stairs: (STAIRS_TOP.x+STAIRS_BOTTOM.x)/2, platform: (STAIRS_BOTTOM.x+WIDTH)/2 }[zone];
       this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 4 });
       this.log("power_restored", `${zone} 区域恢复照明`, true);
     }
@@ -327,6 +379,7 @@ export class World {
     }
     for (const p of this.persons.values()) this.stepPerson(p);
     for (const f of this.facilities.values()) this.stepFacility(f);
+    this.transit.step();
   }
 
   private stepPerson(p: Person) {
@@ -337,11 +390,11 @@ export class World {
     }
     const a = p.activity;
     const stride = p.speed * DT;
+    if (this.transit.stepPerson(p, stride)) return;
     switch (a.kind) {
       case "idle": {
         if (!p.isPlayer && p.passedGate && !p.onPlatform) {
-          if (dist(p.pos, STAIRS_TOP) <= STAIRS_REACH) this.descendStairs(p);
-          else this.walkTo(p, STAIRS_TOP, "下楼梯入口");
+          this.transit.routeNpc(p);
         }
         break;
       }
@@ -410,6 +463,16 @@ export class World {
         }
         break;
       }
+      case "distracted": {
+        if (a.resume?.path.length) this.followPath(p, a.resume.path, stride * .55);
+        a.elapsed = round1(a.elapsed + DT);
+        a.remaining = Math.max(0, a.remaining - DT);
+        if (a.remaining <= 1e-9) {
+          this.finishAttention(p, "关注结束");
+          this.personEvent(p, "wait_done", "关注结束，可以继续赶路");
+        }
+        break;
+      }
       default:
         break;
     }
@@ -436,8 +499,8 @@ export class World {
       f.serving.remaining -= DT;
       if (f.serving.remaining <= 1e-9) {
         const p = this.persons.get(f.serving.personId);
-        const nominal = f.def.exit ?? { x: f.def.head.x, y: f.def.head.y + 1.3 };
-        const exits = f.def.kind === "tvm" ? [nominal, { x: nominal.x, y: f.def.head.y - 1.3 }] : [nominal, { x: nominal.x, y: nominal.y + 0.85 }, { x: nominal.x, y: nominal.y - 0.85 }];
+        const nominal = f.def.exit ?? { x: f.def.head.x + 1.3, y: f.def.head.y };
+        const exits = f.def.kind === "tvm" ? [nominal, { x: f.def.head.x - 1.3, y: f.def.head.y }] : [nominal, { x: nominal.x, y: nominal.y + 0.85 }, { x: nominal.x, y: nominal.y - 0.85 }];
         const exit = p ? exits.find((point) => clearServiceExit(p.pos, point, personRadius(p.kind)) && clearOfPeople(p.pos, point, personRadius(p.kind), this.collisionBodies(p.id))) : nominal;
         if (!exit) return;
         f.serving = null;
@@ -500,7 +563,7 @@ export class World {
         p.onPlatform = false;
         p.activity = { kind: "idle" };
         this.gatePassed++;
-        this.personEvent(p, "service_done", `刷票通过 ${f.def.id}，到达上层平台；请前往 STAIRS_TOP 下楼梯进入站台`);
+        this.personEvent(p, "service_done", `刷票通过 ${f.def.id}，到达上层平台；可选择楼梯或扶梯下行进入站台`);
         break;
     }
     return true;

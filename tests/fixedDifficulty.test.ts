@@ -25,15 +25,17 @@ test("ordinary games, model sessions and retries default to 150 seconds and thre
   expect(buildSystemPrompt("", null, model.settings).rules).toContain("150 秒（世界时间）");
 });
 
-test("setup describes fixed rules with no difficulty presets or editable difficulty fields", () => {
+// 开局展示所选截止时间，整理期间锁定选择，客流仍不可编辑。
+test("setup offers deadlines, reflects the selected limit and locks it while preparing", () => {
   const html = renderToStaticMarkup(createElement(SetupPanel, {
     llmAvailable: false, model: null, agentKind: "offline", onAgentKind: () => {},
-    seed: 1, onSeed: () => {}, guidance: "", onGuidance: () => {}, busy: null,
+    seed: 1, onSeed: () => {}, settings: { ...DEFAULT_GAME_SETTINGS, timeLimitSeconds: 300 }, onTimeLimit: () => {},
+    guidance: "", onGuidance: () => {}, busy: "正在整理指导…",
     onPrepare: () => {}, onConfigureModel: () => {},
   }));
-  expect(html).toContain("150 秒");
+  expect(html).toContain("限时 300 秒");
   expect(html).toContain("额外 3 人");
   expect(html).not.toContain("难度预设");
-  expect(html).not.toContain("本局时限（秒）");
+  expect(html).toContain("截止时间");
   expect(html).not.toContain("每条队列额外人数");
 });

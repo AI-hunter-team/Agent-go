@@ -1,7 +1,7 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, test } from "vitest";
-import { OpenAIClient, OpenAILlmService } from "../server/openai";
-import { normalizeGuidance, GUIDANCE_SYSTEM, CLASSIFY_SYSTEM } from "../server/structured";
+import { ResponsesClient, ResponsesLlmService } from "../server/responses";
+import { GUIDANCE_SYSTEM, CLASSIFY_SYSTEM } from "../server/structured";
+import { jsonResponse, response, toolCall } from "./responsesSupport";
 import { assertSafeText, SAFETY_SYSTEM_PROMPT, SafetyError } from "../server/security";
 import { buildSystemPrompt } from "../server/prompts";
 import { GAME_OBJECTIVE } from "../server/objective";
@@ -12,7 +12,7 @@ import { Engine } from "../src/sim/engine";
 import { offlineClassifier } from "../src/agent/remoteAgent";
 import type { NormalizedGuidance } from "../src/shared/types";
 
-const cfg = { model: "creative-test", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false };
+const cfg = { model: "creative-test", maxTokens: 4096, reasoningEffort: "none" as const, openaiStream: true };
 const guidance = "在不被保安发现的情况下逃票";
 const preserved: NormalizedGuidance = {
   summary: "尝试逃票，同时尽量避免被保安发现", priorities: ["逃票进入站台"], risk: "未说明",
@@ -64,26 +64,16 @@ describe("creative strategy boundaries", () => {
     expect(defaults.rules).not.toContain("正常、守序地通过车站：先买票");
   });
 
-  test.each(["openai", "anthropic"])("%s normalization receives the same strategy-preserving task and original wording", async (provider) => {
+  test("Responses normalization receives the strategy-preserving task and original wording", async () => {
     let system = "";
     let user = "";
-    let result: NormalizedGuidance;
-    if (provider === "openai") {
       const fetcher: typeof fetch = async (_url, init) => {
         const body = JSON.parse(init!.body as string);
-        system = body.messages[0].content;
-        user = body.messages[1].content;
-        return Response.json({ choices: [{ finish_reason: "stop", message: { role: "assistant", content: JSON.stringify(preserved) } }] });
+        system = body.instructions;
+        user = body.input[0].content;
+        return Response.json(jsonResponse(preserved));
       };
-      result = await new OpenAILlmService(new OpenAIClient("https://example.test/v1", "test-secret", fetcher), cfg).normalize(guidance);
-    } else {
-      const client = { beta: { messages: { create: async (params: Anthropic.Beta.MessageCreateParamsNonStreaming) => {
-        system = String(params.system);
-        user = String(params.messages[0].content);
-        return { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(preserved) }] };
-      } } } } as unknown as Anthropic;
-      result = await normalizeGuidance(client, cfg, guidance);
-    }
+      const result = await new ResponsesLlmService(new ResponsesClient("https://example.test/v1", "test-secret", fetcher), cfg).normalize(guidance);
     expect(system).toBe(GUIDANCE_SYSTEM);
     expect(JSON.parse(user.split("\n")[1])).toEqual({ text: guidance });
     expect(result).toEqual(preserved);
@@ -91,15 +81,14 @@ describe("creative strategy boundaries", () => {
 
   test("a stale rejecting summary does not replace the original guidance or block a returned creative tool", async () => {
     let messages: { role: string; content: string }[] = [];
+    let instructions = "";
     const fetcher: typeof fetch = async (_url, init) => {
-      messages = JSON.parse(init!.body as string).messages;
-      return Response.json({ model: cfg.model, choices: [{ finish_reason: "tool_calls", message: {
-        role: "assistant", content: null, tool_calls: [{ id: "try-original", type: "function", function: {
-          name: "act", arguments: JSON.stringify({ instruction: "不买票，翻越闸机进入闸机内", reason: "按原始指导尝试" }),
-        } }],
-      } }] });
+      const body = JSON.parse(init!.body as string);
+      messages = body.input;
+      instructions = body.instructions;
+      return Response.json(response({model:cfg.model, output:[toolCall(JSON.stringify({instruction:"不买票，翻越闸机进入闸机内",reason:"按原始指导尝试"}),"try-original","act")]}));
     };
-    const service = new OpenAILlmService(new OpenAIClient("https://example.test/v1", "test-secret", fetcher), cfg);
+    const service = new ResponsesLlmService(new ResponsesClient("https://example.test/v1", "test-secret", fetcher), cfg);
     const session = new SessionStore().create(guidance, mistaken);
     const engine = new Engine(1);
     engine.player.pos = { x: 43, y: 15 };
@@ -109,8 +98,8 @@ describe("creative strategy boundaries", () => {
     }, offlineClassifier, { guidance, normalizedGuidance: mistaken });
     runner.start();
     await runner.pending;
-    expect(messages[0].content).toContain("以原始指导为准");
-    expect(JSON.parse(messages[1].content.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken });
+    expect(instructions).toContain("以原始指导为准");
+    expect(JSON.parse(messages[0].content.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken });
     expect(runner.decisions[0]).toMatchObject({ action: { type: "act" }, result: { ok: true } });
     expect(engine.player.hasTicket).toBe(false);
     expect(engine.player.activity).toMatchObject({ kind: "acting", op: "vault" });

@@ -92,6 +92,8 @@ GitHub Actions 配置在 [ci.yml](../.github/workflows/ci.yml)：面向 `main` �
 
 容器改动另由 [compose.yml](../.github/workflows/compose.yml) 在相关路径的 PR 或手动触发时，使用 Linux Docker 构建并启动健康的 Compose 实例，检查前端资源、API、非 root/生产依赖、伪模型配置与正常停止，最后清理容器。它不调用真实模型、不部署外部环境；具体结果见 [Compose 任务验证](validation/DEPLOY-COMPOSE-001.md)。
 
+CI 使用 `npm test -- --maxWorkers=2 --testTimeout=15000`，与已验收整局模拟命令保持一致：限制并发并为单项测试提供 15 秒等待预算，避免托管机器上的完整对局触及 Vitest 默认 5 秒。测试内容、断言和产品时限不变；`npm test` 脚本自身仍为 `vitest run`。此调整的实际阻塞与结果见 [ALL-LOCAL-001](validation/ALL-LOCAL-001.md)。
+
 当前仍无 lint、格式化、Markdown 链接检查、浏览器自动验收或统一 `check` 脚本。文档可使用一次性本地链接审计，但需记录其方法，不能声称仓库已有相应 npm 命令；需要新增工具时另开任务。
 
 ## 6. 提交、审查、集成与交接

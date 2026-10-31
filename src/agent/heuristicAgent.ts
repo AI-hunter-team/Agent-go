@@ -3,7 +3,7 @@ import { STAIRS_REACH, STAIRS_TOP } from "../sim/layout";
 import type { Agent } from "./agent";
 
 const SEARCH_ROUTE: Record<FacilityKind, string[]> = {
-  tvm: ["HALL_C", "HALL_N", "HALL_S"],
+  tvm: ["TICKETS_C", "HALL_N", "HALL_C"],
   security: ["HALL_C", "HALL_N", "HALL_S"],
   gate: ["GATE_C", "GATE_N", "GATE_S"],
 };
@@ -33,17 +33,32 @@ export class HeuristicAgent implements Agent {
   private choose(turn: AgentTurn): AgentAction {
     const { self, facilities } = turn.observation;
     if (self.passedGate) {
-      if (self.activity.startsWith("正在下楼梯")) return { type: "wait", seconds: 3, reason: "正在下楼梯，等到达下层站台" };
+      if (self.activity.startsWith("正在下楼梯") || self.activity.startsWith("正在乘扶梯")) return { type: "wait", seconds: 3, reason: "正在下行，等到达下层站台" };
+      if (self.activity.startsWith("正在走向扶梯队尾")) return { type: "wait", seconds: 2, reason: "继续走到扶梯队尾" };
+      const routes = turn.observation.routes;
+      if (routes?.length) {
+        const cost = (r: typeof routes[number]) => r.distance / 1.4 + r.queueLength * r.boardingInterval + r.travelSeconds;
+        const best = routes.reduce((a, b) => cost(a) <= cost(b) ? a : b);
+        if (best.id === "escalator" && self.activity.startsWith("正在候梯")) return { type: "wait", seconds: 2, reason: "候梯并观察是否需要改道" };
+        if (Math.hypot(self.position.x - best.position.x, self.position.y - best.position.y) <= STAIRS_REACH)
+          return { type: "traverse", route: best.id, reason: `选择预计较快的${best.label}` };
+        return { type: "move_to", target: best.node, reason: `比较可见步行、排队和下行时间，选择${best.label}` };
+      }
       if (Math.hypot(self.position.x - STAIRS_TOP.x, self.position.y - STAIRS_TOP.y) <= STAIRS_REACH) {
         return { type: "traverse", route: "stairs", reason: "已到楼梯入口，下楼到站台" };
       }
-      return { type: "move_to", target: "STAIRS_TOP", reason: "已过闸机，前往楼梯入口" };
+      return { type: "move_to", target: routes === undefined ? "STAIRS_TOP" : "LANDING_C", reason: "已过闸机，前往观察下行路线" };
     }
     const stage: FacilityKind = !self.hasTicket ? "tvm" : !self.screened ? "security" : "gate";
     const candidates = facilities.filter((f) => f.kind === stage && f.status === "open");
 
     if (self.activity.startsWith("正在") && self.activity.includes("办理")) {
       return { type: "wait", seconds: 5, reason: "正在办理，等办理完成" };
+    }
+
+    if (stage === "tvm" && !self.queue && candidates.length < 3 && !this.searched.has("tvm:TICKETS_C")) {
+      this.searched.add("tvm:TICKETS_C");
+      return { type: "move_to", target: "TICKETS_C", reason: "先到并排售票机前比较可见队列" };
     }
 
     if (self.queue) {

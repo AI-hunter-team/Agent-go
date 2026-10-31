@@ -1,7 +1,7 @@
 import { captureScene } from "./presentation";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import type { Engine } from "../sim/engine";
-import { ESCALATOR_TOP, ESCALATOR_BOTTOM, RAILING_SEGMENTS, FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_WALL, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
+import { ATTRACTIONS, RAILING_SEGMENTS, ESCALATOR_BOTTOM, ESCALATOR_TOP, FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_BARRIERS, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
 import { RULES } from "../sim/scenario";
 
 // Palette follows the chosen visual direction (design/ui-concepts-v3, 方案 02):
@@ -40,10 +40,10 @@ export const MAP_PX = { w: WIDTH * SCALE, h: HEIGHT * SCALE };
 export const MAP_REGIONS = [
   { label: "售票厅", start: 0, end: SECURITY_X - 5, color: COLORS.hall },
   { label: "安检区", start: SECURITY_X - 5, end: SECURITY_X + 3, color: COLORS.security },
-  { label: "候闸大厅", start: SECURITY_X + 3, end: GATE_X - 5, color: COLORS.concourse },
+  { label: "商业大厅", start: SECURITY_X + 3, end: GATE_X - 5, color: COLORS.concourse },
   { label: "闸机区", start: GATE_X - 5, end: GATE_X, color: COLORS.gate },
   { label: "上层平台", start: GATE_X, end: STAIRS_X, color: COLORS.landing },
-  { label: "下楼梯 ↓", start: STAIRS_X, end: PLATFORM_X, color: COLORS.stairs },
+  { label: "楼梯 / 扶梯 ↓", start: STAIRS_X, end: PLATFORM_X, color: COLORS.stairs },
   { label: "下层站台", start: PLATFORM_X, end: WIDTH, color: COLORS.platform },
 ];
 
@@ -75,9 +75,6 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   ctx.fillText("入口 →", px(0.2), px(16.6));
 
   drawStairs(ctx);
-  ctx.fillStyle="#b1b9b2";ctx.fillRect(px(49),px(19),px(7),px(2));
-  ctx.strokeStyle=COLORS.ink; line(ctx,ESCALATOR_TOP,ESCALATOR_BOTTOM);
-  ctx.fillStyle=COLORS.ink;ctx.fillText("扶梯 ↓",px(51),px(21.8));
 
   // Nav nodes (faint markers so players can read agent targets)
   ctx.fillStyle = "rgba(43,42,39,0.25)";
@@ -91,11 +88,26 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
 
   // Structures
   ctx.fillStyle = COLORS.securityEdge;
-  for (const r of SECURITY_WALL) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
+  for (const r of SECURITY_BARRIERS) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
   ctx.fillStyle = COLORS.ochre;
   for (const r of GATE_BARRIERS) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
   ctx.fillStyle = COLORS.green;
   for (const r of PILLARS) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
+  ctx.font = "bold 11px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  for (const a of ATTRACTIONS) {
+    const label = { toys: "POP MART 玩具机", advert: "广告灯箱", flowers: "鲜花小摊", information: "悬挂信息屏", seating: "等候座椅" }[a.kind];
+    if (a.body) {
+      ctx.fillStyle = a.kind === "seating" ? COLORS.green : COLORS.ochre;
+      ctx.fillRect(px(a.body.x), px(a.body.y), px(a.body.w), px(a.body.h));
+    } else {
+      ctx.fillStyle = COLORS.inkSoft;
+      ctx.fillRect(px(a.pos.x - .9), px(a.pos.y - .2), px(1.8), px(.4));
+    }
+    ctx.fillStyle = COLORS.ink;
+    ctx.fillText(label, px(a.pos.x), px(a.pos.y + (a.pos.y > 20 ? 1.7 : -1.5)));
+  }
+  ctx.textAlign = "start";
 
   ctx.strokeStyle=COLORS.ochre;ctx.lineWidth=5;
   for(const s of RAILING_SEGMENTS) line(ctx,{x:SECURITY_X,y:s.minY},{x:SECURITY_X,y:s.maxY});
@@ -220,47 +232,43 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
 }
 
 function drawStairs(ctx: CanvasRenderingContext2D) {
-  const top = 11;
-  const bottom = 19;
   ctx.save();
-  // The connection is a flight between two levels, with one shared entrance.
   ctx.fillStyle = "rgba(133,106,77,0.09)";
-  ctx.fillRect(px(STAIRS_X), 0, px(PLATFORM_X - STAIRS_X), px(top - 0.8));
-  ctx.fillRect(px(STAIRS_X), px(bottom + 0.8), px(PLATFORM_X - STAIRS_X), px(HEIGHT - bottom - 0.8));
-  ctx.fillStyle = "#f8f3e9";
-  ctx.fillRect(px(STAIRS_X), px(top), px(PLATFORM_X - STAIRS_X), px(bottom - top));
-  ctx.strokeStyle = COLORS.stairsEdge;
-  ctx.lineWidth = 1.4;
-  for (let x = STAIRS_X + 0.4; x < PLATFORM_X; x += 0.55) line(ctx, { x, y: top }, { x, y: bottom });
-  ctx.lineWidth = 3;
-  line(ctx, { x: STAIRS_X, y: top }, { x: PLATFORM_X, y: top });
-  line(ctx, { x: STAIRS_X, y: bottom }, { x: PLATFORM_X, y: bottom });
-  // Landings and a high-contrast direction arrow stay legible behind the actor.
-  ctx.strokeStyle = COLORS.green;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 3]);
-  line(ctx, { x: STAIRS_TOP.x, y: STAIRS_TOP.y }, { x: STAIRS_BOTTOM.x, y: STAIRS_BOTTOM.y });
-  ctx.setLineDash([]);
-  ctx.fillStyle = COLORS.stairsEdge;
-  ctx.beginPath();
-  ctx.moveTo(px(55.2), px(15));
-  ctx.lineTo(px(54.2), px(14.35));
-  ctx.lineTo(px(54.2), px(15.65));
-  ctx.closePath();
-  ctx.fill();
-  ctx.textAlign = "center";
-  ctx.font = "bold 13px ui-sans-serif, system-ui";
-  ctx.fillText("下楼梯 ↓", px((STAIRS_X + PLATFORM_X) / 2), px(9.3));
-  ctx.font = "11px ui-sans-serif, system-ui";
-  ctx.fillText("约 6 秒 · 下行至站台", px((STAIRS_X + PLATFORM_X) / 2), px(20.7));
+  ctx.fillRect(px(STAIRS_X), 0, px(PLATFORM_X - STAIRS_X), px(HEIGHT));
+  for (const route of [
+    { top: STAIRS_TOP, bottom: STAIRS_BOTTOM, label: "楼梯", detail: "固定 6 秒", escalator: false },
+    { top: ESCALATOR_TOP, bottom: ESCALATOR_BOTTOM, label: "扶梯", detail: "站立 10 秒 / 步行 5 秒＋候梯", escalator: true },
+  ]) {
+    const half = route.escalator ? 1.5 : 2;
+    ctx.fillStyle = "#f8f3e9";
+    ctx.fillRect(px(route.top.x), px(route.top.y - half), px(route.bottom.x - route.top.x), px(half * 2));
+    ctx.strokeStyle = COLORS.stairsEdge;
+    ctx.lineWidth = 1;
+    for (let x = route.top.x; x < route.bottom.x; x += .65)
+      line(ctx, { x, y: route.top.y - half }, { x, y: route.top.y + half });
+    ctx.lineWidth = route.escalator ? 3 : 1.5;
+    for (const side of [-1, 1]) line(ctx, { x: route.top.x, y: route.top.y + side * half }, { x: route.bottom.x, y: route.bottom.y + side * half });
+    ctx.strokeStyle = COLORS.green;
+    ctx.lineWidth = 2;
+    line(ctx, route.top, route.bottom);
+    ctx.fillStyle = COLORS.stairsEdge;
+    const middle = (route.top.x + route.bottom.x) / 2;
+    ctx.beginPath();
+    ctx.moveTo(px(middle + 1), px(route.top.y));
+    ctx.lineTo(px(middle), px(route.top.y - .4));
+    ctx.lineTo(px(middle), px(route.top.y + .4));
+    ctx.closePath(); ctx.fill();
+    ctx.textAlign = "center";
+    ctx.font = "bold 13px ui-sans-serif, system-ui";
+    ctx.fillText(`${route.label} ↓`, px(middle), px(route.top.y - half - 1.2));
+    ctx.font = "11px ui-sans-serif, system-ui";
+    ctx.fillText(route.detail, px(middle), px(route.top.y + half + 1.2));
+  }
   ctx.fillStyle = COLORS.inkSoft;
-  ctx.font = "10px ui-sans-serif, system-ui";
-  ctx.fillText("闸机后", px((GATE_X + STAIRS_X) / 2), px(4));
-  ctx.fillText("上层", px((GATE_X + STAIRS_X) / 2), px(5));
-  ctx.font = "bold 13px ui-sans-serif, system-ui";
-  ctx.fillText("下层站台", px(63), px(4));
+  ctx.textAlign = "center";
   ctx.font = "11px ui-sans-serif, system-ui";
-  ctx.fillText("下楼梯到达此处后完成", px(63), px(5.4));
+  ctx.fillText("闸机后连接区", px((GATE_X + STAIRS_X) / 2), px(3));
+  ctx.fillText("下层站台 · 两路同一终点", px((PLATFORM_X + WIDTH) / 2), px(3));
   ctx.restore();
 }
 
@@ -311,13 +319,13 @@ function drawFacility(ctx: CanvasRenderingContext2D, def: FacilityDef, status: F
   } else {
     ctx.fillStyle = unavailable ? "#ecd2ca" : "#fffaf0";
     ctx.beginPath();
-    ctx.roundRect(px(-0.6), px(-0.9), px(1.2), px(1.8), 3);
+    ctx.roundRect(px(-.9), px(-.3), px(1.8), px(.6), 3);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = COLORS.securityEdge;
-    ctx.fillRect(px(-0.4), px(-0.66), px(0.8), px(0.62));
+    ctx.fillRect(px(-.6), px(.05), px(1.2), px(.17));
     ctx.fillStyle = COLORS.ochre;
-    ctx.fillRect(px(-0.3), px(0.35), px(0.6), px(0.12));
+    ctx.fillRect(px(-.3), px(.28), px(.6), px(.06));
   }
 
   if (unavailable) {

@@ -47,7 +47,7 @@ describe("GameRunner", () => {
     expect(agent.turns).toHaveLength(1);
     expect(agent.turns[0]).toMatchObject({
       triggers: [{ kind: "start" }], lastResult: null,
-      observation: { t: 0, self: { position: entrance, activity: "空闲，等待指令" }, facilities: [] },
+      observation: { t: 0, self: { position: entrance, activity: "空闲，等待指令" } },
     });
     runner.advance(100);
     expect(engine.t).toBe(0);
@@ -61,13 +61,13 @@ describe("GameRunner", () => {
     expect(engine.player.pos).toEqual(entrance);
     expect(engine.t).toBe(0);
     if (action.type === "join_queue") expect(engine.player.activity).toMatchObject({ kind: "to_queue", facility: action.facility });
-    else if (action.type === "move_to") expect(engine.player.activity).toMatchObject({ kind: "walking", label: "3号售票机附近" });
+    else if (action.type === "move_to") expect(engine.player.activity).toMatchObject({ kind: "walking", label: "3号自动售票机附近" });
     else expect(engine.player.activity).toMatchObject({ kind: "waiting", remaining: 2 });
     runner.stop();
   });
 
   test("offline agent finishes a run and produces a report", async () => {
-    const runner = new GameRunner(new Engine(28), new HeuristicAgent(), keywords, { guidance: "" });
+    const runner = new GameRunner(new Engine(1, { timeLimitSeconds: 180, extraQueuePeople: 0 }), new HeuristicAgent(), keywords, { guidance: "" });
     await runner.runToEnd();
     const report = runner.report();
     expect(report.status).toBe("success");
@@ -75,6 +75,23 @@ describe("GameRunner", () => {
     expect(report.decisions.length).toBe(report.totals.decisions);
     expect(report.trail.length).toBeGreaterThan(10);
     expect(report.agentKind).toBe("offline");
+  });
+
+  test("the integrated map has a legal route within the 150-second dense default", async () => {
+    const agent = new ScriptedAgent(async ({ observation }) => {
+      const p = observation.self;
+      if (p.activity.includes("办理") || p.activity.startsWith("正在下楼梯")) return ok({ type: "wait", seconds: 5, reason: "等候当前动作" });
+      if (p.passedGate) return ok(Math.hypot(p.position.x - 61, p.position.y - 9) <= .8
+        ? { type: "descend_stairs", reason: "下行" }
+        : { type: "move_to", target: "STAIRS_TOP", reason: "前往楼梯" });
+      return ok({ type: "join_queue", facility: !p.hasTicket ? "TVM-1" : !p.screened ? "S2" : "G3", reason: "执行公开设施路线" });
+    });
+    const runner = new GameRunner(new Engine(22), agent, keywords);
+    await runner.runToEnd();
+    expect(runner.engine.settings).toEqual({ timeLimitSeconds: 150, extraQueuePeople: 3 });
+    expect(runner.engine.status).toBe("success");
+    expect(runner.engine.score).toBeLessThanOrEqual(120);
+    expect(runner.engine.creative.violations).toHaveLength(0);
   });
 
   test("the world is frozen while the agent is thinking", async () => {
@@ -248,7 +265,7 @@ test("debug accounts for first attempts, retries and classification exactly once
   const debug = runner.report().debug!;
   expect(debug.summary.aiWaitMs).toBe(100);
   expect(debug.summary.includingPreparationMs).toBe(200);
-  expect(debug.summary.byOperationMs).toEqual({ decision: 20, retry: 30, classification: 50, negotiation: 0, interpret: 0, npc_respond: 0 });
+  expect(debug.summary.byOperationMs).toEqual({ decision: 20, retry: 30, classification: 50, negotiation: 0, interpret: 0, npc_respond: 0, review: 0, review_draft: 0 });
   expect(debug.summary.byStageMs).toEqual({ ticket: 100, security: 0, gate: 0, stairs: 0 });
   expect(debug.summary.slowestAttempt).toEqual({ index: 3, durationMs: 50 });
   expect(debug.attempts[0].error).toBe("no tool call");

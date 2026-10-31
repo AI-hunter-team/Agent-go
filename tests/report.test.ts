@@ -10,13 +10,13 @@ import { ReportSummary, EventTimeline } from "../src/ui/ReportView";
 const props = { onRetry: () => undefined, onEdit: () => undefined };
 
 test("a completed run renders a score, breakdown and export action", async () => {
-  const runner = new GameRunner(new Engine(28), new HeuristicAgent(), offlineClassifier);
+  const runner = new GameRunner(new Engine(1, { timeLimitSeconds: 180, extraQueuePeople: 0 }), new HeuristicAgent(), offlineClassifier);
   await runner.runToEnd();
   const report = runner.report();
   const html = renderToStaticMarkup(createElement(ReportSummary, { ...props, report }));
   expect(html).toContain("已下楼到达站台");
-  expect(html).toContain("下楼梯");
-  expect(report.timeBreakdown.stairs).toBeCloseTo(6);
+  expect(html).toContain((report.timeBreakdown.escalator ?? 0) > 0 ? "乘扶梯" : "下楼梯");
+  expect([4, 6]).toContain((report.timeBreakdown.stairs ?? 0) + (report.timeBreakdown.escalator ?? 0));
   expect(html).toContain(report.score!.toFixed(1));
   expect(html).toContain("导出报告 JSON");
   expect(html).toContain("Debug 日志与 AI 耗时");

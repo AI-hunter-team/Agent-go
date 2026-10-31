@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
 import { World } from "../src/sim/world";
-import { clearOfScenery, personRadius, steer, sweptDistance } from "../src/sim/movement";
+import { clearOfScenery, detourAroundQueues, personRadius, steer, sweptDistance } from "../src/sim/movement";
+import { segmentIntersectsRect } from "../src/sim/geometry";
 import { DT } from "../src/sim/scenario";
 
+/** Advance a small crowd while checking separation throughout each interpolated step. */
 function walkThrough(world: World, ticks = 300) {
   let lateral = 0;
   for (let i = 0; i < ticks; i++) {
@@ -41,14 +43,14 @@ test("oncoming NPCs yield on consistent sides and both reach their destination",
 
 test("walking around a ticket machine never sweeps through its solid geometry", () => {
   const w = new World(1);
-  const p = w.addPerson("normal", { x: 11, y: 6 });
-  w.walkTo(p, { x: 17, y: 6 }, "past TVM-1");
+  const p = w.addPerson("normal", { x: 7, y: 4 });
+  w.walkTo(p, { x: 13, y: 4 }, "past TVM-2");
   for (let i = 0; i < 200; i++) {
     const start = { ...p.pos };
     w.stepPeopleAndFacilities();
     expect(clearOfScenery(start, p.pos, personRadius(p.kind))).toBe(true);
   }
-  expect(p.pos).toEqual({ x: 17, y: 6 });
+  expect(p.pos).toEqual({ x: 13, y: 4 });
 });
 
 test.each(["normal", "luggage"] as const)("%s passenger reaches S1 from behind its conveyor", (kind) => {
@@ -67,11 +69,12 @@ test.each(["normal", "luggage"] as const)("%s passenger reaches S1 from behind i
 test("a waiting passenger cannot advance onto the passenger being served", () => {
   const w = new World(1), f = w.facility("TVM-2")!;
   const a = w.addPerson("luggage", { ...f.def.head });
-  const b = w.addPerson("luggage", { x: f.def.head.x - 1.05, y: f.def.head.y });
+  const b = w.addPerson("luggage", { x: f.def.head.x, y: f.def.head.y + 1.05 });
   a.activity = { kind: "service", facility: f.def.id }; f.serving = { personId: a.id, remaining: 100, recheck: false };
   b.activity = { kind: "queued", facility: f.def.id }; f.queue = [b.id];
   for (let i = 0; i < 100; i++) w.stepPeopleAndFacilities();
   expect(b.pos.x).toBeCloseTo(w.queueStandPoint(f, 0).x);
+  expect(b.pos.y).toBeCloseTo(w.queueStandPoint(f, 0).y);
   expect(a.pos).toEqual(f.def.head);
   expect(f.queue).toEqual([b.id]);
 });
@@ -124,4 +127,65 @@ test("a clear look-ahead cannot bypass the sweep of the actual short stride", ()
   const other = { id: "crossing", from: { x: 2.05, y: 2.04 }, pos: { x: 2.05, y: 1.96 }, radius: 0.005 };
   const next = steer(from, { x: 3, y: 2 }, 0.1, 0.005, [other]);
   expect(sweptDistance(from, next, other.from, other.pos)).toBeGreaterThanOrEqual(0.03 - 1e-6);
+});
+
+// A queue's machine-side corner is inside TVM-3's body clearance: route around both obstacles.
+test("a queue detour beside a ticket machine reaches its waypoint without oscillating", () => {
+  let pos = { x: 14.8, y: 3.6 };
+  const target = { x: 13.225, y: 4.525 };
+  const queue = { x: 13.33, y: 4.28, w: 1.34, h: 5.72 };
+  const radius = personRadius("normal");
+  for (let tick = 0; tick < 200 && Math.hypot(pos.x - target.x, pos.y - target.y) > 1e-6; tick++) {
+    const waypoint = detourAroundQueues(pos, target, [queue], radius);
+    const next = steer(pos, waypoint, 0.13, radius, []);
+    expect(clearOfScenery(pos, next, radius)).toBe(true);
+    expect(segmentIntersectsRect(pos, next, queue)).toBe(false);
+    pos = next;
+  }
+  expect(pos.x).toBeCloseTo(target.x);
+  expect(pos.y).toBeCloseTo(target.y);
+});
+
+// A passenger almost at an occupied slot should stand still, then advance when it clears.
+test("a blocked nearby waypoint waits without sideways jitter and resumes when clear", () => {
+  const from = { x: 12.37, y: 24.015 };
+  const target = { x: 12.4, y: 24 };
+  const neighbor = { id: "queue-head", pos: { x: 13.05, y: 24 }, radius: 0.32 };
+  let pos = from;
+  for (let tick = 0; tick < 20; tick++) {
+    pos = steer(pos, target, 0.08, 0.32, [neighbor]);
+    expect(pos).toEqual(from);
+  }
+  expect(steer(pos, target, 0.08, 0.32, [])).toEqual(target);
+});
+
+test("an occupied arrival slot cannot make a passenger repeatedly retrace its last steps", () => {
+  const w = new World(1);
+  const blocker = w.addPerson("luggage", { x: 24.11, y: 24 });
+  const p = w.addPerson("elderly", { x: 23.26843767209405, y: 24.07366147703566 });
+  const target = { x: 23.4, y: 24 };
+  p.activity = { kind: "to_queue", facility: "S3", path: [target] };
+  let moved = 0;
+  for (let tick = 0; tick < 80; tick++) {
+    const before = { ...p.pos };
+    w.movePerson(p, target, 0.08);
+    if (Math.hypot(p.pos.x - before.x, p.pos.y - before.y) > 1e-8) moved++;
+    expect(sweptDistance(before, p.pos, blocker.pos)).toBeGreaterThanOrEqual(0.82 - 1e-6);
+  }
+  expect(moved).toBe(0);
+  // Do not stop prematurely when a collision-safe forward step is still possible.
+  p.pos.x -= 0.15;
+  const beforeApproach = { ...p.pos };
+  w.movePerson(p, target, 0.08);
+  expect(Math.hypot(p.pos.x - target.x, p.pos.y - target.y)).toBeLessThan(Math.hypot(beforeApproach.x - target.x, beforeApproach.y - target.y));
+  expect(sweptDistance(beforeApproach, p.pos, blocker.pos)).toBeGreaterThanOrEqual(0.82 - 1e-6);
+  p.pos = { x: 23.26843767209405, y: 24.07366147703566 };
+  // The same obstruction at an intermediate route corner must still allow local avoidance.
+  p.activity.path.push({ x: 20, y: 24 });
+  const waiting = { ...p.pos };
+  w.movePerson(p, target, 0.08);
+  expect(p.pos).not.toEqual(waiting);
+  w.persons.delete(blocker.id);
+  for (let tick = 0; tick < 40; tick++) w.movePerson(p, target, 0.08);
+  expect(p.pos).toEqual(target);
 });

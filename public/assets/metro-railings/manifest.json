@@ -1,0 +1,361 @@
+{
+  "version": 1,
+  "units": "metres",
+  "upAxis": "Y",
+  "heightMetres": 1.1,
+  "fixedFootDiameterMetres": 0.16,
+  "spanConvention": "length includes both foot radii; anchor_start/end are post-centre ground points. rise is end minus start elevation. Keep post/rail cross sections unscaled.",
+  "transparency": "GLB alpha BLEND; disable depthWrite for transparent materials after import. Glass does not cast opaque shadows.",
+  "source": "Original procedural geometry/materials; photographs referenced for structure only, not redistributed.",
+  "assets": [
+    {
+      "id": "metal-straight",
+      "style": "metal",
+      "label": "A 圆管固定栏杆",
+      "kind": "straight",
+      "file": "models/metal-straight.glb",
+      "bytes": 38792,
+      "sha256": "55f049271072fef265364ecf51735771172ef92ed294876f672e6d4b78d61565",
+      "bounds": {
+        "min": [
+          -1.5,
+          0,
+          -0.08
+        ],
+        "max": [
+          1.5,
+          1.100000023841858,
+          0.08
+        ],
+        "size": [
+          3,
+          1.100000023841858,
+          0.16
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 2848,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            -1.42,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            1.42,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "metal-corner",
+      "style": "metal",
+      "label": "A 圆管转角",
+      "kind": "corner",
+      "file": "models/metal-corner.glb",
+      "bytes": 48076,
+      "sha256": "4e1b809979d9198e6af7754f3abf96833f4b72269d9d664e8c334eb1c9b30db9",
+      "bounds": {
+        "min": [
+          -0.75,
+          0,
+          -0.75
+        ],
+        "max": [
+          0.75,
+          1.100000023841858,
+          0.75
+        ],
+        "size": [
+          1.5,
+          1.100000023841858,
+          1.5
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 3216,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            0.67,
+            0,
+            -0.67
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            -0.67,
+            0,
+            0.67
+          ]
+        }
+      ]
+    },
+    {
+      "id": "metal-end",
+      "style": "metal",
+      "label": "A 固定端柱",
+      "kind": "end",
+      "file": "models/metal-end.glb",
+      "bytes": 21660,
+      "sha256": "8eb2c78f1e3107cd8d786d88b233e50d7a80360bbd9927f53a3d323bfdf76374",
+      "bounds": {
+        "min": [
+          -0.08,
+          0,
+          -0.08
+        ],
+        "max": [
+          0.08,
+          1.1,
+          0.08
+        ],
+        "size": [
+          0.16,
+          1.1,
+          0.16
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 848,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glass-straight",
+      "style": "glass",
+      "label": "B 玻璃护栏",
+      "kind": "straight",
+      "file": "models/glass-straight.glb",
+      "bytes": 60076,
+      "sha256": "df6cc1a2b593ee92a0a5d1cf4a6abf1511470f82654770af5b20afb8de888f11",
+      "bounds": {
+        "min": [
+          -1.5,
+          0,
+          -0.08
+        ],
+        "max": [
+          1.5,
+          1.1000000000000005,
+          0.08
+        ],
+        "size": [
+          3,
+          1.1000000000000005,
+          0.16
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.edge",
+        "metro.railing.glass",
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 9724,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            -1.42,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            1.42,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glass-corner",
+      "style": "glass",
+      "label": "B 玻璃转角",
+      "kind": "corner",
+      "file": "models/glass-corner.glb",
+      "bytes": 48800,
+      "sha256": "0e074279ba721530d8866499f3af1dd5e14e8cf462111561fbffa7f4ff7ec7b4",
+      "bounds": {
+        "min": [
+          -0.75,
+          0,
+          -0.75
+        ],
+        "max": [
+          0.75,
+          1.1000000000000003,
+          0.75
+        ],
+        "size": [
+          1.5,
+          1.1000000000000003,
+          1.5
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.edge",
+        "metro.railing.glass",
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 7832,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            0.67,
+            0,
+            -0.67
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            -0.67,
+            0,
+            0.67
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glass-end",
+      "style": "glass",
+      "label": "B 固定端柱",
+      "kind": "end",
+      "file": "models/glass-end.glb",
+      "bytes": 21660,
+      "sha256": "619a13f8d4b62a0411f2d38382151fce36222f627d8b8ab4d2152309e3bf6f1c",
+      "bounds": {
+        "min": [
+          -0.08,
+          0,
+          -0.08
+        ],
+        "max": [
+          0.08,
+          1.1,
+          0.08
+        ],
+        "size": [
+          0.16,
+          1.1,
+          0.16
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 848,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glass-stairs",
+      "style": "glass",
+      "label": "B 楼梯斜段（9m / −2m）",
+      "kind": "stairs",
+      "file": "models/glass-stairs.glb",
+      "bytes": 112056,
+      "sha256": "66e89351722ba6ada4e484de7dafedd634d50853bceddfb86c04d246020a06b4",
+      "bounds": {
+        "min": [
+          -4.5,
+          -2,
+          -0.08
+        ],
+        "max": [
+          4.5,
+          1.1,
+          0.08
+        ],
+        "size": [
+          9,
+          3.1,
+          0.16
+        ]
+      },
+      "materialSlots": [
+        "metro.railing.edge",
+        "metro.railing.glass",
+        "metro.railing.rubber",
+        "metro.railing.steel"
+      ],
+      "triangles": 21068,
+      "anchors": [
+        {
+          "name": "anchor_start",
+          "position": [
+            -4.42,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "anchor_end",
+          "position": [
+            4.42,
+            -2,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

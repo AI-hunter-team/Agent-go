@@ -4,7 +4,6 @@ import { bossContextValid, validatePlan } from "./boss";
 import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDialogue";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { extname, resolve } from "node:path";
-import { configFromEnv } from "./claude";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
 import type {
@@ -21,9 +20,12 @@ import type { Session, SessionStore } from "./sessions";
 import { DebugLogger, traceOperation } from "./debug";
 import { ModelConfigError, ModelConfigStore } from "./modelConfig";
 import { assertSafeText, SafetyError, validateNormalized } from "./security";
+import { ReviewFailure, validateDraft, validateReview, validateReviewInput, validateStrategies, type DraftResult, type ReviewInput, type ReviewResult, type ReviewStrategy } from "../src/shared/review";
 
 /** Model-backed operations. Absent when no credentials are configured. */
 export interface LlmService {
+  review?(input: ReviewInput): Promise<ReviewResult>;
+  draftGuidance?(guidance: string, strategies: ReviewStrategy[]): Promise<DraftResult>;
   readonly model: string;
   decide(session: Session, turn: AgentTurn): Promise<DecisionResult>;
   normalize(text: string): Promise<NormalizedGuidance>;
@@ -54,14 +56,16 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
   type Runtime = { llm: LlmService | null; parameters: Record<string, unknown>; token: string };
   const bindings = new WeakMap<Session, Runtime>();
+  /** 新请求使用当前页面配置；诊断与实例使用相同的设置。 */
   const runtime = (req: Request): Runtime => {
     const token = req.get("x-model-config") || "";
     if (!token) return { llm, parameters: modelParameters, token };
     const config = modelConfigs.get(token);
     if (!config.llm) throw new ModelConfigError("请先选择模型并验证启用", 409);
-    const cfg = configFromEnv({ ...process.env, AGENT_MODEL: config.llm.model, AGENT_FALLBACK: "off" });
-    return { llm: config.llm, parameters: { ...cfg, provider: "openai", model: config.llm.model, effort: cfg.reasoningEffort, timeoutMs: 20_000, transportRetries: 0 }, token };
+    const cfg = config.settings!;
+    return { llm: config.llm, parameters: { ...cfg, provider: "responses", model: config.llm.model, effort: cfg.reasoningEffort, timeoutMs: 20_000, transportRetries: 0 }, token };
   };
+  /** 已开始的对局使用原实例，且校验其所属配置 token。 */
   const forSession = (req: Request, session: Session): Runtime => {
     const bound = bindings.get(session);
     if (!bound) return runtime(req);
@@ -83,8 +87,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     const token = req.get("x-model-config");
     if (!token) throw new ModelConfigError("请先验证 API 配置");
     const { value } = await traceOperation({ operation: "decide", runId: null, sessionId: null },
-      { purpose: "model_verification", model: req.body?.model }, debugLogger,
-      () => modelConfigs.enable(token, req.body?.model));
+      { purpose: "model_verification", model: req.body?.model, reasoningEffort: req.body?.reasoningEffort ?? "none" }, debugLogger,
+      () => modelConfigs.enable(token, req.body?.model, req.body?.reasoningEffort));
     res.json(value);
   }));
   app.delete("/api/model/config", (req, res) => {
@@ -94,6 +98,39 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
   app.get("/api/health", wrap((req, res) => {
     const { llm } = runtime(req);
     res.json({ llm: llm !== null, model: llm?.model ?? null });
+  }));
+
+  // Independent analysis calls: the run's session has already been disposed.
+  app.post("/api/review", wrap(async (req, res) => {
+    const input: unknown = req.body?.input;
+    try { validateReviewInput(input); } catch { return void res.status(400).json({ error: "复盘资料格式无效或超出限制" }); }
+    assertSafeText(JSON.stringify(input));
+    const current = runtime(req);
+    if (!current.llm?.review) return void res.status(503).json({ error: "请先连接模型，再生成失败复盘" });
+    let returned: ReviewResult | null = null;
+    try {
+      const { value } = await traceOperation({ operation: "review", runId: null, sessionId: null }, { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.review!(input));
+      returned = value;
+      validateReview(value.analysis, input);
+      assertSafeText(JSON.stringify(value.analysis));
+      res.json(value);
+    } catch (error) { res.status(502).json({ error: "复盘生成失败，模型可能不可用或返回格式异常，请重试", attempt: error instanceof ReviewFailure ? error.attempt : returned ? { model: returned.model, usage: returned.usage, latencyMs: returned.latencyMs, operation: "review", status: "error" } : null }); }
+  }));
+
+  app.post("/api/review/guidance", wrap(async (req, res) => {
+    const { guidance, strategies } = req.body ?? {};
+    try { if (guidanceError(guidance)) throw new Error(); validateStrategies(strategies); }
+    catch { return void res.status(400).json({ error: "请提供原指导并选择 1–3 条有效建议" }); }
+    assertSafeText(JSON.stringify({ guidance, strategies }));
+    const current = runtime(req);
+    if (!current.llm?.draftGuidance) return void res.status(503).json({ error: "请先连接模型，再合并指导草稿" });
+    let returned: DraftResult | null = null;
+    try {
+      const { value } = await traceOperation({ operation: "review_draft", runId: null, sessionId: null }, { guidance, strategies, modelParameters: current.parameters }, debugLogger, () => current.llm!.draftGuidance!(guidance, strategies));
+      returned = value;
+      validateDraft(value); assertSafeText(value.guidance);
+      res.json(value);
+    } catch (error) { res.status(502).json({ error: "指导草稿生成失败或超过 300 字，请重试", attempt: error instanceof ReviewFailure ? error.attempt : returned ? { model: returned.model, usage: returned.usage, latencyMs: returned.latencyMs, operation: "draft", status: "error" } : null }); }
   }));
 
   app.post(
@@ -111,6 +148,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     }),
   );
 
+  // 校验可选时限与固定客流，并将本局设置冻结到模型会话。
   app.post("/api/session", wrap((req, res) => {
     const { guidance = "", normalized = null, settings } = req.body ?? {};
     const err = guidanceError(guidance);
@@ -119,8 +157,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     validateNormalized(normalized);
     const settingsError = gameSettingsError(settings);
     if (settingsError) return void res.status(400).json({ error: settingsError });
-    if (settings && (settings.timeLimitSeconds !== DEFAULT_GAME_SETTINGS.timeLimitSeconds || settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople)) {
-      return void res.status(400).json({ error: `对局规则固定为 ${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒、每条初始开放队列额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
+    if (settings && settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
+      return void res.status(400).json({ error: `每条初始开放队列固定额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
     }
     let loadout;
     try { loadout = resolveLoadout(req.body?.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }

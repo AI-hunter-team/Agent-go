@@ -14,15 +14,12 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "8787"
-      AGENT_PROVIDER: "${AGENT_PROVIDER:-openai}"
-      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      AGENT_PROVIDER: "${AGENT_PROVIDER:-responses}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.deepseek.com}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      AGENT_MODEL: "${AGENT_MODEL:-gpt-6-luna}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      ANTHROPIC_AUTH_TOKEN: "${ANTHROPIC_AUTH_TOKEN:-}"
-      ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
-      AGENT_FALLBACK: "${AGENT_FALLBACK:-off}"
-      DECISION_THINKING_TOKENS: "${DECISION_THINKING_TOKENS:-1024}"
+      AGENT_MODEL: "${AGENT_MODEL:-deepseek-flash}"
+      OPENAI_REASONING_EFFORT: "${OPENAI_REASONING_EFFORT:-none}"
+      OPENAI_STREAM: "${OPENAI_STREAM:-1}"
       DECISION_MAX_TOKENS: "${DECISION_MAX_TOKENS:-4096}"
       DEBUG_LOG_ENABLED: "${DEBUG_LOG_ENABLED:-1}"
       DEBUG_LOG_DIR: /app/logs

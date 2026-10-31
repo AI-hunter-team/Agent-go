@@ -1,0 +1,97 @@
+# ALL-LOCAL-001 全部本地工作集成验证
+
+状态：最终组合提交前快照；提交、CI 和合入的最终证据见本次集成 PR。规则与任务边界见[简报](../tasks/ALL-LOCAL-001.md)。执行人：本聊天 Codex，2026-10-31（Asia/Shanghai）。
+
+## 来源与结果
+
+| 来源 | 处理及证据 |
+|---|---|
+| PR #22 / `3e8080d` | [CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41169918585) 与 [Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41169918563) 通过，无未解决审查线程；已按用户授权合入 main `67a7703934c3d449d5a0ecb552f9a088eff18995` |
+| 原目录 Responses/UI/性能工作副本 | `b1ef12e` 已提交并普通 push 到 `codex/responses-deepseek`；其旧基线行为已由 PR #22 集成交付，保留最新 NPC 隔离、错误处理、随机种子和品牌，不反向覆盖。此源提交作为合并父历史保留，并补齐此前未入库的调查/任务记录 |
+| 自定义角色与保安 | `3eacd0f` 已提交并普通 push 到 `codex/custom-character`，包含用户原 GLB、独立帽子/警棍及动画文件、生成脚本、导入设置与原有有限测试 |
+| PR18 剩余记录 | `1e0a8f5` 已提交原三份交付结果及本次任务范围；后续与 main 和源分支统一合并 |
+
+实际 .env、凭据、node_modules、日志、截图和构建不入库；用户授权的默认模型是产品资产，需要入库。已核对本次待提交文档无个人绝对路径，常见令牌模式未命中。此前本机过程文档的“不提交”是旧任务阶段边界，本轮用户明确要求全部提交后纳入可追溯历史。
+
+## 冲突与实现
+
+- 原目录与 PR #22 有 44 个变化路径的 Git blob/删除状态一致，37 个属于业务；其余业务差异经 diff 核对，来源为新 main 或交付时兼容修正。旧源快照合并后，业务/配置/依赖与 PR #22 保持一致，只有本地记录增加。
+- 一组四档思考和错误处理测试因两个分支中的插入位置不同被自动合并为重复内容，核对同名原文后保留 PR #22 的单份检查，没有新增测试或修改断言。
+- 外观组合冲突位于 `App.tsx`、`GameScene.tsx` 及四份工作/索引文档。手工把主角/保安 URL、方向和错误回调与性能设置组合，保留随机种子、按需渲染、限帧、简化乘客和低频 HUD；全部工作记录保留双方条目。
+- 没有新增玩法、协议或业务函数。`Character.tsx` 与外观模块采用已提交源功能；模型动作/世界坐标、导入边界和存储职责沿用 [AVATAR-001](../tasks/AVATAR-001.md) 与 [GUARD-002](../tasks/GUARD-002.md)。
+
+## 初轮组合检查（未含 PR #23）
+
+环境：Windows、Node `v24.21.0`、npm `12.1.0`。最终集成使用独立的现有 `pr18-merge` worktree；清空该预览服务进程的模型凭据环境变量，仅运行离线页面，没有调用真实模型。
+
+| 受测版本与命令 | 实际结果 |
+|---|---|
+| 原 Responses 源快照：`npm run typecheck`、`npm test -- --maxWorkers=2`、`npm run build`、diff 检查 | 全部通过，41 文件 / 356 项；没有放宽超时或新增检查 |
+| 原角色源快照：同上 | 全部通过，41 文件 / 360 项；3 个用户模型及动画、绑定检查包含在现有用例中 |
+| 最终组合：`npm ci` | 通过，326 包；沿用既有 3 项依赖审计及安装脚本提示，没有额外升级 |
+| 最终组合：`npm run typecheck` | 通过，退出 0 |
+| 最终组合：`npm test -- --maxWorkers=2` | 通过，47 文件 / 403 项，退出 0；本轮未新增用例，也未修改时限或断言 |
+| 最终组合：`npm run build` | 通过，退出 0；前端 `dist/`、服务端 `build/server.js`；保留已有大 chunk 提示 |
+| 实际生产构建页面 | 本地 5197、无模型凭据、默认离线；显示设置中性能面板与主角/保安两组导入同时存在 |
+| 节能预设与恢复默认 | 低画质、30 FPS、简化乘客/低频 HUD/减少动效一起生效，两组外观设置保留；恢复默认后均恢复，未修改其他预览 origin 的偏好 |
+| 默认外观与场景 | 总览中大肥鱼主角和两名奶娃保安可见；该浏览器标签页的 error 日志为空。截图仅本地保存于 `artifacts/all-local/settings.png`、`scene.png` |
+| 冲突及暂存检查 | 无冲突标记；`git diff --check` 和提交前暂存检查记录于最终提交；源工作区已提交，不通过删除或 reset 消除工作 |
+
+本次浏览器只核对本轮组合风险，未重复原任务的全部导入/存储故障注入、整局、移动性能或真实模型验证。原报告保留各自版本边界；软件检查不代表模型供应商兼容或硬件功耗验收。
+
+## 函数与交接
+
+| 本轮手工接线 | 作用 |
+|---|---|
+| `App` | 同时维护性能偏好、主角与保安外观，并将各自 URL、旋转与错误回调传给场景 |
+| `applyAsset` | 将调试路径交给统一主角外观管理器，复用校验和错误处理 |
+| `Contents` | 简化普通乘客时仍渲染主角/保安，并按角色种类分配各自模型、方向与回调 |
+| `GameScene` / `SceneProps` | 保留按需 Canvas 与画质/限帧设置，接收组合后的两组外观参数 |
+
+上述函数注释已保留/更新；其余角色、动画、存储、制作脚本的逐函数职责见 AVATAR-001/GUARD-002 表，Responses/UI/性能函数见 [PR-SUBMIT-001 验证](PR-SUBMIT-001.md)。
+
+- 构建集中复制至原项目本地 `artifacts/all-local/` 后核对文件哈希；不覆盖其他历史产物，不入库截图与构建。
+- 用户已授权普通 push、PR 和合入，未授权部署或真实模型。人工审查未进行，不冒称批准。
+- 最终合入后仅在确认各工作区干净时将原目录切到最新 main；源提交与源分支仍保留，无破坏性清理。实际最终提交、远端 CI 与合入以本次 PR 为准。
+
+## 追加：同步正式站厅 main（当前最终组合）
+
+- 初轮 `e0b6b35` 的 [Windows/Ubuntu CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41175102568) 与 [Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41175102567) 全通过，但 main 已合入 PR #23，GitHub 合并返回冲突。随后将 main `1866824` 整合入本分支。
+- 已完整核对 STATION-INTEGRATION-001 简报和 App/GameScene 相关代码，保留正式站厅模型、栏杆、布光、模拟器几何及上游测试；没有更改这些规则。
+- 修复内部错误通道冲突：`onStationAssetError` 只更新站厅提示；`retryScene` 清除此提示并重挂载场景，保留角色选择和对局；`Contents` 分别使用站厅、主角、保安错误回调。`StationLighting` 保留上游行为并补职责注释。HTTP、动作和报告格式未改。
+- 同一锁文件下 `npm run typecheck`、`npm test -- --maxWorkers=2`、`npm run build` 均通过；48 文件 / 416 项，未新增用例、未改时限/断言，新增计数来自上游已有检查。
+- 实际生产页面：正式站厅与主角/保安设置共存，正常新页面的 error 日志为空。仅对本地测试标签页临时拦截站厅 manifest：出现站厅专属失败/重试提示，两组角色设置和选择仍保留；解除拦截后点重试，提示清除并恢复正式素材。临时网络拦截与禁缓存均已还原，测试标签页已关闭。
+- 当前截图 `artifacts/all-local/settings-station.png`（早期截图保留为初轮证据）。未重跑整局或付费调用，也未重复上游的全套资产验收。
+- 当前构建保存为原项目本地 `artifacts/all-local/final/dist/` 与 `final/build/server.js`；初轮构建仍保留，最终交付以 final 目录为准。
+- 后续仅更新同一 [PR #24](https://github.com/AI-hunter-team/Agent-go/pull/24)，以该最新头的 CI/合入结果为准，不把初轮检查冒充新头通过。
+
+## 追加：两条已核实的模型审查修复
+
+- 根位移：`scene/avatarRootMotion.ts` 的 `createAvatarRootMotionGuard` 捕获根骨骼绑定位置和可复用矩阵，内部 `constrainRootMotion` 将动画位移映射到模型坐标系、仅保留 Y 位移，再映回父节点局部坐标。`ImportedModel` 每帧调用它，保留竖直动作而不沿地面偏离模拟位置。函数均有注释，独立模块避免影响轻量设置页入口的 Three.js 延迟加载。
+- 存储：`useAvatarModel.reset` 先恢复当前页默认外观，再异步删除持久记录；删除失败保留“刷新后可能恢复旧模型”的提示，不把恢复当前页绑定到存储可用性。
+- 仅新增 1 项旋转/缩放骨架边界回归：模型竖直位移保留、地面平移归零、重复调用不漂移。全量 `npm test -- --maxWorkers=2` 为 48 文件 / 417 项通过。逻辑机械移至独立场景模块后，类型、4 项相关检查和完整构建再次通过；没有放宽时限或修改现有断言。
+- 浏览器原生故障注入命令不受支持，改用本地排除目录中的隔离静态检查服务（5198），只向生产 HTML 注入 IndexedDB 拒绝访问；生产文件未改。实际选择用户模型导入后出现“本次页面内有效”，再点恢复默认，名称变回“大肥鱼”、恢复按钮禁用且持久化警告保留。另一个角色不受影响。标签页和临时服务在交付前关闭。
+- 本地证据 `artifacts/all-local/storage-reset.png`；临时检查脚本、截图和构建不提交。自动审批拒绝了含旧产物目录替换的命令（仅返回 blocked by policy），故保留旧目录，新产物非破坏性复制到 `artifacts/all-local/reviewed/`。只对实际修复做针对性检查，不扩展功能或测试矩阵。
+
+## 再同步失败复盘主线（当前交付组合）
+
+- 修复头 `e6752ee` 的 [CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41176534435) 与 [Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41176534719) 均通过，两条审查线程已解决；此时 main 已更新为失败复盘 PR #25 的 `d8f02f4`，合并再次返回内容冲突。
+- 读取上游失败复盘简报、计划及 App 全部相关代码后，正常合入 main。实际只有 App 两个区域冲突：保留 `adoptGuidance`、终局模型配置与复盘报告参数，同时继续使用独立站厅提示及角色外观管理。上游服务端/报告/复盘实现未被二次改写。
+- `adoptGuidance` 保留主线行为并补注释：验证玩家确认的指导，清空旧整理结果并返回编辑，不自动开局，外观和性能状态独立保留。
+- 本组合 `npm run typecheck`、`npm test -- --maxWorkers=2`、`npm run build` 全通过：53 文件 / 442 项，无新失败。测试增加来自上游既有复盘检查，本轮没有再新增用例或修改时限/断言。
+- 本轮仅为现有接线协调，沿用已核对的模型/存储/站厅浏览器范围，不重复整局或模型调用。最终远端结果以 PR #24 最新头为准。
+- 保留此前各构建快照，实际合入后将最新构建非破坏性复制到原目录 `artifacts/all-local/release/`；最终产物以该目录为准，历史目录不删除。
+
+## 接续：本地最终快照
+
+- PR #24 最终已合入 `09d874bf010d72aa3fc531ad026fa6973c013df8`；其 Windows 在既有模拟用例 5000ms 超时后仅重试失败作业一次，随后 [CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41177067013) 全通过，[Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41177067099) 通过。
+- 原目录最终核对时，新的本地集成聊天正在整合 `19c6842`（抽搐）与 `cc5abbb`（截止时间）。本会话未同时修改其文件，等待其 completed/idle 后接手本地 main `8205201a30c1236148ea21d3e9ade9838a006e71` 的 7 个尚未推送提交。
+- 已读取 [本地最终简报](../tasks/FINAL-LOCAL-001.md) 和 [验证报告](FINAL-LOCAL-001.md)：类型、53 文件 / 444 项（maxWorkers=2、命令行 testTimeout=15000）、构建及 5173 页面核对通过。没有把该 15 秒命令说成默认 5 秒检查通过；远端继续运行默认门禁。
+- 发布分支只追加交接文档，业务代码与已验收本地快照一致，无新函数或测试；保持用户 5173 测试页面/服务和本地标签，未调用真实模型。
+- 抽搐修复、时限选择与函数职责使用原报告，不重新设计；当前用户已明确授权全部推送及合入，源任务仅本地结论为历史阶段边界。最终接续 PR 承载真实提交、CI 与合入状态。
+
+## 接续 PR #26 的 CI 执行预算
+
+- 初轮 [CI 41178529708](https://github.com/AI-hunter-team/Agent-go/actions/runs/41178529708) 两个平台失败均为 5000ms 超时：Windows 为 gameSession seed 1 与 heuristicAgent 多局检查；Ubuntu 另有 runner 整局。没有断言错误；[Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41178529627) 已通过。
+- `.github/workflows/ci.yml` 测试命令改为源版本已实际通过的 `npm test -- --maxWorkers=2 --testTimeout=15000`；全部 444 项检查继续执行。`package.json`、断言、产品时限和业务代码不变，开发流程同步该真实命令。没有再次重复同一批本地检查，后续远端结果如实由 PR 承载。
+- 普通 push 新建 `codex/character-jitter`、`codex/deadline-selection` 两个独立分支名时返回 GH007；这些提交已通过 `codex/all-local-final` 的成功推送完整到达远端，Git `rev-list --branches --not --remotes` 为空。保留本地源分支，不绕过隐私保护、不改写已发布祖先，统一通过 [PR #26](https://github.com/AI-hunter-team/Agent-go/pull/26) 合入。

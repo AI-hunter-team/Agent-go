@@ -1,7 +1,7 @@
 import type { FacilityObservation, Observation, Vec } from "../shared/types";
 import { compass, dist, lineOfSight } from "./geometry";
 import type { GuardSystem } from "./guards";
-import { SIGHT_OCCLUDERS, ZONE_LABEL, zoneOf } from "./layout";
+import { ATTRACTIONS, BOARDING_INTERVAL, ESCALATOR_SECONDS, ESCALATOR_APPROACH, SIGHT_OCCLUDERS, STAIRS_SECONDS, STAIRS_TOP, ZONE_LABEL, zoneOf } from "./layout";
 import { nearestNode } from "./nav";
 import { PROFILES, RULES, multiplierOf } from "./scenario";
 import { round1, type Facility, type Person, type World } from "./world";
@@ -76,6 +76,10 @@ export function describeActivity(world: World, p: Person): string {
       return ({ glance: "看了一眼", murmur: "小声议论", complain: "抱怨", argue: "争执", expel: "驱赶插队者", keep_distance: "向旁边让开", flee: "惊慌后退", confront: "上前阻拦", report: "朝保安走去" } as Record<string,string>)[a.reaction] ?? "停下观察";
     case "acting":
       return `正在执行 ${a.op}`;
+    case "to_escalator": return "正在走向扶梯队尾";
+    case "escalator_queue": return `正在候梯（第 ${world.transit.queue.indexOf(p.id) + 1} 位）`;
+    case "escalator": return `正在乘扶梯（剩余 ${round1(a.remaining)} 秒）`;
+    case "distracted": return `正在关注 ${a.attraction}（剩余 ${round1(a.remaining)} 秒，可继续赶路）`;
     case "done":
       return "已进入站台";
   }
@@ -110,6 +114,14 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       holding: world.items.holdings(other.id).filter((i) => world.items.slot(i) === "hand").map((i) => i.kind),
     })),
     facilities: visibleFacilities(world, p.pos).map((f) => observeFacility(world, f, p.pos)),
+    attractions: ATTRACTIONS.filter(a => p.screened && !p.passedGate && playerCanSee(p.pos, a.approach)).map(a => ({
+      id: a.id, label: a.label, cue: a.cue, distance: round1(dist(p.pos, a.approach)), approach: { ...a.approach }, canLinger: dist(p.pos, a.approach) <= 2.5,
+    })),
+    routes: [
+      { id: "stairs" as const, label: "楼梯", node: "STAIRS_TOP", position: STAIRS_TOP, travelSeconds: STAIRS_SECONDS, queueLength: 0, boardingInterval: 0 },
+      { id: "escalator" as const, label: "扶梯", node: "ESCALATOR_TOP", position: ESCALATOR_APPROACH, travelSeconds: ESCALATOR_SECONDS,
+        queueLength: world.transit.queue.filter(id => { const person = world.persons.get(id); return person && playerCanSee(p.pos, person.pos); }).length, boardingInterval: BOARDING_INTERVAL },
+    ].filter(r => p.passedGate && playerCanSee(p.pos, r.position)).map(r => ({ ...r, position: { ...r.position }, distance: round1(dist(p.pos, r.position)) })),
     guards: guards.guards
       .filter((g) => playerCanSee(p.pos, g.pos, world.lightAt))
       .map((g) => ({
@@ -128,5 +140,6 @@ export function summarizeObservation(o: Observation): string {
     .map((f) => `${f.id}:${f.status === "open" ? `${f.queueLength}人` : f.status === "broken" ? "故障" : "停用"}`)
     .join(" ");
   const guards = o.guards.length ? ` 保安:${o.guards.map((g) => `${g.distance}m${g.facing}`).join(",")}` : "";
-  return `t=${o.t}s ${o.self.zone} ${o.self.activity}${fac ? ` | 可见 ${fac}` : " | 视野内无设施"}${guards}`;
+  const additions = [...(o.attractions ?? []).map(a => a.id), ...(o.routes ?? []).map(r => `${r.label}:${r.queueLength}人可见`)].join(" ");
+  return `t=${o.t}s ${o.self.zone} ${o.self.activity}${fac ? ` | 可见 ${fac}` : " | 视野内无设施"}${guards}${additions ? ` | ${additions}` : ""}`;
 }

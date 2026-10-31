@@ -5,7 +5,7 @@ import type { DialogueSystem } from "../dialogue";
 import type { EventBus } from "../events";
 import { angleDiff, angleTo, dist, lineOfSight } from "../geometry";
 import type { GuardSystem } from "../guards";
-import { GATE_X, RAILING_X, RAILING_SEGMENTS, STAIRS_TOP, STAIRS_BOTTOM, STAIRS_REACH, HEIGHT, ITEM_SPOTS, NAV_NODES, SIGHT_OCCLUDERS, zoneOf } from "../layout";
+import { GATE_X, RAILING_X, RAILING_SEGMENTS, STAIRS_TOP, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, ESCALATOR_TOP, HEIGHT, ITEM_SPOTS, NAV_NODES, SIGHT_OCCLUDERS, zoneOf } from "../layout";
 import { clearOfPeople, clearOfScenery, personRadius } from "../movement";
 import { findPath } from "../nav";
 import type { NpcBrain } from "../npcBrain";
@@ -39,7 +39,7 @@ export class ActionExecutor {
   private queue: PlanStep[] = [];
   private current: Current | null = null;
   private rng;
-  private traversal: Extract<Person["activity"], { kind: "stairs" }> | null = null;
+  private traversal: Extract<Person["activity"], { kind: "stairs" | "escalator" }> | null = null;
   private consent: {
     npcId: string;
     facility: string;
@@ -77,7 +77,7 @@ export class ActionExecutor {
   }
   start(plan: ActionPlan): ActionResult {
     const p = this.context.world.player;
-    if (!p || this.busy || this.pendingDialogue || p.incapacitated || ["service", "done"].includes(p.activity.kind) || (p.activity.kind === "stairs" && !(p.activity.route === "escalator" && plan?.steps?.length === 1 && plan.steps[0].op === "vault" && plan.steps[0].obstacle === "escalator_side"))) return {
+    if (!p || this.busy || this.pendingDialogue || p.incapacitated || ["service", "done"].includes(p.activity.kind) || (["stairs", "escalator"].includes(p.activity.kind) && !(p.activity.kind === "escalator" && plan?.steps?.length === 1 && plan.steps[0].op === "vault" && plan.steps[0].obstacle === "escalator_side"))) return {
       ok: false,
       text: "当前行动尚未完成或无法行动"
     };
@@ -91,7 +91,8 @@ export class ActionExecutor {
       ok: false,
       text: error
     };
-    this.traversal = p.activity.kind === "stairs" ? structuredClone(p.activity) : null;
+    this.context.world.finishAttention(p, "转向行动");
+    this.traversal = p.activity.kind === "escalator" ? structuredClone(p.activity) : null;
     this.queue = structuredClone(plan.steps);
     this.outcomes = [];
     this.context.world.removeFromQueue(p);
@@ -239,14 +240,13 @@ export class ActionExecutor {
     this.resetActivity();
     if (this.traversal) {
       const p = this.context.world.player!, a = this.traversal;
-      p.pos.y = a.start.y;
-      const fraction = Math.max(0, Math.min(1, (57 - p.pos.x) / (57 - a.start.x)));
-      p.activity = { ...a, remaining: Math.max(.1, (a.duration ?? 10) * fraction), duration: Math.max(.1, (a.duration ?? 10) * fraction), start: { ...p.pos } };
+      p.pos.y = a.kind === "escalator" ? ESCALATOR_TOP.y : a.start.y;
+      p.activity = { ...a };
       this.traversal = null;
     }
     if (interrupted?.op === "slide_handrail") {
       const p=this.context.world.player!;
-      const duration=Math.max(.1,(STAIRS_BOTTOM.x-p.pos.x)/(STAIRS_BOTTOM.x-STAIRS_TOP.x)*6);
+      const duration=Math.max(.1,(STAIRS_BOTTOM.x-p.pos.x)/(STAIRS_BOTTOM.x-STAIRS_TOP.x)*STAIRS_SECONDS);
       p.activity={kind:"stairs",remaining:duration,duration,start:{...p.pos},end:STAIRS_BOTTOM};
     }
     this.context.world.notifyPlayer("action_interrupted", text);
@@ -378,7 +378,7 @@ export class ActionExecutor {
       if (!settling) {
         if (step.obstacle === "gate" && (zoneOf(p.pos) !== "concourse" || GATE_X - p.pos.x > RULES.jumpGateDistance)) return "只能在安检后大厅、靠近闸机线翻越闸机";
         if (step.obstacle === "railing" && (p.pos.x >= RAILING_X || RAILING_X - p.pos.x > 1.8 || !RAILING_SEGMENTS.some(s => p.pos.y >= s.minY && p.pos.y <= s.maxY))) return "请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
-        if (step.obstacle === "escalator_side" && !(p.activity.kind === "stairs" && p.activity.route === "escalator")) return "只能在下行扶梯上翻出侧边";
+        if (step.obstacle === "escalator_side" && !(p.activity.kind === "escalator")) return "只能在下行扶梯上翻出侧边";
       }
       const dest = this.current?.dest;
       if (settling && step.obstacle !== "escalator_side" && dest && !clearOfPeople(p.pos, dest, personRadius(p.kind), w.collisionBodies(p.id))) return "落地点被占用";
@@ -538,7 +538,7 @@ export class ActionExecutor {
       if (s.obstacle === "railing") { p.pos = { ...a.dest! }; p.screened = true; return { ok: true, text: "翻过安检栏杆，进入大厅；尚未过闸" }; }
       if (s.obstacle === "escalator_side") {
         p.pos = { ...a.dest! };
-        const remaining = Math.max(.1, (STAIRS_BOTTOM.x - p.pos.x) / (STAIRS_BOTTOM.x - STAIRS_TOP.x) * 6);
+        const remaining = Math.max(.1, (STAIRS_BOTTOM.x - p.pos.x) / (STAIRS_BOTTOM.x - STAIRS_TOP.x) * STAIRS_SECONDS);
         p.activity = { kind: "stairs", route: "stairs", remaining, duration: remaining, start: { ...p.pos }, end: STAIRS_BOTTOM };
         this.traversal = null;
         return { ok: true, text: "翻出扶梯侧边，改从楼梯下行" };
@@ -708,6 +708,7 @@ export class ActionExecutor {
       ok: false,
       text: error ?? "让位失效"
     };
+    w.finishAttention(p, "转向协商让位");
     w.removeFromQueue(p);
     this.consent = {
       npcId,

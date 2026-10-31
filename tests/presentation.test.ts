@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { Engine } from "../src/sim/engine";
 import { captureScene, PresentationBuffer, sampleActor } from "../src/ui/presentation";
+import { STAIRS_TOP, STAIRS_BOTTOM } from "../src/sim/layout";
 
 test("snapshots are copies, and rendering cannot change world facts", () => {
   const engine = new Engine(1);
@@ -54,7 +55,7 @@ test("jump height is a visual offset, and guard facing maps the planar axes corr
 
 test("stairs lower the displayed player to the platform without changing simulation facts", () => {
   const engine = new Engine(1);
-  engine.player.pos = { x: 48, y: 15 };
+  engine.player.pos = { ...STAIRS_TOP };
   engine.player.passedGate = true;
   expect(engine.applyAction({ type: "descend_stairs", reason: "test" }).ok).toBe(true);
   const buffer = new PresentationBuffer(engine);
@@ -69,7 +70,7 @@ test("stairs lower the displayed player to the platform without changing simulat
   sampleActor(buffer, "player", 1, pose);
   expect(pose.y).toBe(-2);
   expect(engine.status).toBe("success");
-  expect(engine.player.pos).toEqual({ x: 57, y: 15 });
+  expect(engine.player.pos).toEqual(STAIRS_BOTTOM);
 });
 
 test("queued and serving actors turn toward their facility after arriving from the side", () => {
@@ -88,7 +89,7 @@ test("queued and serving actors turn toward their facility after arriving from t
     buffer.capture(engine);
     const pose = { x: 0, y: 0, z: 0, yaw: 0 };
     sampleActor(buffer, p.id, 1, pose);
-    expect(pose.yaw).toBeCloseTo(Math.PI / 2);
+    expect(pose.yaw).toBeCloseTo(f.def.kind === "tvm" ? Math.PI : Math.PI / 2);
     expect(buffer.current.actors.get(p.id)!.motion).toBe(kind === "service" ? "interact" : "walk");
   }
 });
@@ -107,4 +108,33 @@ test("interaction snapshots copy directed badges, physical items and expiring sp
   e.world.t=5;
   expect(captureScene(e).speech).toHaveLength(0);
   expect(JSON.stringify(e.observe())).not.toContain('"ring"');
+});
+test("NPC collision reversals and arrival transitions have bounded visual turns", () => {
+  const engine = new Engine(1);
+  engine.world.persons.clear();
+  const p = engine.world.addPerson("normal", { x: 10, y: 15 });
+  p.activity = { kind: "walking", path: [{ x: 15, y: 15 }], label: "test" };
+  let scene = captureScene(engine);
+  for (let tick = 0; tick < 20; tick++) {
+    const old = scene.actors.get(p.id)!;
+    p.pos.y += tick % 2 ? 0.08 : -0.08;
+    engine.world.t += 0.1;
+    scene = captureScene(engine, scene);
+    const actor = scene.actors.get(p.id)!;
+    expect(Math.abs(actor.yaw - old.yaw)).toBeLessThanOrEqual(0.4 + 1e-8);
+    expect(actor.x).toBe(p.pos.x);
+    expect(actor.z).toBe(p.pos.y);
+  }
+  const stopped = scene.actors.get(p.id)!.yaw;
+  engine.world.t += 0.1;
+  scene = captureScene(engine, scene);
+  expect(scene.actors.get(p.id)!.yaw).toBe(stopped);
+  p.activity = { kind: "queued", facility: "TVM-2" };
+  for (let tick = 0; tick < 20; tick++) { engine.world.t += 0.1; scene = captureScene(engine, scene); }
+  const buffer = new PresentationBuffer(engine);
+  buffer.previous = buffer.current = scene;
+  const pose = { x: 0, y: 0, z: 0, yaw: 0 };
+  sampleActor(buffer, p.id, 1, pose);
+  const facility = engine.world.facility("TVM-2")!.def;
+  expect(pose.yaw).toBeCloseTo(Math.atan2(facility.pos.x - p.pos.x, facility.pos.y - p.pos.y));
 });

@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
-import Anthropic from "@anthropic-ai/sdk";
+import { fake, jsonResponse } from "./responsesSupport";
 import { respond, dialogueRequestValid, validateResponse } from "../server/npcDialogue";
-import { structuredCall } from "../server/structured";
 import { generatePersona } from "../src/sim/persona";
 import { Rng } from "../src/sim/rng";
 import type { NpcDialogueRequest } from "../src/shared/types";
@@ -18,9 +17,7 @@ test("NPC validates actual holdings and malformed inputs", async () => {
   expect((await respond(async()=>({}),request)).source).toBe("error");
   expect((await respond(async()=>{throw Error("offline")},request)).decision).toBe("refuse");
 });
-test("Anthropic structured adapter supports the new NPC schema", async () => {
-  const request=dialogueFixture();
-  const client=new Anthropic({apiKey:"fake",fetch:async()=>Response.json({id:"m1",type:"message",role:"assistant",model:"claude-test",stop_reason:"end_turn",usage:{input_tokens:1,output_tokens:2},content:[{type:"text",text:JSON.stringify({reply:"不行",decision:"refuse",give:null,want:null,reason:"没有票"})}]})});
-  const result=await respond((system,user,schema,_name,maxTokens)=>structuredCall(client,{model:"claude-test",maxTokens:4096,maxThinkingTokens:1024,fallback:false},{system,user,schema,maxTokens,validate:(value):value is unknown=>!!value}),request);
-  expect(result).toMatchObject({decision:"refuse",source:"llm"});
+test("Responses structured adapter supports the NPC schema", async () => {
+  const {service}=fake([jsonResponse({reply:"不行",decision:"refuse",give:null,want:null,reason:"没有票"})]);
+  expect(await service.respond(dialogueFixture())).toMatchObject({decision:"refuse",source:"llm"});
 });

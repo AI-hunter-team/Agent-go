@@ -1,6 +1,5 @@
 /** Classify known errors without returning arbitrary upstream text or credentials. */
-export async function modelHttpError(response: Response): Promise<string> {
-  const fallback = `模型接口错误 ${response.status}，请检查接口配置或稍后重试`;
+export async function modelHttpError(response: Response, fallback = `模型接口错误 ${response.status}，请检查接口配置或稍后重试`): Promise<string> {
   if (![400, 404, 422].includes(response.status)) return fallback;
   let error: { code?: unknown; param?: unknown; message?: unknown };
   try { error = (await response.json())?.error ?? {}; }
@@ -13,7 +12,7 @@ export async function modelHttpError(response: Response): Promise<string> {
   if (error.code === "model_not_found") {
     return `${prefix}模型不存在或当前账号没有调用权限，请检查模型 ID 或选择其他模型`;
   }
-  if (error.param === "reasoning_effort" && ["unsupported_parameter", "unsupported_value"].includes(String(error.code))) {
+  if (["reasoning_effort", "reasoning.effort", "reasoning"].includes(String(error.param)) && ["unsupported_parameter", "unsupported_value"].includes(String(error.code))) {
     return `${prefix}此模型不支持当前推理强度参数，请使用支持该参数的模型或调整推理配置`;
   }
   if (["tools", "tool_choice", "parallel_tool_calls"].includes(String(error.param)) && error.code === "unsupported_parameter") {

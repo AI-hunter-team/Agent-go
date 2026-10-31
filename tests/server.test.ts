@@ -6,9 +6,11 @@ import { createApp, type LlmService } from "../server/app";
 import { SessionStore } from "../server/sessions";
 import { countChars } from "../src/shared/guidance";
 import { Engine } from "../src/sim/engine";
+import { buildSystemPrompt } from "../server/prompts";
 
 let server: Server | null = null;
 
+/** 启动隔离 API 和伪模型，返回请求入口及可核对的会话存储。 */
 async function start(llm: LlmService | null = null) {
   const sessions = new SessionStore();
   server = createApp({ llm, sessions }).listen(0);
@@ -98,16 +100,21 @@ describe("API with a model", () => {
     expect(sessions.get(body.sessionId)?.loadout).toEqual({backpack:false});
     for(const path of ["/api/creative/classify","/api/npc/negotiate"]) expect((await call("POST",path,{})).status).toBe(404);
   });
-  test("session uses fixed difficulty and rejects player overrides before creating a game", async () => {
+  test("session accepts selected deadlines and rejects crowd overrides before creating a game", async () => {
     const { call, sessions } = await start(fakeLlm);
     const settings = { timeLimitSeconds: 150, extraQueuePeople: 3 };
-    for (const invalid of [{ ...settings, timeLimitSeconds: 180 }, { ...settings, extraQueuePeople: 0 }, { ...settings, timeLimitSeconds: 10 }, { ...settings, extraQueuePeople: 99 }, { ...settings, grantTicket: true }, null]) {
+    for (const invalid of [{ ...settings, extraQueuePeople: 0 }, { ...settings, timeLimitSeconds: 10 }, { ...settings, extraQueuePeople: 99 }, { ...settings, grantTicket: true }, null]) {
       expect((await call("POST", "/api/session", { guidance: "", settings: invalid })).status).toBe(400);
     }
     expect(sessions.size).toBe(0);
-    const result = await call("POST", "/api/session", { guidance: "", settings });
-    expect(result.status).toBe(200);
-    expect(sessions.get(result.body.sessionId)?.settings).toEqual(settings);
+    for (const timeLimitSeconds of [60, 120, 150, 180, 240, 300]) {
+      const chosen = { ...settings, timeLimitSeconds };
+      const result = await call("POST", "/api/session", { guidance: "", settings: chosen });
+      expect(result.status).toBe(200);
+      const session = sessions.get(result.body.sessionId)!;
+      expect(session.settings).toEqual(chosen);
+      expect(buildSystemPrompt("", null, session.settings).rules).toContain(`${timeLimitSeconds} 秒（世界时间）`);
+    }
     const omitted = await call("POST", "/api/session", { guidance: "" });
     expect(sessions.get(omitted.body.sessionId)?.settings).toEqual(settings);
   });

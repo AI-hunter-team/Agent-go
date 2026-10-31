@@ -2,11 +2,12 @@ import { describe, expect, test } from "vitest";
 import { Engine } from "../src/sim/engine";
 import { findPath } from "../src/sim/nav";
 import { World } from "../src/sim/world";
+import { STAIRS_BOTTOM, STAIRS_TOP } from "../src/sim/layout";
 
 function atStairs() {
   const engine = new Engine(1);
-  engine.world.items.spawn("ticket", { type: "held", personId: engine.player.id, slot: "pocket" }, engine.player.id);
-  Object.assign(engine.player, { screened: true, passedGate: true, pos: { x: 48, y: 15 } });
+  engine.world.items.spawn("ticket", {type:"held",personId:"player",slot:"pocket"},"player");
+  Object.assign(engine.player, { screened: true, passedGate: true, pos: { ...STAIRS_TOP } });
   engine.takeTriggers();
   return engine;
 }
@@ -38,7 +39,7 @@ describe("stairs after the gate", () => {
     expect(e.applyAction({ type: "descend_stairs", reason: "" })).toMatchObject({ ok: false });
     expect(e.applyAction({ type: "move_to", target: "STAIRS_TOP", reason: "" }).ok).toBe(true);
     for (let i = 0; i < 200 && e.player.activity.kind !== "idle"; i++) e.step();
-    expect(e.player.pos).toEqual({ x: 48, y: 15 });
+    expect(e.player.pos).toEqual(STAIRS_TOP);
     expect(e.applyAction({ type: "descend_stairs", reason: "" })).toMatchObject({ ok: true });
   });
 
@@ -46,12 +47,12 @@ describe("stairs after the gate", () => {
     const e = atStairs();
     expect(e.applyAction({ type: "descend_stairs", reason: "" })).toMatchObject({ ok: true });
     for (let i = 0; i < 30; i++) e.step();
-    expect(e.player.pos.x).toBeGreaterThan(48);
-    expect(e.player.pos.x).toBeLessThan(57);
+    expect(e.player.pos.x).toBeGreaterThan(STAIRS_TOP.x);
+    expect(e.player.pos.x).toBeLessThan(STAIRS_BOTTOM.x);
     expect(e.player.onPlatform).toBe(false);
     expect(e.status).toBe("running");
     for (let i = 0; i < 30; i++) e.step();
-    expect(e.player.pos).toEqual({ x: 57, y: 15 });
+    expect(e.player.pos).toEqual(STAIRS_BOTTOM);
     expect(e.player.onPlatform).toBe(true);
     expect(e.status).toBe("success");
     expect(e.score).toBe(6);
@@ -71,7 +72,7 @@ describe("stairs after the gate", () => {
   test("walking cannot bypass the stairs at any side of the landing", () => {
     const e = atStairs();
     expect(e.applyAction({ type: "move_to", target: "PLATFORM", reason: "" }).ok).toBe(false);
-    for (const y of [1, 15, 29]) expect(findPath({ x: 48, y }, { x: 57, y })).toBeNull();
+    for (const y of [1, 15, 29]) expect(findPath({ x: STAIRS_TOP.x, y }, { x: STAIRS_BOTTOM.x, y })).toBeNull();
     expect(e.player.onPlatform).toBe(false);
   });
 

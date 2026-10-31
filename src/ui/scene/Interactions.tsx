@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei/web/Html";
 import type { Group, Mesh } from "three";
 import type { GameSession } from "../gameSession";
-import { sampleActor } from "../presentation";
+import { platformElevation, sampleActor } from "../presentation";
 import { colors } from "./resources";
 import { ITEM_DEFS } from "../../sim/content/items";
 
@@ -40,7 +40,7 @@ function ItemMarker({id,session}:{id:string;session:GameSession}) {
     const i=session.presentation.current.items.find(i=>i.id===id);
     if(!mesh.current) return;
     mesh.current.visible=!!i;
-    if(i) mesh.current.position.set(i.x+(i.holderId?.length? .3:0),i.holderId ? 1:.16,i.z);
+    if(i) mesh.current.position.set(i.x+(i.holderId?.length? .3:0),platformElevation(i.x) + (i.holderId ? 1:.16),i.z);
   });
   const item=session.presentation.current.items.find(i=>i.id===id);
   return <mesh ref={mesh} name={item ? ITEM_DEFS[item.kind].label:id}><boxGeometry args={[.45,.2,.25]} /><meshStandardMaterial color={item?.kind==="ticket" ? colors.white:colors.ochre} /></mesh>;

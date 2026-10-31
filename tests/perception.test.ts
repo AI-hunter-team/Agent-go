@@ -44,12 +44,12 @@ describe("event bus and perception", () => {
     expect(system.step([observer])[0]).toMatchObject({ channel: "hearing", attributedTo: null, role: "bystander" });
   });
   test("a wall halves hearing range and seeing only the result does not identify its actor", () => {
-    const { bus, system, observer, event } = setup({ x: 23, y: 10 });
+    const { bus, system, observer, event } = setup({ x: 33, y: 12 });
     bus.endAct("actor");
     bus.drainFrame();
-    bus.emit({ ...event, pos: { x: 29, y: 10 }, loudness: 10 });
+    bus.emit({ ...event, pos: { x: 39, y: 12 }, loudness: 10 });
     expect(system.step([observer])).toHaveLength(0);
-    bus.emit({ ...event, pos: { x: 27, y: 10 }, loudness: 10 });
+    bus.emit({ ...event, pos: { x: 37, y: 12 }, loudness: 10 });
     expect(system.step([observer])[0]).toMatchObject({ channel: "hearing", attributedTo: null });
     const b = setup(); b.bus.endAct("actor");
     expect(b.system.step([b.observer])[0]).toMatchObject({ channel: "sight", attributedTo: null });
@@ -65,8 +65,8 @@ describe("event bus and perception", () => {
     bus.emit({ ...event, kind: "report", aboutId: "subject", pos: { x: 32, y: 15 }, targetId: "guard", loudness: 8 });
     const guard: Observer = { ...observer, id: "guard", role: "guard", facing: Math.PI };
     expect(system.step([guard])[0]).toMatchObject({ channel: "report", attributedTo: "subject" });
-    bus.emit({ ...event, kind: "report", aboutId: "subject", pos: { x: 23, y: 10 }, loudness: 20 });
-    const throughWall: Observer = { ...guard, pos: { x: 29, y: 10 } };
+    bus.emit({ ...event, kind: "report", aboutId: "subject", pos: { x: 33, y: 12 }, loudness: 20 });
+    const throughWall: Observer = { ...guard, pos: { x: 39, y: 12 } };
     expect(system.step([throughWall])[0]).toMatchObject({ channel: "hearing", attributedTo: null });
   });
 });
