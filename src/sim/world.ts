@@ -1,3 +1,5 @@
+import { platformClearanceBlocks } from "../shared/connectorGeometry";
+import { selectConnector } from "./connectors";
 import { EntranceSystem } from "./entrance";
 import { legacyWorld } from "./worldDefinition";
 import type { WorldDefinition } from "../shared/world";
@@ -26,12 +28,12 @@ export type Activity =
   | { kind: "queued"; facility: string }
   | { kind: "service"; facility: string }
   | { kind: "waiting"; remaining: number }
-  | { kind: "stairs"; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
+  | { kind: "stairs"; connectorId?: string; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
   | { kind: "reacting"; reaction: string; subjectId: string }
   | { kind: "acting"; op: string; progress: number }
   | { kind: "to_escalator"; path: Vec[] }
   | { kind: "escalator_queue"; joinedAt: number }
-  | { kind: "escalator"; remaining: number; duration?: number }
+  | { kind: "escalator"; connectorId?: string; remaining: number; duration?: number }
   | { kind: "distracted"; attraction: string; remaining: number; elapsed: number; resume?: { path: Vec[]; label: string } }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
@@ -56,6 +58,7 @@ export interface Person {
   facing: number;
   incapacitated: number;
   transitRoute?: "stairs" | "escalator";
+  transitConnectorId?: string;
   attentionCooldown: Record<string, number>;
   entryOrigin?: string;
   ambient?: { label:string; point:Vec; remaining:number; started:boolean };
@@ -126,6 +129,7 @@ export class World {
   gatePassed = 0;
   private nextId = 1;
   collisionGuards: MovingBody[] = [];
+  private readonly walkReplanAt=new WeakMap<Person,number>();
   private readonly detourCache=new Map<string,{target:Vec;waypoint:Vec;until:number}>();
   readonly tickStarts = new Map<string, Vec>();
   readonly cutInReservations = new Map<string, { facility: string; npcId: string }>();
@@ -190,7 +194,7 @@ export class World {
       && dist(p.pos, target) <= personRadius(p.kind) + stride
       && !this.spatial.clearOfPeople(target, target, personRadius(p.kind), bodies);
     const memberships = [...this.facilities.values()].map(f => [...f.queue, ...(f.serving ? [f.serving.personId] : [])]);
-    memberships.push(this.transit.queue);
+    memberships.push(...this.transit.queues());
     const queues = memberships.flatMap((ids) => {
       const people = ids.filter(id => id !== p.id).map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
       if (people.length < (avoidSingleQueue ? 1 : 2)) return [];
@@ -212,7 +216,7 @@ export class World {
   }
 
   constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds, readonly loadout: Readonly<Loadout> = DEFAULT_LOADOUT, readonly definition:WorldDefinition=legacyWorld(seed)) {
-    this.layout=definition.layout; this.spatial=createMovement(this.layout); this.navigation=createNavigation(this.layout,this.spatial);
+    this.layout=definition.layout; this.spatial=createMovement(this.layout,platformClearanceBlocks(definition.connectors).map(v=>v.bounds)); this.navigation=createNavigation(this.layout,this.spatial);
     this.loadout = resolveLoadout(loadout);
     this.rng = new Rng(seed);
     this.personaRng = this.rng.fork("persona");
@@ -363,21 +367,25 @@ export class World {
   }
 
   /** The stable-duration alternative to the queued escalator. */
-  descendStairs(p: Person): string | null {
+  descendStairs(p: Person, connectorId?:string): string | null {
+    const connector=this.definition.connectors?selectConnector(this,p,"stairs",connectorId):undefined;
+    if(this.definition.connectors&&!connector)return "无法到达所选楼梯入口";
+    const top=connector?.from??this.layout.STAIRS_TOP;
     if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs" || p.activity.kind === "escalator") return "当前行动尚未完成";
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
-    if (dist(p.pos, this.layout.STAIRS_TOP) > STAIRS_REACH) return "请先前往下楼梯入口";
+    if (dist(p.pos, top) > STAIRS_REACH) return "请先前往下楼梯入口";
     this.finishAttention(p, "选择楼梯");
     this.removeFromQueue(p);
-    if(this.definition.generatorVersion!=="legacy-v0")p.pos={...p.pos,floorId:"transit:stairs",elevation:0};
-    p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos } };
+    if(this.definition.generatorVersion !== "legacy-v0")p.pos={...p.pos,floorId:connector?`transit:${connector.id}`:"transit:stairs",elevation:0};
+    p.transitConnectorId=connector?.id;
+    p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos }, ...(connector?{connectorId:connector.id,end:connector.to}: {}) };
     return null;
   }
 
-  traverse(p: Person, route: "stairs" | "escalator", walking = false): string | null {
-    if (route === "stairs") return this.descendStairs(p);
+  traverse(p: Person, route: "stairs" | "escalator", walking = false, connectorId?:string): string | null {
+    if (route === "stairs") return this.descendStairs(p,connectorId);
     if (["service", "creative", "acting", "stairs", "escalator"].includes(p.activity.kind)) return "当前行动尚未完成";
-    const error=this.transit.join(p);
+    const error=this.transit.join(p,connectorId);
     if (error) return error;
     p.escalatorWalking=walking;
     return null;
@@ -474,7 +482,7 @@ export class World {
         break;
       }
       case "walking": {
-        const connectorArrival=this.definition.generatorVersion!=="legacy-v0"&&p.passedGate&&a.path.length===1&&[this.layout.STAIRS_TOP,this.layout.ESCALATOR_APPROACH].some(top=>dist(a.path[0],top)<.01&&dist(p.pos,top)<=.2);
+        const connectorArrival=this.definition.generatorVersion !== "legacy-v0"&&p.passedGate&&a.path.length===1&&(this.definition.connectors?.map(c=>c.approach)??[this.layout.STAIRS_TOP,this.layout.ESCALATOR_APPROACH]).some(top=>dist(a.path[0],top)<.01&&dist(p.pos,top)<=.2);
         if (connectorArrival || this.followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
           const door = p.isPlayer && p.onPlatform && trainDoors(this.definition).find(d => dist(p.pos, d.pos) < 0.05);
@@ -562,7 +570,7 @@ export class World {
           y: a.start.y + (end.y - a.start.y) * progress,
         };
         if (!this.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
-        p.pos = {...next, ...(this.definition.generatorVersion!=="legacy-v0" ? {floorId:"transit:stairs",elevation:(a.start.elevation??0)+(-6-(a.start.elevation??0))*progress} : {floorId:p.pos.floorId})};
+        p.pos = {...next, ...(this.definition.generatorVersion !== "legacy-v0" ? {floorId:a.connectorId?`transit:${a.connectorId}`:"transit:stairs",elevation:(a.start.elevation??0)+(-6-(a.start.elevation??0))*progress} : {floorId:p.pos.floorId})};
         a.remaining = remaining;
         if (a.remaining <= 1e-9) {
           p.pos = { ...end };
@@ -588,6 +596,16 @@ export class World {
   }
 
   private followPath(p: Person, path: Vec[], stride: number): boolean {
+    // Crowd avoidance can carry a walker away from its original visible segment.
+    // Rejoin the static route around floor openings instead of steering at a point
+    // behind the slab indefinitely. Queue/service/transit paths keep their rules.
+    if(this.definition.connectors&&p.activity.kind==="walking"&&path.length&&this.t>=(this.walkReplanAt.get(p)??0)){
+      this.walkReplanAt.set(p,this.t+.5);
+      if(!this.spatial.clearOfScenery(p.pos,path[0],personRadius(p.kind))){
+        const route=this.navigation.findPath(p.pos,path.at(-1)!,personRadius(p.kind));
+        if(route)path.splice(0,path.length,...route);
+      }
+    }
     let budget = stride;
     while (path.length && budget > 1e-8) {
       const next = path[0];

@@ -2,7 +2,7 @@ import { Vector3 } from "three";
 import type { ActorPose } from "../presentation";
 import { cameraFraction } from "./cameraCollision";
 import { constrainCabinCamera } from "./trainCabin";
-import { generatedTrainLayout } from "../../shared/generatedTrain";
+import { worldTrainLayout } from "../../shared/generatedTrain";
 import type { WorldDefinition } from "../../shared/world";
 
 interface Shot { azimuth: number; distance: number; height: number; focus: number; offset: number; fov: number }
@@ -61,8 +61,7 @@ export class VictoryCamera {
       const axis = definition && definition.generatorVersion !== "legacy-v0" ? definition.layout.platformAxis : undefined;
       const horizontal = axis?.direction === "x";
       const along = horizontal ? pose.x : pose.z;
-      const length = horizontal ? definition!.layout.WIDTH : definition?.layout.HEIGHT ?? 0;
-      const centres = axis ? generatedTrainLayout(length).centres : [];
+      const centres = axis ? worldTrainLayout(definition!).centres : [];
       const centre = centres.length ? centres.reduce((a, b) => Math.abs(a - along) < Math.abs(b - along) ? a : b) : 15;
       const direction = along < centre ? 1 : -1;
       // Reserve the top result and bottom actions, including short landscape screens.

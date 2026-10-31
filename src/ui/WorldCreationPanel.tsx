@@ -1,3 +1,4 @@
+import { previewWorldVersion } from "./worldVersion";
 import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import type { WorldDefinition } from "../shared/world";
@@ -28,7 +29,7 @@ export function WorldCreation({draft,onConfirm,onCancel,quality,reducedMotion}:W
   const timer=setTimeout(()=>{
    const seed=resolveWorldSeed(source.value);
    if(!seed.ok){setError(seed.error);setBusy(false);return;}
-   try{const next=generateWorld(seed.seed);if(active){setWorld(next);setError("");setBusy(false);setTurn(0);}}
+   try{const next=generateWorld(seed.seed,{generatorVersion:previewWorldVersion()});if(active){setWorld(next);setError("");setBusy(false);setTurn(0);}}
    catch{if(active){setError("地图准备失败，请换一个种子后重试。");setBusy(false);}}
   },180);return()=>{active=false;clearTimeout(timer);};
  },[source]);
@@ -54,7 +55,7 @@ export function WorldCreation({draft,onConfirm,onCancel,quality,reducedMotion}:W
      <div className="segmented">{(["random","custom"] as const).map(mode=><button key={mode} aria-pressed={source.mode===mode} className={source.mode===mode?"on":""} onClick={()=>setSource(s=>mode===s.mode?s:mode==="random"?{mode,value:String(randomSeed(world?.seed??draft.seed))}:{...s,mode})}>{mode==="random"?"随机种子":"自定义种子"}</button>)}</div>
      <label className="field">世界种子<div className="row"><input aria-label="世界种子" value={source.value} readOnly={source.mode==="random"} maxLength={128} aria-invalid={!!error} onChange={e=>setSource({mode:"custom",value:e.target.value})}/>{source.mode==="random"&&<button onClick={()=>setSource({mode:"random",value:String(randomSeed(Number(source.value)))})}>换一个</button>}</div></label>
      <p className={styles.hint}>数字或文字均可。同一种子与版本生成同一座车站。</p>
-     <div className={styles.worldSummary} role="status">{busy?"正在生成地图…":error|| (world&&<><strong>{world.name}</strong><span>{({central:"中央付费区",side:"侧向服务带",dual:"双端入站组团",legacy:"固定车站"})[world.archetype]} · {world.layout.WIDTH} × {world.layout.HEIGHT} m</span><small>双层岛式站台 · {world.layout.FACILITIES.length}组设施</small></>)}</div>
+     <div className={styles.worldSummary} role="status">{busy?"正在生成地图…":error|| (world&&<><strong>{world.name}</strong><span>{(world.architecture?.layoutType?({"dual-ended":"双端站厅型","offset-entry":"偏置入口型","open-hall":"开阔站厅型"})[world.architecture.layoutType]:({central:"中央付费区",side:"侧向服务带",dual:"双端入站组团",legacy:"固定车站"})[world.archetype])} · {world.layout.WIDTH} × {world.layout.HEIGHT} m</span><small>双层岛式站台 · {world.layout.FACILITIES.length}组设施</small></>)}</div>
      <div className={styles.worldActions}><button className="primary full-width" disabled={!canConfirm} onClick={()=>canConfirm&&world&&onConfirm(world,source,name.trim()||world.name)}>创建世界 →</button><button className="ghost full-width" onClick={onCancel}>返回休息室</button></div>
     </section>
    </div>

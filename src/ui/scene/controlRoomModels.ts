@@ -1,7 +1,7 @@
 import { Group, Mesh, MeshStandardMaterial, CylinderGeometry, LatheGeometry, SphereGeometry, TorusGeometry, Vector2 } from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { createBrandSculpture } from "./brandGeometry";
-import { LOUNGE, LOUNGE_PORTAL } from "./loungeLayout";
+import { LOUNGE, LOUNGE_PORTAL, LOUNGE_JOIN } from "./loungeLayout";
 import { SurfaceBuilder,disposeSurfaceGeometry } from "./surfaceGeometry";
 import type { GeneratedPalette } from "./generatedSurfaces";
 export type ControlAsset="room"|"console"|"wardrobe"|"door"|"passage"|"seat"|"table"|"brand";
@@ -70,8 +70,8 @@ export function createControlRoomAsset(kind:ControlAsset,p:GeneratedPalette,cuta
   }else{
     const passageWall=matte("#837a64"),passageLower=matte("#48503b");
     // Private side branch into the public upper landing, before the timed stairs.
-    b.box(p.stone,[5,.18,1.8],[-.5,-.09,2.1]);b.box(passageWall,[5,2.8,.15],[-.5,1.4,1.125]);b.box(passageWall,[1.3,2.8,.15],[-2.4,1.4,3.075]);
-    b.box(passageLower,[5,1.3,.03],[-.5,.65,1.215]);b.box(passageLower,[1.3,1.3,.03],[-2.4,.65,2.985]);
+    b.box(p.stone,[5,.18,1.8],[-.5,-.09,2.1]);b.box(passageWall,[LOUNGE_JOIN.wallLength,2.8,.15],[LOUNGE_JOIN.wallCenterX,1.4,LOUNGE_JOIN.nearZ]);b.box(passageWall,[1.3,2.8,.15],[-2.4,1.4,3.075]);
+    b.box(passageLower,[LOUNGE_JOIN.wallLength,1.3,.03],[LOUNGE_JOIN.wallCenterX,.65,LOUNGE_JOIN.nearZ+.09]);b.box(passageLower,[1.3,1.3,.03],[-2.4,.65,2.985]);
     b.box(p.wall,[5,.15,2.1],[-.5,2.875,2.1]);b.box(p.light,[4.8,.035,.045],[-.5,2.72,1.25]);
     b.box(p.tactile,[1.3,.016,.3],[-2.4,.009,3.5]);
   }

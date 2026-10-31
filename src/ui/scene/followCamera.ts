@@ -32,14 +32,22 @@ export class FollowCamera {
     this.position.y = this.target.y + dy;
     this.position.z = this.target.z + dz;
     // Stay above the actual stair/landing under the camera, rather than looking through its lip.
+    let entranceView = false;
     for(const entry of definition?.entrances??[]){
       const along=(this.position.x-entry.top.x)*entry.inward.x+(this.position.z-entry.top.y)*entry.inward.y;
       const across=-(this.position.x-entry.top.x)*entry.inward.y+(this.position.z-entry.top.y)*entry.inward.x;
       const playerAlong=(pose.x-entry.top.x)*entry.inward.x+(pose.z-entry.top.y)*entry.inward.y;
+      const playerAcross=-(pose.x-entry.top.x)*entry.inward.y+(pose.z-entry.top.y)*entry.inward.x;
+      if(playerAlong>=-.1&&playerAlong<8&&Math.abs(playerAcross)<entry.width/2&&pose.y>.1)entranceView=true;
       if(along>=-4.3&&along<=8&&Math.abs(across)<entry.width/2&&playerAlong<8&&playerAlong>=-.1){
+        entranceView = true;
         const floor=along<0?4:along>6?0:4*(1-along/6);
         this.position.y=Math.max(floor+1.65,Math.min(floor+2.35,this.position.y));
       }
+    }
+    if(definition?.architecture&&!entranceView){
+      const ceiling=pose.y<-.1?pose.y+2.5:3.6;
+      this.position.y=Math.min(this.position.y,ceiling-.18);
     }
     const safe = cameraFraction(this.target, this.position, definition);
     if (initial || snap || reducedMotion || safe < this.fraction) {
