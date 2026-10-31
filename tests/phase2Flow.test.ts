@@ -3,7 +3,7 @@ import { Engine } from "../src/sim/engine";
 import { World } from "../src/sim/world";
 import { ITEM_DEFS } from "../src/sim/content/items";
 import { emptyScenario, createFixtureEngine } from "./fixtures/scenarios";
-import { ESCALATOR_TOP, STAIRS_TOP } from "../src/sim/layout";
+import { ESCALATOR_TOP, RAILING_SEGMENTS, RAILING_X, STAIRS_TOP } from "../src/sim/layout";
 import type { PlanStep } from "../src/shared/interaction";
 import { GameRunner } from "../src/agent/runner";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
@@ -46,8 +46,26 @@ describe("IV2 phase 2 world flows",()=>{
   const e=createFixtureEngine();e.player.pos={x:24.5,y:10};expect(plan(e,{op:"vault",obstacle:"railing"}).ok).toBe(true);
   run(e,2.9);expect(e.player.screened).toBe(false);run(e,.2);expect(e.player.screened).toBe(true);expect(e.player.passedGate).toBe(false);expect(e.events.events[0]).toMatchObject({kind:"vault",severity:"violation"});
  });
- test("railing outside explicit low sections is rejected",()=>{
-  const e=createFixtureEngine();e.player.pos={x:24.5,y:15};expect(plan(e,{op:"vault",obstacle:"railing"}).ok).toBe(false);
+ test("railing vault from the hall walks to the nearest low section and crosses only there",()=>{
+  const e=createFixtureEngine();e.player.pos={x:24.5,y:15};expect(plan(e,{op:"vault",obstacle:"railing"}).ok).toBe(true);
+  expect(e.player.activity).toMatchObject({kind:"acting",op:"approach"});
+  run(e,10);expect(e.player.screened).toBe(true);expect(e.player.pos.x).toBeGreaterThan(RAILING_X);
+  expect(RAILING_SEGMENTS.some(s=>e.player.pos.y>=s.minY&&e.player.pos.y<=s.maxY)).toBe(true);
+ });
+ test.each(["RAIL_N","RAIL_S"])("move_to %s stands close enough to vault without another approach",(target)=>{
+  const e=createFixtureEngine();e.player.pos={x:19,y:15};expect(e.applyAction({type:"move_to",target,reason:""}).ok).toBe(true);
+  run(e,10);expect(e.player.activity.kind).toBe("idle");
+  expect(plan(e,{op:"vault",obstacle:"railing"}).ok).toBe(true);expect(e.player.activity).toMatchObject({kind:"acting",op:"vault"});
+ });
+ test("railing vault is rejected once past the security wall",()=>{
+  const e=createFixtureEngine();e.player.pos={x:28,y:10};expect(plan(e,{op:"vault",obstacle:"railing"}).ok).toBe(false);
+ });
+ test("an unreachable concourse approach before a railing vault is replaced by the hall-side walk",()=>{
+  // Report seed 78017401: the interpreter planned approach CONC_N then vault, which failed as unreachable.
+  const e=createFixtureEngine();e.player.pos={x:23.6,y:7.2};
+  expect(e.executor.start({status:"plan",steps:[{op:"approach",target:{kind:"node",id:"CONC_N"}},{op:"vault",obstacle:"railing"}],summary:"测试",reason:"",source:"llm"}).ok).toBe(true);
+  run(e,10);expect(e.player.screened).toBe(true);expect(e.player.pos.x).toBeGreaterThan(RAILING_X);
+  expect(e.executor.outcomes.every(o=>o.ok)).toBe(true);
  });
  test.each([[false,10],[true,5]] as const)("escalator walking=%s takes %s seconds",(walking,seconds)=>{
   const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};expect(e.applyAction({type:"traverse",route:"escalator",walking,reason:""}).ok).toBe(true);run(e,seconds-.1);expect(e.player.onPlatform).toBe(false);run(e,.2);expect(e.status).toBe("success");expect(e.player.pos.y).toBe(ESCALATOR_TOP.y);

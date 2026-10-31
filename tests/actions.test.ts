@@ -383,10 +383,13 @@ describe("action executor lifecycle", () => {
     advance(e, 2);
     expect(f.queue).not.toContain("player");
     expect(e.executor.outcomes.at(-1)?.ok).toBe(false);
+    // From the hall a railing vault first walks to the nearest low section.
     expect(e.executor.start(plan({
       op: "vault",
       obstacle: "railing"
-    })).ok).toBe(false);
+    })).ok).toBe(true);
+    expect(e.player.activity).toMatchObject({ kind: "acting", op: "approach" });
+    e.executor.cancel();
     expect(e.executor.start(plan({
       op: "vault",
       obstacle: "escalator_side"
