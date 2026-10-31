@@ -227,7 +227,7 @@ export function App() {
             )}
           </div>
         )}
-        {!watching && !ended && flow.stage !== "launch" && (
+        {!watching && flow.stage !== "launch" && (
           <Dialog.Root open={j.drawer} onOpenChange={j.setDrawer}>
             <Dialog.Trigger asChild>
               <button className={styles.settingsTrigger} aria-label="打开设置">
@@ -244,7 +244,7 @@ export function App() {
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="muted">
-                  配置后续旅程；浏览与选角无需连接模型。
+                  {ended ? "为当前复盘连接或更换模型。" : "配置后续旅程；浏览与选角无需连接模型。"}
                 </Dialog.Description>
                 <div className="drawer-body">
                   <details open>
@@ -256,6 +256,7 @@ export function App() {
                       onEnabled={j.enabled}
                     />
                   </details>
+                  {!ended && <>
                   <details open>
                     <summary>运行方式</summary>
                     <div className="segmented">
@@ -334,6 +335,7 @@ export function App() {
                     </label>
                     <AvatarSettings avatar={guardAvatar} />
                   </details>
+                  </>}
                 </div>
               </Dialog.Content>
             </Dialog.Portal>
@@ -726,7 +728,7 @@ export function App() {
                   onRetry={j.retry}
                   onEdit={() => j.edit()}
                   onAdopt={j.edit}
-                  onConfigureModel={j.replaceModel}
+                  onConfigureModel={() => j.setDrawer(true)}
                   modelAvailable={health.llm}
                 />
               </div>
