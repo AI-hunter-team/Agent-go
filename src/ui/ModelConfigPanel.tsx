@@ -40,7 +40,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
       pendingToken.current = result.token;
       setBaseUrl(result.baseUrl);
       setVerified(result);
-      setModel(result.models[0] ?? "");
+      setModel(health.model && result.models.includes(health.model) ? health.model : "");
       setManual(result.models.length === 0);
       setApiKey("");
     } catch (e) { setError((e as Error).message); }
@@ -78,7 +78,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
         <h2 id="model-config-title">模型 API 配置</h2>
         <button className="ghost" disabled={busy !== null} onClick={onClose}>返回开局设置</button>
       </div>
-      <p className="muted">连接你的 OpenAI 兼容 API，验证后选择模型来驱动角色。</p>
+      <p className="muted">连接你的 OpenAI 兼容 API，验证后选择模型来驱动 Agent。NPC 使用开发者配置的独立模型。</p>
       <ol className="config-steps" aria-label="配置步骤">
         <li className="on">1 填写接口</li>
         <li className={verified ? "on" : ""}>2 选择模型</li>
@@ -114,6 +114,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
             <select id="api-model" disabled={busy !== null} value={manual ? "__manual__" : model} onChange={(e) => {
               setManual(e.target.value === "__manual__"); setModel(e.target.value === "__manual__" ? "" : e.target.value); setError(null);
             }}>
+              <option value="" disabled>请选择支持工具调用的对话模型</option>
               {verified.models.map((id) => <option key={id} value={id}>{id}</option>)}
               <option value="__manual__">手动填写模型 ID…</option>
             </select>
@@ -121,7 +122,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
           {manual && <label className="field" htmlFor="api-model-manual"><span>模型 ID</span>
             <input id="api-model-manual" value={model} maxLength={200} disabled={busy !== null} placeholder="例如 gpt-6-luna" onChange={(e) => { setModel(e.target.value); setError(null); }} />
           </label>}
-          <p className="muted">启用时会进行一次真实工具调用，验证模型权限和兼容性，可能消耗少量 API 额度。</p>
+          <p className="muted">模型列表不代表账号拥有调用权限；图片模型不能驱动角色。启用时会进行一次真实工具调用，验证权限和兼容性，可能消耗少量 API 额度。</p>
           <button className="primary" disabled={busy !== null || !model.trim()} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型并启用大模型"}</button>
         </div>
       )}

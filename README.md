@@ -40,6 +40,8 @@ npm run dev
 
 打开 http://localhost:5173 。前端 Vite 代理 `/api` 到本机 Express 8787 端口。
 
+手动测试期间保持 `npm run dev` 的终端运行；关闭终端或停止进程会同时断开页面和模型 API。若页面提示无法连接本地 API，先重新启动前后端，再重试；API 重启后，页面临时模型配置需要重新验证，旧对局会话不能继续使用。
+
 没有模型凭据也能玩：选 **离线规则 Agent → 准备开局 → 出发**。可暂停、切换 1/2/4 倍速、结束对局；结束后看成绩、耗时、决策与事件，或导出 JSON。
 
 页面侧栏展示五个环节，显示闸机排队、验票通行和缺票状态。正常过闸或翻闸后只到达上层连接区，需要走到 `STAIRS_TOP`，再调用 `descend_stairs` 下楼 6 秒，到达下层站台后才结算。普通步行不能绕过楼梯；下楼过程包含在轨迹、事件和报告耗时中。
@@ -72,7 +74,7 @@ JSON 导出包含全部调用记录和原始返回内容块，保存前请先导
 
 先靠近队伍，再通过 `request_cut_in` 对观察中 `facilities.people` 的具体乘客说出请求（最多 200 字、3 米以内）。NPC 由模型结合固定性格、排队处境与对话历史自由选择同意或拒绝；每位乘客每局最多三轮。同意后用 1.5 秒移动到该乘客前面，拒绝保留原位次；同意者离队或设施停用时许可失效。旧 `attempt_creative` 插队请求会提示先沟通。
 
-NPC 复用现有模型 API、密钥及模型，无需单独配置，每次有效沟通额外调用一次。模型错误或离线时不会自动同意。运行日志、角色回放和报告保留对话与判定说明，JSON 还包含实际请求、原始返回和执行结果；NPC 调用次数、token 和现实等待单独列出。
+NPC 使用开发者在服务端单独配置的模型 API、密钥及模型，不随用户的 Agent 模型变化；每次有效沟通额外调用一次。未配置 NPC 模型或调用失败时不会自动同意，也不会借用 Agent 模型。运行日志、角色回放和报告保留对话与判定说明，JSON 还包含实际请求、原始返回和执行结果；NPC 调用次数、token 和现实等待单独列出。
 ### 三维观战与占位资产
 
 - 默认第三人称跟随；拖动场景环绕、滚轮缩放；“回正”恢复背后视角，“总览”切换正交镜头。暂停或思考时仍可操作镜头。
@@ -92,7 +94,7 @@ NPC 复用现有模型 API、密钥及模型，无需单独配置，每次有效
 
 可直接在页面点击 **模型 API 配置**，填写 OpenAI 兼容接口的 **API 域名和 Key → 验证连接并获取模型 → 选择模型 → 验证模型并启用大模型**。只填写域名时自动补上 `/v1`；填写完整基础路径时会保留。模型列表接口不受支持时，可手动填写模型 ID。启用前会发起一次与游戏相同的真实工具调用，验证认证、模型权限与工具协议，可能消耗少量接口额度；失败时不会启用。
 
-页面配置按浏览器页面隔离，Key 仅存于临时内存，不写入浏览器存储、`.env` 或日志；刷新后需重新配置，闲置 30 分钟后失效。配置只影响当前页面的新对局，不更改服务端默认配置或其他用户的模型。可通过「清除页面配置」恢复服务端默认配置。
+页面配置按浏览器页面隔离，Key 仅存于临时内存，不写入浏览器存储、`.env` 或日志；刷新后需重新配置，闲置 30 分钟后失效。配置只影响当前页面新对局的 Agent（包括指导整理和创造性分类），不更改服务端默认配置、NPC 或其他用户的模型。可通过「清除页面配置」恢复 Agent 的服务端默认配置。
 
 DeepSeek 官方接口可填写 `https://api.deepseek.com`（页面自动补 `/v1`），模型以获取到的列表为准。当前仍使用 Chat Completions，按精确主机 `api.deepseek.com` 自动适配：保留默认 `low` 思考，使用 `auto` 工具选择和 `max_tokens`，回传已返回的 `reasoning_content`；不启用需要 `/beta` 的严格工具模式。指导整理、行动归类和乘客沟通使用 `json_object`，字段/长度仍由程序验证。游戏只执行一个合法动作，无动作时沿用局内最多一次重试；页面启用探测仍要求本次返回有效动作。其他兼容网关的参数不变，第三方 DeepSeek 代理不自动套用官方参数。该适配的软件验证见 [DEEPSEEK-THINKING-001](docs/validation/DEEPSEEK-THINKING-001.md)，不代表付费模型整局已验收。
 
@@ -104,9 +106,9 @@ DeepSeek 官方接口可填写 `https://api.deepseek.com`（页面自动补 `/v1
 Copy-Item .env.example .env
 ```
 
-编辑 `.env`，填入自己的 `OPENAI_API_KEY`，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
+编辑 `.env`，分别填入 Agent 和 NPC 对应的 API Key，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
 
-- 模板默认 `AGENT_PROVIDER=openai`、`OPENAI_BASE_URL=https://lax.toklens.ai/v1`、`AGENT_MODEL=gpt-6-luna`，使用兼容 OpenAI 的 Chat Completions 协议，由 Node 服务端发出请求。
+- 模板以 DeepSeek Agent 和 Kimi NPC 为例：Agent 使用 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`、`AGENT_MODEL=deepseek-flash`；NPC 使用独立的 `NPC_*` 配置与 `kimi-k2.6`。分别填写 `ANTHROPIC_API_KEY` 和 `NPC_OPENAI_API_KEY`，由 Node 服务端发出请求。模型可用性以各账号 `/models` 列表为准；Kimi K2.6 的 NPC 请求关闭思考，不发送其不支持的 `reasoning_effort`。
 - Luna 默认使用 `reasoning_effort=none` 降低生成等待，其他兼容模型默认 `low`；可用 `OPENAI_REASONING_EFFORT=low` 恢复更多推理。兼容接口默认通过 HTTP SSE 流式接收（`OPENAI_STREAM=0` 可关闭），强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
 - 流式接收不等于提前执行：服务端等完整动作与结束标记、完成流聚合后才校验并交给模拟器；末尾用量会保留，缺失用量记为未知；浏览器仍通过 HTTP JSON 获取完整决策。首段数据时间与完整动作等待分别记录，换成 WebSocket 不保证降低上游排队或生成耗时。当前 `gpt-6-luna` 的 `none` 已在配置的兼容接口做小请求与完整对局验证；复杂策略质量、上游偶发空响应及稳定时延仍需独立验收，详见 [LLM-LATENCY-001](docs/validation/LLM-LATENCY-001.md)。
 - 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
@@ -118,6 +120,17 @@ Copy-Item .env.example .env
 - 每个决策最多重试一次，思考用量逐次检查，复盘累计两次用量。模型传输层不自动重试，20 秒超时；浏览器请求 30 秒超时。
 - 兼容 API 接入固定关闭应用侧模型回退；Anthropic 可通过 `AGENT_FALLBACK=default` 开启服务端拒答回退。日志记录供应商响应的模型名。
 - 指导整理属于赛前操作，输出上限 4096；创造性归类独立调用，上限 1024。角色决策（含重试）与 NPC 沟通的 token 分列统计，**不是全局账单**。
+
+NPC 由开发者在服务端 `.env` 单独配置，随后重启服务；页面不提供 NPC 配置入口：
+
+```dotenv
+NPC_PROVIDER=openai
+NPC_MODEL=your-npc-model-id
+NPC_OPENAI_BASE_URL=https://api.example.com/v1
+NPC_OPENAI_API_KEY=your-npc-api-key
+```
+
+使用 Anthropic 时，改为 `NPC_PROVIDER=anthropic`，设置 `NPC_MODEL` 和 `NPC_ANTHROPIC_API_KEY` 或 `NPC_ANTHROPIC_AUTH_TOKEN`，可选 `NPC_ANTHROPIC_BASE_URL`。NPC 不继承任何 Agent 模型、接口或凭据；必须提供 `NPC_MODEL` 和对应凭据。NPC 输出上限为 1024 token，不启用模型回退；未配置时协商返回 503，调用失败返回 502，均不授予插队许可。已有部署升级后也需补充 NPC 配置，Docker 说明见 [部署教程](docs/DOCKER.md)。
 
 ### Debug 日志与 AI 耗时
 

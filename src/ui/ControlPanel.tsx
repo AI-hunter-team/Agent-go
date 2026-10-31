@@ -1,6 +1,7 @@
 import { countChars } from "../shared/guidance";
 import { GUIDANCE_MAX_CHARS, type NormalizedGuidance } from "../shared/types";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { randomSeed } from "./seed";
 
 export type AgentChoice = "llm" | "offline";
 
@@ -61,11 +62,14 @@ export function SetupPanel(p: SetupProps) {
         {p.agentKind === "offline" && <small className="muted">离线规则 Agent 不读取指导，只按默认方案行动。</small>}
       </label>
 
-      <label className="field inline">
-        <span>情景种子</span>
-        <input aria-label="情景种子" type="number" min={1} value={p.seed} disabled={p.busy !== null} onChange={(e) => p.onSeed(Math.max(1, Number(e.target.value) || 1))} />
-        <small className="muted">相同种子固定初始条件，角色行动会影响后续演化。</small>
-      </label>
+      <div className="field">
+        <label htmlFor="scenario-seed">情景种子</label>
+        <div className="seed-controls">
+          <input id="scenario-seed" aria-label="情景种子" type="number" min={1} max={4_294_967_295} step={1} value={p.seed} disabled={p.busy !== null} onChange={(e) => p.onSeed(Math.min(4_294_967_295, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} />
+          <button type="button" disabled={p.busy !== null} onClick={() => p.onSeed(randomSeed(p.seed))}>刷新随机种子</button>
+        </div>
+        <small className="muted">新局默认随机生成，也可手动填写。相同种子固定初始条件，角色行动会影响后续演化。</small>
+      </div>
 
       <p className="small muted">{`本局规则固定：${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒，每条初始开放队列额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人。`}</p>
       <button className="primary" disabled={over || p.busy !== null} onClick={p.onPrepare}>

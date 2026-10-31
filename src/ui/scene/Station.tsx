@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, DoubleSide, SRGBColorSpace, type Mesh, type MeshBasicMaterial } from "three";
-import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_WALL, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
+import { FACILITIES, QUEUE_SPACING, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_WALL, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
 import type { GameSession } from "../gameSession";
 import { box, materials, plane, type colors } from "./resources";
 
@@ -55,7 +55,7 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
     </>}
     <mesh ref={lamp} geometry={box} material={materials.sage} position={[x - 0.23, def.kind === "security" ? 2.5 : 1.75, z]} scale={[0.08, 0.08, 0.45]} />
     <Sign text={def.id} position={[x - 0.12, def.kind === "security" ? 2.95 : 2.3, z]} width={1.3} />
-    {Array.from({ length: 6 }, (_, index) => <mesh key={index} geometry={box} material={materials.line} position={[def.head.x - index * 0.8, 0.006, z]} scale={[0.03, 0.01, 0.4]} receiveShadow />)}
+    {Array.from({ length: 6 }, (_, index) => <mesh key={index} geometry={box} material={materials.line} position={[def.head.x - index * QUEUE_SPACING, 0.006, z]} scale={[0.03, 0.01, 0.4]} receiveShadow />)}
   </group>;
 });
 

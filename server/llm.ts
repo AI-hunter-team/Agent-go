@@ -1,9 +1,26 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { LlmService } from "./app";
+import type { LlmService, NpcService } from "./app";
 import { ClaudeDecider, configFromEnv } from "./claude";
 import { OpenAIClient, OpenAILlmService } from "./openai";
 import { classifyIntent, negotiateNpc, normalizeGuidance } from "./structured";
 import { debugFetch } from "./debug";
+
+/** Map only developer NPC settings; do not inherit any Agent configuration. */
+export function createNpcLlm(env: NodeJS.ProcessEnv = process.env): NpcService | null {
+  if (!env.NPC_MODEL?.trim()) return null;
+  const llm = createLlm({
+    AGENT_PROVIDER: env.NPC_PROVIDER,
+    AGENT_MODEL: env.NPC_MODEL.trim(),
+    AGENT_FALLBACK: "off",
+    OPENAI_API_KEY: env.NPC_OPENAI_API_KEY,
+    OPENAI_STREAM: "0",
+    OPENAI_BASE_URL: env.NPC_OPENAI_BASE_URL || "https://api.openai.com/v1",
+    ANTHROPIC_API_KEY: env.NPC_ANTHROPIC_API_KEY,
+    ANTHROPIC_AUTH_TOKEN: env.NPC_ANTHROPIC_AUTH_TOKEN,
+    ANTHROPIC_BASE_URL: env.NPC_ANTHROPIC_BASE_URL || "https://api.anthropic.com",
+  });
+  return llm?.negotiate ? { model: llm.model, negotiate: (request) => llm.negotiate!(request) } : null;
+}
 
 export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | null {
   const provider = env.AGENT_PROVIDER || (env.OPENAI_API_KEY ? "openai" : "anthropic");

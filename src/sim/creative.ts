@@ -1,6 +1,6 @@
 import type { ActionResult, CreativeMechanic, Vec } from "../shared/types";
 import type { GuardSystem } from "./guards";
-import { GATE_X, HEIGHT, queueSlot, zoneOf } from "./layout";
+import { GATE_X, HEIGHT, zoneOf } from "./layout";
 import { DT, RULES } from "./scenario";
 import { prepareCutIn } from "./negotiation";
 import { round1, type Person, type World } from "./world";
@@ -40,9 +40,10 @@ export class CreativeSystem {
     if (!valid.ok) return valid;
     const mine = w.queuePosition(p);
     const f = w.facility(valid.request.npc.facility)!;
-    const dest = queueSlot(f.def, f.queue.indexOf(npcId));
+    const dest = w.queueStandPoint(f, f.queue.indexOf(npcId), p.kind);
     if (mine) w.removeFromQueue(p);
     p.activity = { kind: "creative", mechanic: "cut_in_line", remaining: RULES.cutInSeconds, facility: f.def.id, dest };
+    w.cutInReservations.set(p.id, { facility: f.def.id, npcId });
     this.consentTarget = npcId;
     this.current = null;
     return { ok: true, text: `${npcId} 同意让位，开始移动到这位乘客前面（${f.def.id}）` };
@@ -72,6 +73,16 @@ export class CreativeSystem {
     const a = p.activity;
     if (a.kind === "creative") {
       a.remaining -= DT;
+      if (a.mechanic === "cut_in_line") {
+        const f = this.world.facility(a.facility)!;
+        if (f.status !== "open" || !this.consentTarget || !f.queue.includes(this.consentTarget)) {
+          this.finish(p, a); return;
+        }
+        a.dest = this.world.cutInPoint(p, f);
+        const arrived = this.world.movePerson(p, a.dest, p.speed * DT);
+        if (arrived && a.remaining <= 1e-9) this.finish(p, a);
+        return;
+      }
       const frac = Math.min(1, DT / Math.max(a.remaining + DT, DT));
       p.pos = { x: p.pos.x + (a.dest.x - p.pos.x) * frac, y: p.pos.y + (a.dest.y - p.pos.y) * frac };
       this.detect(p);
@@ -83,8 +94,8 @@ export class CreativeSystem {
 
   private finish(p: Person, a: Extract<Person["activity"], { kind: "creative" }>) {
     const w = this.world;
-    p.pos = { ...a.dest };
     if (a.mechanic === "jump_gate") {
+      p.pos = { ...a.dest };
       p.passedGate = true;
       p.activity = { kind: "idle" };
       w.gatePassed++;
@@ -93,6 +104,7 @@ export class CreativeSystem {
       return;
     }
     const f = w.facility(a.facility)!;
+    w.cutInReservations.delete(p.id);
     const index = this.consentTarget ? f.queue.indexOf(this.consentTarget) : -1;
     this.consentTarget = null;
     if (f.status !== "open" || index < 0) {

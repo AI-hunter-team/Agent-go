@@ -1,4 +1,5 @@
 import { readChatStream } from "./chatStream";
+import { modelHttpError } from "./modelError";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
 import type { LlmService } from "./app";
 import type { ClaudeConfig } from "./claude";
@@ -70,7 +71,7 @@ export class OpenAIClient {
     }
     if (response.status === 401 || response.status === 403) throw new Error("模型认证失败，请检查 OPENAI_API_KEY 和模型权限");
     if (response.status === 429) throw new Error("模型限流或额度不足，请稍后再试");
-    if (!response.ok) throw new Error(`模型接口错误 ${response.status}，请检查接口配置或稍后重试`);
+    if (!response.ok) throw new Error(await modelHttpError(response));
     if (response.headers.get("content-type")?.includes("text/event-stream")) {
       return readChatStream(response);
     }
@@ -211,7 +212,10 @@ export class OpenAILlmService implements LlmService {
     let metadata: Pick<NpcReply, "model" | "usage" | "output"> = { model: this.model, usage: null };
     try {
       const response = await this.client.complete({
-        ...this.completionOptions(1024),
+        // K2.6 uses a thinking toggle and does not accept reasoning_effort.
+        ...(this.model === "kimi-k2.6"
+          ? { model: this.model, max_completion_tokens: 1024, thinking: { type: "disabled" } }
+          : this.completionOptions(1024)),
         ...this.jsonOptions(NPC_SYSTEM, untrustedData("NPC 对话资料", request), NPC_SCHEMA, "npc_reply"),
       });
       const choice = response.choices?.[0];

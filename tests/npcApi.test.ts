@@ -1,8 +1,9 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, test } from "vitest";
-import { createApp, type LlmService } from "../server/app";
+import { createApp, type NpcService } from "../server/app";
 import { SessionStore } from "../server/sessions";
+import { DebugLogger } from "../server/debug";
 import type { CutInDialogueRequest, NpcReply } from "../src/shared/types";
 
 const request: CutInDialogueRequest = {
@@ -22,19 +23,19 @@ const reply: NpcReply = {
 
 let server: Server | null = null;
 
-async function start(negotiate?: (value: CutInDialogueRequest) => Promise<NpcReply>) {
+async function start(negotiate?: (value: CutInDialogueRequest) => Promise<NpcReply>, guidance = "向 NPC 求助", debugLogger?: DebugLogger) {
   const llm = negotiate ? {
     model: "fake-npc",
     negotiate,
-    decide: async () => { throw new Error("not used"); },
-    normalize: async () => { throw new Error("not used"); },
-    classify: async () => { throw new Error("not used"); },
-  } as LlmService : null;
-  server = createApp({ llm, sessions: new SessionStore() }).listen(0);
+  } satisfies NpcService : null;
+  const sessions = new SessionStore();
+  const session = sessions.create(guidance, null);
+  server = createApp({ llm: null, npcLlm: llm, sessions, debugLogger }).listen(0);
   await new Promise((resolve) => server!.once("listening", resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/npc/negotiate`;
   return async (body: unknown) => {
-    const result = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const withSession = body && typeof body === "object" && !Array.isArray(body) ? { sessionId: session.id, ...body } : body;
+    const result = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(withSession) });
     const raw = await result.text();
     return { status: result.status, body: raw.startsWith("{") ? JSON.parse(raw) : raw };
   };
@@ -46,6 +47,23 @@ afterEach(() => {
 });
 
 describe("NPC negotiation API", () => {
+  test.each([false, true])("does not expose developer credentials through upstream errors (throws=%s)", async (throws) => {
+    const secret = "developer-private-npc-key";
+    const call = await start(async () => {
+      if (throws) throw new Error(`upstream echoed ${secret}`);
+      return { ...reply, source: "error", reason: `upstream echoed ${secret}`, output: { id: "err", stopReason: "error", content: [secret] } };
+    }, "向 NPC 求助", new DebugLogger(false, "logs", [secret]));
+    const result = await call(request);
+    expect(result.status).toBe(502);
+    expect(JSON.stringify(result.body)).not.toContain(secret);
+    expect(result.body.reason).toContain("[REDACTED]");
+  });
+  test("a standalone request cannot invoke NPCs without a session", async () => {
+    let calls = 0;
+    const call = await start(async () => { calls++; return reply; });
+    expect((await call({ ...request, sessionId: null })).status).toBe(403);
+    expect(calls).toBe(0);
+  });
   test("missing model returns 503 without granting permission", async () => {
     const call = await start();
     const result = await call(request);

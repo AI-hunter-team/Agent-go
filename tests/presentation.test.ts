@@ -68,3 +68,23 @@ test("stairs lower the displayed player to the platform without changing simulat
   expect(engine.status).toBe("success");
   expect(engine.player.pos).toEqual({ x: 57, y: 15 });
 });
+
+test("queued and serving actors turn toward their facility after arriving from the side", () => {
+  for (const facilityId of ["TVM-2", "S2", "G2"]) for (const kind of ["queued", "service"] as const) {
+    const engine = new Engine(1);
+    engine.world.persons.clear();
+    const f = engine.world.facility(facilityId)!;
+    const p = engine.world.addPerson("player", { x: f.def.head.x, y: f.def.head.y - 1 }, { isPlayer: true });
+    const buffer = new PresentationBuffer(engine);
+    p.pos = { ...f.def.head };
+    p.activity = { kind, facility: facilityId };
+    if (kind === "queued") f.queue = [p.id];
+    else { f.queue = []; f.serving = { personId: p.id, remaining: 5, recheck: false }; }
+    engine.world.t += 0.1;
+    buffer.capture(engine);
+    const pose = { x: 0, y: 0, z: 0, yaw: 0 };
+    sampleActor(buffer, p.id, 1, pose);
+    expect(pose.yaw).toBeCloseTo(Math.PI / 2);
+    expect(buffer.current.actors.get(p.id)!.motion).toBe(kind === "service" ? "interact" : "walk");
+  }
+});

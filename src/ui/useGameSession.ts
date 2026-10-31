@@ -1,8 +1,9 @@
 import { useEffect, useReducer, useState } from "react";
 import { GameSession } from "./gameSession";
+import { randomSeed } from "./seed";
 
 export function useGameSession() {
-  const [session] = useState(() => new GameSession(1));
+  const [session] = useState(() => new GameSession(randomSeed()));
   const [, refresh] = useReducer((value: number) => value + 1, 0);
   useEffect(() => {
     const unsubscribe = session.subscribe(refresh);
