@@ -9,6 +9,8 @@ export type * from "./interaction";
 import type { DraftResult, ReviewAttempt, ReviewResult, WorldReviewSnapshot } from "./review";
 
 export interface Vec {
+  floorId?: string;
+  elevation?:number;
   x: number;
   y: number;
 }
@@ -144,6 +146,7 @@ export interface GuardObservation {
 }
 
 export interface Observation {
+  publicMap?: import("./world").PublicStationMap;
   people?: PersonObservation[];
   items?: ItemObservation[];
   t: number;
@@ -310,11 +313,16 @@ export interface TimeBreakdown {
 }
 
 export interface TrailPoint extends Vec {
+  elevation?:number;
+  connector?:"stairs"|"escalator"|"entrance";
+  entranceId?:string;
+  progress?:number;
   /** World time; absent only in recordings made before trajectory replay. */
   t?: number;
 }
 
 export interface GameReport {
+  world?: import("./world").WorldDefinition;
   alerts?: AlertChange[];
   items?: ItemTransfer[];
   worldEvents?: WorldEvent[];

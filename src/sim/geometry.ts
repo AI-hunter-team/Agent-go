@@ -2,6 +2,7 @@ import type { Vec } from "../shared/types";
 
 /** Axis-aligned rectangle; (x, y) is the minimum corner. */
 export interface Rect {
+  floorId?: string;
   x: number;
   y: number;
   w: number;
@@ -10,15 +11,17 @@ export interface Rect {
 
 export const vec = (x: number, y: number): Vec => ({ x, y });
 
+export const sameFloor = (a: Vec, b: Vec) => (a.floorId ?? "concourse") === (b.floorId ?? "concourse");
+
 export function dist(a: Vec, b: Vec): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return sameFloor(a,b) ? Math.hypot(a.x - b.x, a.y - b.y) : Infinity;
 }
 
 /** Move `from` toward `to` by at most `step`; returns the new point. */
 export function moveToward(from: Vec, to: Vec, step: number): Vec {
   const d = dist(from, to);
-  if (d <= step || d === 0) return { x: to.x, y: to.y };
-  return { x: from.x + ((to.x - from.x) / d) * step, y: from.y + ((to.y - from.y) / d) * step };
+  if (d <= step || d === 0) return { ...to };
+  return { ...from, x: from.x + ((to.x - from.x) / d) * step, y: from.y + ((to.y - from.y) / d) * step };
 }
 
 /** Liang–Barsky clip test: does segment a→b pass through the rectangle? */
@@ -53,7 +56,7 @@ export function segmentIntersectsRect(a: Vec, b: Vec, r: Rect): boolean {
 }
 
 export function lineOfSight(a: Vec, b: Vec, occluders: readonly Rect[]): boolean {
-  return !occluders.some((r) => segmentIntersectsRect(a, b, r));
+  return sameFloor(a,b) && !occluders.some((r) => (r.floorId ?? "concourse") === (a.floorId ?? "concourse") && segmentIntersectsRect(a, b, r));
 }
 
 /** Angle in radians of the vector from a to b. */

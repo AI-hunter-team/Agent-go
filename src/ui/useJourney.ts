@@ -1,8 +1,14 @@
+import type { WorldDefinition } from "../shared/world";
+import { createdWorld, matchesCreatedWorld, type CreatedWorld, type WorldSeedSource } from "./worldCreation";
+import { useWorldLibrary, type SavedWorld } from "./worldLibrary";
+import { generateWorld } from "../sim/worldDefinition";
+import { descriptor } from "../sim/worldDefinition";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Api, RemoteAgent, offlineClassifier } from "../agent/remoteAgent";
 import { HeuristicAgent } from "../agent/heuristicAgent";
 import type { Agent } from "../agent/agent";
 import type { RunnerOptions } from "../agent/runner";
+import { readDefaultCharacter,saveDefaultCharacter } from "./appearancePreferences";
 import type { JourneyInput, JourneyMetadata } from "../shared/journey";
 import { guidanceError } from "../shared/guidance";
 import { resolveGameSettings } from "../shared/gameSettings";
@@ -41,6 +47,11 @@ export const CHARACTERS = [
 /** 准备、异步请求与本局冻结信息独立于三维画布和展示布局。 */
 export function useJourney(interval: number) {
   const session = useGameSession(interval);
+  const library = useWorldLibrary();
+  const currentRecord = useRef<SavedWorld|null>(null);
+  const [incompatibleWorld,setIncompatibleWorld] = useState<SavedWorld|null>(null);
+  const [launchReady,setLaunchReady] = useState(false);
+  const [fastEntry,setFastEntry] = useState(false);
   const [flow, dispatch] = useReducer(journeyReducer, initialFlow);
   const [health, setHealth] = useState<{ llm: boolean; model: string | null }>({
     llm: false,
@@ -49,13 +60,19 @@ export function useJourney(interval: number) {
   const [kind, setKind] = useState<"llm" | "offline">("llm");
   const [guidance, setGuidance] = useState("");
   const [seed, setSeed] = useState(session.engine.seed);
+  const [worldDraft, setWorldDraft] = useState<{seed:number;initial:CreatedWorld|null;revision:number}>({seed:session.engine.seed,initial:null,revision:0});
+  const selectedWorld=useRef<CreatedWorld|null>(flow.createdWorld);
+  selectedWorld.current=flow.createdWorld;
   const [settings, setSettings] = useState(session.engine.settings);
   const [backpack, setBackpack] = useState(session.engine.loadout.backpack);
-  const [characterId, setCharacterId] = useState("dafeiyu");
+  const [initialCharacter]=useState(readDefaultCharacter);
+  const defaultCharacter=useRef(initialCharacter);
+  const [characterId, setCharacterId] = useState<string>(initialCharacter);
   const [drawer, setDrawer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previousRun, setPreviousRun] = useState<{ generation: number; runner: GameRunner; engine: Engine; review: ReviewSession | null } | null>(null);
   const quickStart = useRef<boolean | null>(null);
+  const pendingRetry = useRef<{ worldId: string; autonomous: boolean; twoDimensional: boolean } | null>(null);
   const [camera, setCamera] = useState<CameraSettings>({
     mode: "follow",
     reset: 0,
@@ -113,6 +130,7 @@ export function useJourney(interval: number) {
     abort.current = null;
     const old = pending.current;
     pending.current = null;
+    setLaunchReady(false);
     if (old) void old.agent.dispose();
   };
   const invalidate = () => {
@@ -123,12 +141,15 @@ export function useJourney(interval: number) {
       stage.current = "guidance";
     dispatch({ type: "invalidate" });
   };
-  const navigate = (next: JourneyStage) => {
+  const navigate = (requested: JourneyStage,characterEntry:"lobby"|"journey"="journey") => {
+    const appearance=requested==="character"&&characterEntry==="lobby";
+    const next=requested!=="lobby"&&requested!=="world"&&!appearance&&!selectedWorld.current?"world":requested;
+    if(next==="lobby")setCharacterId(defaultCharacter.current);
     stage.current = next;
     cancel();
     setError(null);
     setDrawer(false);
-    dispatch({ type: "navigate", stage: next });
+    dispatch({ type: "navigate", stage: next,characterEntry });
     setCamera((c) => ({
       mode: "follow",
       reset: c.reset + 1,
@@ -142,12 +163,60 @@ export function useJourney(interval: number) {
               : "plan",
     }));
   };
-  const changeSeed = (value: number) => {
+  const openAppearance=()=>navigate("character","lobby");
+  const cancelCharacter=()=>navigate("lobby");
+  const recoverDefaultAppearance=useCallback(()=>{defaultCharacter.current="dafeiyu";saveDefaultCharacter("dafeiyu");setCharacterId(current=>current==="custom"?"dafeiyu":current);},[]);
+  const openWorldCreation = (fresh=false) => {
     preserveRun();
+    if(fresh)setCharacterId(defaultCharacter.current);
+    if(watching)session.stop();
     invalidate();
-    setSeed(value);
-    session.preview(value, settings, { backpack });
+    setWorldDraft(previous=>({seed:fresh?randomSeed(seed):seed,initial:fresh?null:selectedWorld.current,revision:previous.revision+1}));
+    navigate("world");
   };
+  const confirmWorld = (definition:WorldDefinition,source:WorldSeedSource,name:string) => {
+    if(stage.current!=="world")return;
+    try{
+      const choice={...createdWorld(definition,source,name),id:crypto.randomUUID()};
+      cancel();preparation.current=null;setError(null);
+      session.preview(choice.seed,settings,{backpack},definition);
+      if(!matchesCreatedWorld(choice,session.engine.world.definition))throw new Error("预览与创建结果不一致，请重新生成世界。");
+      const record:SavedWorld={...choice,id:choice.id,schemaVersion:1,createdAt:Date.now(),updatedAt:Date.now(),preferences:{settings:{...settings},backpack,characterId,kind,guidance}};
+      currentRecord.current=record;library.save(record);setIncompatibleWorld(null);
+      selectedWorld.current=choice;setSeed(choice.seed);stage.current="character";
+      dispatch({type:"world-created",choice});
+      setCamera(c=>({mode:"follow",reset:c.reset+1,shot:"character"}));
+    }catch(error){setError(`创建世界失败：${(error as Error).message}`);}
+  };
+  const selectWorld = (record:SavedWorld) => {
+    const definition=generateWorld(record.seed);
+    if(!matchesCreatedWorld(record,definition)){setIncompatibleWorld(record);setError("这个世界的生成版本已变化。可以保留原记录，用当前版本创建副本。");return;}
+    invalidate();currentRecord.current=record;setIncompatibleWorld(null);
+    const p=record.preferences;setSettings(resolveGameSettings(p.settings));setBackpack(p.backpack);setCharacterId(p.characterId);setKind(p.kind);setGuidance(p.guidance);setSeed(record.seed);
+    session.preview(record.seed,p.settings,{backpack:p.backpack},definition);
+    selectedWorld.current=record;stage.current="character";dispatch({type:"world-selected",choice:record});
+    setCamera(c=>({mode:"follow",reset:c.reset+1,shot:"character"}));
+  };
+  const recreateWorld = (record:SavedWorld) => {
+    invalidate();setIncompatibleWorld(null);setWorldDraft(previous=>({seed:record.seed,initial:{...record,name:`${record.name.slice(0,43)} 副本`},revision:previous.revision+1}));navigate("world");
+  };
+  const renameWorld = (record:SavedWorld,name:string) => {
+    const next={...record,name:name.trim().slice(0,48)||record.name,updatedAt:Date.now()};library.save(next);
+    if(selectedWorld.current?.id===record.id){currentRecord.current=next;selectedWorld.current=next;dispatch({type:"world-renamed",name:next.name});}
+  };
+  const deleteWorld = (id:string) => {
+    library.remove(id);
+    if(incompatibleWorld?.id===id)setIncompatibleWorld(null);
+    if(selectedWorld.current?.id===id){cancel();preparation.current=null;currentRecord.current=null;selectedWorld.current=null;setCharacterId(defaultCharacter.current);dispatch({type:"world-removed"});stage.current="lobby";setCamera(c=>({mode:"follow",reset:c.reset+1,shot:"lobby"}));}
+  };
+  useEffect(()=>{
+    const record=currentRecord.current;
+    if(!record||record.id!==flow.createdWorld?.id||flow.characterEntry==="lobby"||flow.stage==="lobby"||flow.stage==="world")return;
+    const preferences={settings:{...settings},backpack,characterId,kind,guidance};
+    if(JSON.stringify(record.preferences)===JSON.stringify(preferences))return;
+    const timer=setTimeout(()=>{if(currentRecord.current?.id!==record.id)return;const next={...record,preferences,updatedAt:Date.now()};currentRecord.current=next;library.save(next);},250);
+    return()=>clearTimeout(timer);
+  },[settings,backpack,characterId,kind,guidance,flow.createdWorld?.id,flow.stage,flow.characterEntry,library.save]);
   const changeDeadline = (value: number) => {
     preserveRun();
     const next = resolveGameSettings({ ...settings, timeLimitSeconds: value });
@@ -161,17 +230,18 @@ export function useJourney(interval: number) {
     setBackpack(value);
     session.preview(seed, settings, { backpack: value });
   };
-  const enterScene = () => {
-    session.preview(seed, settings, { backpack });
-    navigate("character");
+  const enterScene = () => openWorldCreation(true);
+  const editWorld = () => openWorldCreation(false);
+  const continueWorld=()=>{if(currentRecord.current)selectWorld(currentRecord.current);else openWorldCreation(true);};
+  const confirmCharacter = () => {
+    if(flow.characterEntry==="lobby"){
+      defaultCharacter.current=characterId as typeof initialCharacter;const saved=saveDefaultCharacter(characterId);navigate("lobby");
+      if(!saved)setError("外观已应用；本机存储不可用，刷新后可能无法保留。");return;
+    }
+    navigate(kind === "offline" || (flow.prepared && preparation.current) ? "plan" : "guidance");
   };
-  const confirmCharacter = () =>
-    navigate(
-      kind === "offline" || (flow.prepared && preparation.current)
-        ? "plan"
-        : "guidance",
-    );
   const prepare = async (autonomous: boolean, options?: { seed: number; twoDimensional: boolean }) => {
+    if (!matchesCreatedWorld(selectedWorld.current, session.engine.world.definition)) { openWorldCreation(); return; }
     if (stage.current === "planning" || stage.current === "launch") return;
     if (kind === "offline") {
       navigate("plan");
@@ -194,6 +264,7 @@ export function useJourney(interval: number) {
     const epoch = request.current;
     const input: JourneyInput = {
       sceneId: "metro",
+      ...(session.engine.world.definition.generatorVersion==="metro-v1"?{world:descriptor(session.engine.world.definition)}:{}),
       seed: options?.seed ?? seed,
       settings: { ...settings },
       loadout: { backpack },
@@ -228,12 +299,14 @@ export function useJourney(interval: number) {
       !cameraReady.current ||
       ready.epoch !== request.current ||
       !active.current ||
-      stage.current !== "launch"
+      stage.current !== "launch" ||
+      !matchesCreatedWorld(selectedWorld.current,session.engine.world.definition)
     )
       return;
     pending.current = null;
     const agent = ready.agent;
-    session.start(agent, offlineClassifier, ready.opts);
+    try{session.startPrepared(agent, offlineClassifier, ready.opts);}
+    catch(error){void agent.dispose();preparation.current=null;setLaunchReady(false);stage.current="guidance";dispatch({type:"invalidate"});dispatch({type:"navigate",stage:"guidance"});setCamera(c=>({mode:"follow",reset:c.reset+1,shot:"guidance"}));setError(`开局失败：${(error as Error).message}`);return;}
     dispatch({ type: "navigate", stage: "watch" });
     setCamera((c) => ({ mode: "follow", reset: c.reset }));
   }, [session]);
@@ -243,6 +316,7 @@ export function useJourney(interval: number) {
   }, [tryStart]);
   const start = async (twoDimensional: boolean) => {
     if (stage.current !== "plan") return;
+    if(!matchesCreatedWorld(selectedWorld.current,session.engine.world.definition)){openWorldCreation();setError("请先创建并确认世界。");return;}
     if (kind === "llm" && (!flow.prepared || !preparation.current)) {
       navigate("guidance");
       setError("请重新生成初始方案");
@@ -262,6 +336,8 @@ export function useJourney(interval: number) {
     const journey: JourneyMetadata = {
       sceneId: "metro",
       sceneName: "地铁末班车",
+      worldName: selectedWorld.current?.name,
+      worldSeedSource: selectedWorld.current?.source,
       characterId,
       characterName: character.name,
       model: kind === "llm" ? prepared!.model : null,
@@ -279,7 +355,7 @@ export function useJourney(interval: number) {
               p!.input.runId,
               settings,
               { backpack },
-              { preparationId: prepared!.id, sceneId: "metro", seed },
+              { preparationId: prepared!.id, sceneId: "metro", seed, world:p!.input.world },
             )
           : new HeuristicAgent();
       if (epoch !== request.current || !active.current) {
@@ -299,6 +375,7 @@ export function useJourney(interval: number) {
             : undefined,
         },
       };
+      setLaunchReady(true);
       // React may not have committed launch yet; its effect will also try the gate.
       tryStart();
     } catch (e) {
@@ -335,10 +412,27 @@ export function useJourney(interval: number) {
     if (kind === "llm" && !health.llm) { setError("请先连接模型，上一局结果已保留。"); setDrawer(true); return; }
     preserveRun();
     const nextSeed = options.sameScenario ? seed : randomSeed(seed);
-    setSeed(nextSeed);
+    if (nextSeed !== seed) {
+      const definition = generateWorld(nextSeed);
+      const choice = { ...createdWorld(definition, { mode: "random", value: String(nextSeed) }), id: crypto.randomUUID() };
+      const record: SavedWorld = { ...choice, id: choice.id, schemaVersion: 1, createdAt: Date.now(), updatedAt: Date.now(), preferences: { settings: { ...settings }, backpack, characterId, kind, guidance } };
+      session.preview(nextSeed, settings, { backpack }, definition);
+      currentRecord.current = record; selectedWorld.current = choice; library.save(record);
+      setSeed(nextSeed);
+      pendingRetry.current = { worldId: choice.id, autonomous, twoDimensional: options.twoDimensional ?? false };
+      stage.current = "character";
+      dispatch({ type: "world-selected", choice });
+      return;
+    }
     session.preview(nextSeed, settings, { backpack });
     void prepare(autonomous, { seed: nextSeed, twoDimensional: options.twoDimensional ?? false });
   };
+  useEffect(() => {
+    const retry = pendingRetry.current;
+    if (!retry || flow.createdWorld?.id !== retry.worldId) return;
+    pendingRetry.current = null;
+    void prepare(retry.autonomous, { seed: flow.createdWorld.seed, twoDimensional: retry.twoDimensional });
+  }, [flow.createdWorld?.id]);
   const returnLobby = () => {
     if (watching) session.stop();
     preserveRun();
@@ -384,11 +478,15 @@ export function useJourney(interval: number) {
     previousRun,
     invalidate,
     navigate,
-    changeSeed,
+    worldDraft,
+    library, selectWorld, renameWorld, deleteWorld, recreateWorld, incompatibleWorld,
+    launchReady, fastEntry, setFastEntry,
+    confirmWorld,
+    editWorld,
     changeDeadline,
     changeBackpack,
     enterScene,
-    confirmCharacter,
+    confirmCharacter,openAppearance,cancelCharacter,continueWorld,recoverDefaultAppearance,initialCharacter,
     prepare,
     onCameraReady,
     start,

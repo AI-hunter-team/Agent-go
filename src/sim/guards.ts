@@ -1,11 +1,13 @@
+import * as legacyLayout from "./layout";
+import type { StationLayout } from "../shared/world";
 import type { Percept, Vec } from "../shared/types";
 import type { AlertSystem } from "./alert";
 import type { EventBus } from "./events";
-import { findPath } from "./nav";
+import { createNavigation } from "./nav";
 import { angleTo, dist, inViewCone, lineOfSight } from "./geometry";
-import { SIGHT_OCCLUDERS } from "./layout";
+
 import { DT, GUARDS, RULES, type GuardDef } from "./scenario";
-import { personRadius, steer, type MovingBody } from "./movement";
+import { createMovement, personRadius, type MovingBody } from "./movement";
 
 export interface Guard {
   role: "guard" | "security_staff";
@@ -27,10 +29,13 @@ export interface Guard {
 
 export class GuardSystem {
   readonly guards: Guard[];
+  private spatial;
+  private navigation;
   private clock = 0;
   lightAt: (pos: Vec) => number = () => 1;
 
-  constructor(definitions: readonly GuardDef[] = GUARDS) {
+  constructor(definitions: readonly GuardDef[] = GUARDS, private layout:StationLayout=legacyLayout) {
+    this.spatial=createMovement(layout);this.navigation=createNavigation(layout,this.spatial);
     this.guards = definitions.map((def) => ({
       role: def.role ?? "guard", mode: "patrol", incapacitated: 0, wakeAt: 0, investigation: null, watching: null, path: [],
       def,
@@ -93,7 +98,7 @@ export class GuardSystem {
       }
       const dest = g.def.route[g.target];
       g.facing = angleTo(g.pos, dest);
-      g.pos = steer(g.pos, dest, g.def.speed * DT, personRadius("guard"), people, false);
+      g.pos = this.spatial.steer(g.pos, dest, g.def.speed * DT, personRadius("guard"), people, false);
       if (dist(g.pos, dest) < 1e-6) {
         g.target = (g.target + 1) % g.def.route.length;
         g.pauseLeft = g.def.pauseSeconds;
@@ -102,14 +107,14 @@ export class GuardSystem {
   }
 
   canSee(g: Guard, p: Vec): boolean {
-    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange * Math.min(this.lightAt(g.pos), this.lightAt(p)), p) && lineOfSight(g.pos, p, SIGHT_OCCLUDERS);
+    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange * Math.min(this.lightAt(g.pos), this.lightAt(p)), p) && lineOfSight(g.pos, p, this.layout.SIGHT_OCCLUDERS);
   }
 
   investigate(g: Guard, point: Vec, priority: number) {
     if (g.incapacitated > 0 || (g.investigation && g.investigation.priority > priority) || (g.mode === "watch" && priority < 3)) return;
     g.mode = "investigate"; g.watching = null; g.lookAt = null;
     g.investigation = { point: { ...point }, priority, remaining: 4, arrived: dist(g.pos, point) < 0.3 };
-    g.path = findPath(g.pos, point, personRadius("guard")) ?? [];
+    g.path = this.navigation.findPath(g.pos, point, personRadius("guard")) ?? [];
   }
   watch(g: Guard, subjectId: string, point: Vec) {
     if (g.incapacitated > 0) return;
@@ -136,15 +141,15 @@ export class GuardSystem {
   }
   private returnToPatrol(g: Guard) {
     g.mode = "return"; g.investigation = null; g.watching = null;
-    g.path = findPath(g.pos, g.def.route[g.target], personRadius("guard")) ?? [];
+    g.path = this.navigation.findPath(g.pos, g.def.route[g.target], personRadius("guard")) ?? [];
   }
   private walk(g: Guard, point: Vec, people: readonly MovingBody[]): boolean {
     if (dist(g.pos, point) < 0.2) return true;
-    if (!g.path.length || dist(g.path.at(-1)!, point) > 0.5) g.path = findPath(g.pos, point, personRadius("guard")) ?? [];
+    if (!g.path.length || dist(g.path.at(-1)!, point) > 0.5) g.path = this.navigation.findPath(g.pos, point, personRadius("guard")) ?? [];
     const next = g.path[0];
     if (!next) return false;
     g.facing = angleTo(g.pos, next);
-    g.pos = steer(g.pos, next, g.def.speed * DT, personRadius("guard"), people);
+    g.pos = this.spatial.steer(g.pos, next, g.def.speed * DT, personRadius("guard"), people);
     if (dist(g.pos, next) < 1e-6) g.path.shift();
     return dist(g.pos, point) < 0.2;
   }

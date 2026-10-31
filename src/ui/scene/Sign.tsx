@@ -3,7 +3,7 @@ import { CanvasTexture, DoubleSide, SRGBColorSpace } from "three";
 import { plane } from "./resources";
 
 export function Sign({ text, position, width = 3.8, dark = true, facing = "west" }: {
-  text: string; position: [number, number, number]; width?: number; dark?: boolean; facing?: "west" | "north" | "south";
+  text: string; position: [number, number, number]; width?: number; dark?: boolean; facing?: "west" | "east" | "north" | "south";
 }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
@@ -20,7 +20,7 @@ export function Sign({ text, position, width = 3.8, dark = true, facing = "west"
     return map;
   }, [text, dark]);
   useEffect(() => () => texture.dispose(), [texture]);
-  const angle = facing === "west" ? -Math.PI / 2 : facing === "north" ? Math.PI : 0;
+  const angle = facing === "west" ? -Math.PI / 2 : facing === "east" ? Math.PI / 2 : facing === "north" ? Math.PI : 0;
   return <mesh position={position} rotation={[0, angle, 0]} geometry={plane} scale={[width, width * 192 / 1024, 1]}>
     <meshBasicMaterial map={texture} side={DoubleSide} toneMapped={false} />
   </mesh>;

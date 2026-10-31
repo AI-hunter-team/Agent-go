@@ -1,11 +1,18 @@
+import type { DepartureAudio } from "../departureAudio";
+import { CONTROL_ROOM_LIGHTING, stationLightBlend } from "./controlRoomLighting";
+import type { AmbientLight, DirectionalLight, HemisphereLight, PointLight } from "three";
+import { ControlRoom, type RoomAction } from "./ControlRoom";
+import { controlRoomState, entranceDock } from "./controlRoomLayout";
+import type { JourneyStage } from "../journeyFlow";
+import { worldViewBounds } from "../../sim/entranceGeometry";
 import { AlertBadge, SceneItems } from "./Interactions";
 import { MessageBillboardLayout } from "./MessageBillboardLayout";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useProgress } from "@react-three/drei/core/Progress";
-import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
+import { Box3, Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { WIDTH, HEIGHT } from "../../sim/layout";
+import { WIDTH } from "../../sim/layout";
 import { platformElevation } from "../presentation";
 import { RULES } from "../../sim/scenario";
 import type { GameSession } from "../gameSession";
@@ -26,6 +33,11 @@ import type { HeadMessageMode } from "../headMessages";
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
 export interface SceneProps {
   session: GameSession;
+  stage: JourneyStage;
+  launchReady: boolean;
+  fastEntry: boolean;
+  audio:DepartureAudio;
+  onRoomAction: (action:RoomAction)=>void;
   camera: CameraSettings;
   quality: "standard" | "low";
   targetFps: 60 | 30 | 15;
@@ -51,7 +63,7 @@ export interface SceneProps {
 }
 
 /** 按目标频率唤醒按需渲染；空闲或隐藏时休眠，阶段与采样变化可立即唤醒。 */
-function RenderSchedule({ session, targetFps, metrics, reducedMotion }: Pick<SceneProps, "session" | "targetFps" | "metrics" | "reducedMotion">) {
+function RenderSchedule({ session, targetFps, metrics, reducedMotion, stage }: Pick<SceneProps, "session" | "targetFps" | "metrics" | "reducedMotion" | "stage">) {
   const { invalidate, gl } = useThree();
   const performanceState = getScenePerformance(session);
   // 先推进展示秒表，再让角色和相机采样；不使用 R3F 的累计运行时间。
@@ -62,7 +74,7 @@ function RenderSchedule({ session, targetFps, metrics, reducedMotion }: Pick<Sce
     let intersects = true;
     const interval = 1000 / targetFps;
     /** 世界运行或可见的展示动画需要连续帧，终局不用恢复模拟循环。 */
-    const active = () => !session.frozen || metrics.active || performanceState.needsFrames(reducedMotion);
+    const active = () => !session.frozen || metrics.active || performanceState.needsFrames(reducedMotion) || stage === "launch";
     /** 按目标帧率补绘；隐藏和视口之外停止续订。 */
     const frame = (now: number) => {
       raf = 0;
@@ -90,13 +102,19 @@ function RenderSchedule({ session, targetFps, metrics, reducedMotion }: Pick<Sce
     document.addEventListener("visibilitychange", visibility);
     visibility();
     return () => { unsubscribe(); observer.disconnect(); document.removeEventListener("visibilitychange", visibility); cancelAnimationFrame(raf); performanceState.setVisible(false); };
-  }, [session, targetFps, metrics, invalidate, gl, reducedMotion, performanceState]);
+  }, [session, targetFps, metrics, invalidate, gl, reducedMotion, performanceState, stage]);
   return null;
 }
 
 /** 编排准备、跟随、总览和胜利镜头，并在开局就位后通知旅程流程。 */
-function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean; assetRotation: number; onReady?: () => void }) {
-  const { gl, size, set, get, invalidate } = useThree();
+function CameraRig({ session, settings, reducedMotion, assetRotation, onReady, stage, launchReady, fastEntry }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean; assetRotation: number; onReady?: () => void; stage:JourneyStage; launchReady:boolean; fastEntry:boolean }) {
+  const viewBounds=worldViewBounds(session.engine.world.definition),WIDTH=viewBounds.w,HEIGHT=viewBounds.h;
+  const centerX=viewBounds.x+WIDTH/2, centerY=viewBounds.y+HEIGHT/2;
+  const { gl, size, set, get, invalidate, scene } = useThree();
+  const dock = useMemo(()=>entranceDock(session.engine.world.definition),[session.engine.world.definition]);
+  const room = controlRoomState(session);
+  const warm = useRef({key:"",time:0,compiled:false});
+  const worldTarget = useMemo(()=>new Vector3(),[]);
   const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 240), overview: new OrthographicCamera(-50, 50, 30, -30, 0.1, 240) }), []);
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; pointer: number } | null>(null);
@@ -139,7 +157,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
       active.left = -halfWidth; active.right = halfWidth; active.top = halfHeight; active.bottom = -halfHeight;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
-  }, [cameras, set, get, settings.mode, size.width, size.height, cinematic, performanceState, session.generation]);
+  }, [cameras, set, get, settings.mode, size.width, size.height, cinematic, performanceState, WIDTH, HEIGHT, session.generation]);
   useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; manualReady.current = false; invalidate(); }, [settings.reset, settings.shot, session.generation, follow, invalidate]);
   useEffect(() => {
     const canvas = gl.domElement;
@@ -194,22 +212,39 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
     return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("lostpointercapture", up); window.removeEventListener("blur", up); canvas.removeEventListener("wheel", wheel); drag.current = null; performanceState.releaseCamera(); };
   }, [gl, get, settings.mode, settings.shot, invalidate, performanceState, session, victory, manualTarget]);
   useFrame((state, delta) => {
+    state.camera.parent?.updateWorldMatrix(true,true);
+    const warmKey=`${session.generation}:${settings.reset}`;
+    if(warm.current.key!==warmKey)warm.current={key:warmKey,time:0,compiled:false};
+    const hasStation=!!scene.getObjectByName("generated-station")||session.engine.world.definition.generatorVersion==="legacy-v0";
+    const resourcesReady=stage==="launch"&&launchReady&&!assetsLoading&&hasStation&&!scene.getObjectByName("station-kit-loading");
+    if(resourcesReady){
+      warm.current.time+=performanceState.delta;
+      if(!warm.current.compiled){gl.compile(scene,state.camera);warm.current.compiled=true;}
+    }else warm.current.time=0;
+    room.update(stage,performanceState.delta,resourcesReady&&warm.current.time>.3,fastEntry,dock,size.width<600);
+    if(stage!=="watch"){
+      if(state.camera instanceof PerspectiveCamera&&state.camera.fov!==room.fov){state.camera.fov=room.fov;state.camera.updateProjectionMatrix();}
+      state.camera.position.copy(room.eye).applyMatrix4(dock.inverse);state.camera.lookAt(room.target);cameraInitialized.current=true;
+      if(room.moving&&stage!=="launch")invalidate();
+      if(stage==="launch"&&room.complete&&!room.notified){room.notified=true;room.handoff=true;queueMicrotask(()=>onReady?.());}
+      return;
+    }
     if (performanceState.cinematic) {
       sampleActor(session.presentation, "player", session.alpha, pose.current);
       if (activeVictory.current !== victory) {
         const focusDistance = manualReady.current ? state.camera.position.distanceTo(manualTarget) : 4.2;
-        victory.capture(state.camera.position, state.camera.getWorldDirection(direction), performanceState.victoryTime, (state.camera as PerspectiveCamera).fov ?? 45, focusDistance);
+        victory.capture(state.camera.position, state.camera.getWorldDirection(direction).transformDirection(dock.inverse), performanceState.victoryTime, (state.camera as PerspectiveCamera).fov ?? 45, focusDistance);
         activeVictory.current = victory;
       }
-      victory.update(pose.current, performanceState.victoryTime, size.width / Math.max(1, size.height), reducedMotion, assetRotation, session.engine.player.onTrain, size.height);
+      victory.update(pose.current, performanceState.victoryTime, size.width / Math.max(1, size.height), reducedMotion, assetRotation, session.engine.player.onTrain, size.height, session.engine.world.definition);
       const camera = state.camera as PerspectiveCamera;
       if (Math.abs(camera.fov - victory.fov) > 0.001) { camera.fov = victory.fov; camera.updateProjectionMatrix(); }
-      camera.position.copy(victory.position); camera.lookAt(victory.target); return;
+      camera.position.copy(victory.position); camera.lookAt(worldTarget.copy(victory.target).applyMatrix4(dock.matrix)); return;
     }
     activeVictory.current = null;
     const { target, desired, eye, anchor } = vectors;
     if (settings.mode === "overview") {
-      state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
+      state.camera.position.set(centerX - 28, 62, viewBounds.y + HEIGHT + 28); state.camera.lookAt(worldTarget.set(centerX,-.5,centerY).applyMatrix4(dock.matrix)); return;
     }
     // 大厅展示车站全景；选角时重新初始化角色镜头，避免从远处穿越设施。
     if (settings.shot === "lobby") {
@@ -231,14 +266,14 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
         Math.max(pose.current.y + 0.25, manualTarget.y + Math.sin(orbit.current.pitch) * orbit.current.distance),
         manualTarget.z - Math.cos(yaw) * horizontal);
       if (session.engine.player.onTrain) {
-        constrainCabinCamera(desired, pose.current);
-        state.camera.position.copy(desired); state.camera.lookAt(manualTarget); return;
+        constrainCabinCamera(desired, pose.current, session.engine.world.definition);
+        state.camera.position.copy(desired); state.camera.lookAt(worldTarget.copy(manualTarget).applyMatrix4(dock.matrix)); return;
       }
       desired.y = Math.max(desired.y, platformElevation(desired.x) + 0.25);
       // 新站台边缘外是列车与轨道，自由缩放也不把镜头推进车体内。
       const edgeFraction = desired.x > WIDTH - 0.3 ? (WIDTH - 0.3 - manualTarget.x) / (desired.x - manualTarget.x) : 1;
-      const fraction = Math.min(cameraFraction(manualTarget, desired), Math.max(0.05, edgeFraction));
-      state.camera.position.lerpVectors(manualTarget, desired, fraction); state.camera.lookAt(manualTarget); return;
+      const fraction = Math.min(cameraFraction(manualTarget, desired, session.engine.world.definition), Math.max(0.05, edgeFraction));
+      state.camera.position.lerpVectors(manualTarget, desired, fraction); state.camera.lookAt(worldTarget.copy(manualTarget).applyMatrix4(dock.matrix)); return;
     }
     target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
     anchor.copy(target);
@@ -249,28 +284,29 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
       target.x -= Math.cos(angle) * (narrow ? 0 : 1.4);
       target.z += Math.sin(angle) * (narrow ? 0 : 1.4);
       if (narrow) target.y -= 0.9;
-      const fraction = cameraFraction(anchor, desired);
+      const fraction = cameraFraction(anchor, desired, session.engine.world.definition);
       eye.copy(anchor).lerp(desired, fraction);
       if (!cameraInitialized.current || reducedMotion || fraction < 0.99) state.camera.position.copy(eye);
       else state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
-      const safeFraction = cameraFraction(anchor, state.camera.position);
+      const safeFraction = cameraFraction(anchor, state.camera.position, session.engine.world.definition);
       if (safeFraction < 1) state.camera.position.lerpVectors(anchor, state.camera.position, safeFraction);
-      state.camera.lookAt(target);
+      state.camera.lookAt(worldTarget.copy(target).applyMatrix4(dock.matrix));
       cameraInitialized.current = true;
       if (session.frozen && state.camera.position.distanceToSquared(eye) > 0.00001) invalidate();
       return;
     }
-    follow.update(pose.current, orbit.current, delta, initial.current, reducedMotion);
+    follow.update(pose.current, orbit.current, delta, initial.current, reducedMotion, session.engine.world.definition);
     initial.current = false;
     eye.set(follow.position.x, follow.position.y, follow.position.z);
     target.set(follow.target.x, follow.target.y, follow.target.z);
     if (size.width < 600) target.y -= 0.55;
-    if (settings.shot === "launch" && cameraInitialized.current && !reducedMotion) {
+    if ((room.handoff || settings.shot === "launch" && !reducedMotion) && cameraInitialized.current) {
       state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
-      const safeFraction = cameraFraction(anchor, state.camera.position);
+      const safeFraction = cameraFraction(anchor, state.camera.position, session.engine.world.definition);
       if (safeFraction < 1) state.camera.position.lerpVectors(anchor, state.camera.position, safeFraction);
     } else state.camera.position.copy(eye);
-    state.camera.lookAt(target);
+    worldTarget.copy(target).applyMatrix4(dock.matrix);
+    if(room.handoff){room.target.lerp(worldTarget,1-Math.exp(-delta*12));state.camera.lookAt(room.target);}else state.camera.lookAt(worldTarget);
     cameraInitialized.current = true;
     const key = `${settings.reset}:${settings.shot}`;
     if (settings.shot === "launch" && !assetsLoading && readyKey.current !== key && state.camera.position.distanceToSquared(eye) < 0.0001 && follow.settled) {
@@ -278,7 +314,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
     }
     if (session.frozen && (!follow.settled || state.camera.position.distanceToSquared(eye) > 0.00001)) invalidate();
   });
-  return null;
+  return <group matrix={dock.matrix} matrixAutoUpdate={false}><primitive object={cameras.follow}/><primitive object={cameras.overview}/></group>;
 }
 
 /** 让键盘用户在画布聚焦后按 Enter/空格触发与点击相同的问候。 */
@@ -319,14 +355,14 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   useFrame(() => {
     if (!geometry.current || !trail) return;
     const count = Math.min(points.length, 2048);
-    for (let i = 0; i < count; i++) { linePoints[i * 3] = points[i].x; linePoints[i * 3 + 1] = platformElevation(points[i].x) + 0.025; linePoints[i * 3 + 2] = points[i].y; }
+    for (let i = 0; i < count; i++) { linePoints[i * 3] = points[i].x; linePoints[i * 3 + 1] = ((points[i] as import("../../shared/types").TrailPoint).elevation ?? (session.engine.world.definition.generatorVersion==="metro-v1"?(points[i].floorId==="platform"?-6:0):platformElevation(points[i].x))) + 0.025; linePoints[i * 3 + 2] = points[i].y; }
     geometry.current.setDrawRange(0, count); geometry.current.attributes.position.needsUpdate = true;
     if (pathGeometry.current) {
       const path = session.presentation.current.path;
       const player = session.presentation.current.actors.get("player");
       pathPoints[0] = player?.x ?? 0; pathPoints[1] = (player?.elevation ?? 0) + 0.03; pathPoints[2] = player?.z ?? 0;
       const pathCount = Math.min(path.length, 2047);
-      for (let i = 0; i < pathCount; i++) { pathPoints[(i + 1) * 3] = path[i].x; pathPoints[(i + 1) * 3 + 1] = platformElevation(path[i].x) + 0.03; pathPoints[(i + 1) * 3 + 2] = path[i].z; }
+      for (let i = 0; i < pathCount; i++) { pathPoints[(i + 1) * 3] = path[i].x; pathPoints[(i + 1) * 3 + 1] = (session.engine.world.definition.generatorVersion==="metro-v1"?0:platformElevation(path[i].x)) + 0.03; pathPoints[(i + 1) * 3 + 2] = path[i].z; }
       pathGeometry.current.setDrawRange(0, path.length ? pathCount + 1 : 0); pathGeometry.current.attributes.position.needsUpdate = true;
     }
   });
@@ -344,9 +380,21 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
 }
 
 /** 为正式站厅建立环境反射与分区照明，并按当前画质控制阴影。 */
-function StationLighting({ standard, blackout }: { standard: boolean; blackout: boolean }) {
+function StationLighting({ standard,session }: { standard: boolean;session:GameSession }) {
+  const l=session.engine.world.layout;
+  const side=session.engine.world.definition.archetype==="side";
+  const points=session.engine.world.definition.generatorVersion==="metro-v1"?Array.from({length:Math.floor((side?l.HEIGHT:l.WIDTH)/12)},(_,i)=>side?[l.WIDTH/2,6+i*12]:[6+i*12,l.HEIGHT/2]):[8,24,39,56,76,WIDTH-3].map(x=>[x,15]);
   const { gl, scene } = useThree();
-  const target = useMemo(() => { const node = new Object3D(); node.position.set(35, 0, 15); return node; }, []);
+  const hemisphere=useRef<HemisphereLight>(null),ambient=useRef<AmbientLight>(null),sun=useRef<DirectionalLight>(null),lamps=useRef<(PointLight|null)[]>([]);
+  useFrame(()=>{
+    const blend=stationLightBlend(controlRoomState(session)),room=CONTROL_ROOM_LIGHTING,blackout=session.presentation.current.blackout.active;
+    if(hemisphere.current)hemisphere.current.intensity=room.hemisphere+((blackout ? .22 : 1.1)-room.hemisphere)*blend;
+    if(ambient.current)ambient.current.intensity=room.ambient+((blackout ? .12 : .55)-room.ambient)*blend;
+    if(sun.current){sun.current.intensity=(blackout ? .35 : 2.3)*blend;}
+    for(const light of lamps.current)if(light){light.intensity=(blackout ? 2 : 28)*blend;}
+    scene.environmentIntensity=room.environment+(.45-room.environment)*blend;
+  });
+  const target = useMemo(() => { const node = new Object3D(); node.position.set(l.WIDTH / 2, 0, l.HEIGHT / 2); return node; }, [l.WIDTH, l.HEIGHT]);
   useEffect(() => {
     const pmrem = new PMREMGenerator(gl), room = new RoomEnvironment();
     const map = pmrem.fromScene(room, 0.04); const old = scene.environment;
@@ -355,11 +403,11 @@ function StationLighting({ standard, blackout }: { standard: boolean; blackout: 
     return () => { scene.environment = old; map.dispose(); };
   }, [gl, scene]);
   return <>
-    <hemisphereLight args={["#fff2d9", "#a1a28f", blackout ? 0.22 : 1.1]} />
-    <ambientLight intensity={blackout ? 0.12 : 0.55} />
+    <hemisphereLight ref={hemisphere} name="station-hemisphere" args={["#fff2d9", "#a1a28f", CONTROL_ROOM_LIGHTING.hemisphere]} />
+    <ambientLight ref={ambient} name="station-ambient" intensity={CONTROL_ROOM_LIGHTING.ambient} />
     <primitive object={target} />
-    <directionalLight target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={blackout ? 0.35 : 2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
-    {[8, 24, 39, 56, 76, WIDTH - 3].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, 15]} intensity={blackout ? 2 : 28} distance={23} decay={2} />)}
+    <directionalLight ref={sun} name="station-key" target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
+    {points.map(([x,z],index) => <pointLight ref={light=>{lamps.current[index]=light;}} key={`${x}:${z}`} color="#ffdeb2" position={[x, STATION_CEILING - 0.45, z]} intensity={28} distance={23} decay={2} />)}
   </>;
 }
 
@@ -385,14 +433,16 @@ function Contents(props: SceneProps) {
       root?.traverse((node) => { if ("isBone" in node && /Hips|Head$|RightArm$|LeftLeg$/.test(node.name)) bones[node.name] = [...node.position.toArray(), ...node.quaternion.toArray()]; });
       const point = root ? root.getWorldPosition(new Vector3()).add(new Vector3(0, 0.9, 0)).project(camera) : new Vector3();
       const rect = gl.domElement.getBoundingClientRect();
+      const brand=scene.getObjectByName("lounge-brand"),brandBox=brand?new Box3().setFromObject(brand):null;
+      const project=(v:Vector3)=>{v.project(camera);return {x:rect.left+(v.x+1)*rect.width/2,y:rect.top+(1-v.y)*rect.height/2};};
       return { generation: session.generation, t: session.engine.t, status: session.engine.status, displayTime: performance.time,
         visible: performance.visible, dance: performance.dance, danceTime: performance.danceTime, previousDance: performance.previousDance, victoryTime: performance.victoryTime, greetingTime: performance.greetingTime,
-        cinematic: performance.cinematic, cameraResumeIn: performance.cameraResumeIn, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
-        position: root?.position.toArray(), bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
+        lighting:{stationBlend:stationLightBlend(controlRoomState(session)),environment:scene.environmentIntensity,exposure:gl.toneMappingExposure,roomKey:(scene.getObjectByName("control-room-key") as DirectionalLight|undefined)?.intensity},cinematic: performance.cinematic, cameraResumeIn: performance.cameraResumeIn, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
+        lounge:{brand:brandBox?{min:project(brandBox.min.clone()),max:project(brandBox.max.clone())}:null,roomMeshes:scene.getObjectByName("departure-control-room")?.children.length},resources:{geometries:gl.info.memory.geometries,textures:gl.info.memory.textures,drawCalls:gl.info.render.calls},actorUuid:root?.uuid,cameraUuid:camera.uuid,quaternion:camera.quaternion.toArray(),position: root?.position.toArray(), scenePosition:root?.getWorldPosition(new Vector3()).toArray(), cameraWorld:camera.getWorldPosition(new Vector3()).toArray(), entry:{stage:props.stage,elapsed:controlRoomState(session).elapsed,door:controlRoomState(session).door,hash:session.engine.world.definition.layoutHash}, bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
     };
     const target = window as typeof window & { victoryInspect?: typeof inspect }; target.victoryInspect = inspect;
     return () => { if (target.victoryInspect === inspect) delete target.victoryInspect; };
-  }, [get, gl, session, props.reducedMotion]);
+  }, [get, gl, session, props.reducedMotion, props.stage]);
   useEffect(() => {
     const context = gl.getContext();
     const extension = context.getExtension("WEBGL_debug_renderer_info");
@@ -415,25 +465,31 @@ function Contents(props: SceneProps) {
     const sampling = metrics.active;
     if (sampling && wasSampling.current) metrics.push(delta);
     wasSampling.current = metrics.active;
+    const intro=controlRoomState(session);props.audio.update(intro.active?intro.time:session.visualTime,intro.active?intro.walking:session.presentation.current.actors.get("player")?.motion==="walk",intro.door);
     // 唤醒后的首帧不包含休眠时长；采样完成只通知一次，不恢复空闲轮询。
     if (sampling && !metrics.active) queueMicrotask(() => session.notify());
   });
   const actors = [...session.presentation.current.actors.values()];
   const performanceState = getScenePerformance(session);
+  const dock=useMemo(()=>entranceDock(session.engine.world.definition),[session.engine.world.definition]);
+  const stationMounted=props.stage==="launch"||props.stage==="watch";
   return <>
-    <RenderSchedule session={session} targetFps={props.targetFps} metrics={metrics} reducedMotion={props.reducedMotion} />
+    <RenderSchedule stage={props.stage} session={session} targetFps={props.targetFps} metrics={metrics} reducedMotion={props.reducedMotion} />
     <CharacterKeyboard session={session} reducedMotion={props.reducedMotion} />
     <color attach="background" args={["#e9e1cf"]} />
-    <StationLighting standard={props.quality === "standard"} blackout={session.presentation.current.blackout.active} />
-    <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} />
-    <Station session={session} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
-    <MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
-    {actors.map(a=><AlertBadge key={a.id} id={a.id} session={session} messageMode={props.messageMode} thought={a.id==="player"?props.thought:null}/>)}
-    <MessageBillboardLayout />
-    <SceneItems session={session}/>
-    {props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
-    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} onModelLoadStart={actor.kind === "player" ? props.onModelLoadStart : undefined} onModelLoaded={actor.kind === "player" ? props.onModelLoaded : undefined} reducedMotion={props.reducedMotion} />)}
-    <DebugGround key={`ground-${session.generation}`} session={session} vision={props.showVision} trail={props.showTrail} />
+    <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} stage={props.stage} launchReady={props.launchReady} fastEntry={props.fastEntry}/>
+    <ControlRoom session={session} standard={props.quality==="standard"}/>
+    <group name="station-world-root" matrix={dock.matrix} matrixAutoUpdate={false}>
+    <StationLighting session={session} standard={props.quality === "standard"} />
+    {stationMounted&&<Station session={session} generation={session.generation} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />}
+    {stationMounted&&actors.map(a=><AlertBadge key={a.id} id={a.id} session={session} messageMode={props.messageMode} thought={a.id === "player" ? props.thought : null}/>)}
+    {stationMounted&&<MessageBillboardLayout />}
+    {stationMounted&&session.engine.world.definition.generatorVersion === "legacy-v0"&&<MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />}
+    {stationMounted&&<SceneItems session={session}/>}
+    {stationMounted && props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
+    {actors.filter((actor) => actor.kind === "player" || stationMounted && (!props.simpleCrowd || actor.kind === "guard")).map((actor) => <Character key={actor.id==="player"?"player":`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} onModelLoadStart={actor.kind === "player" ? props.onModelLoadStart : undefined} onModelLoaded={actor.kind === "player" ? props.onModelLoaded : undefined} onSelect={actor.id==="player"&&props.stage!=="watch"&&props.stage!=="launch"?()=>props.onRoomAction("character"):undefined} reducedMotion={props.reducedMotion} />)}
+    {stationMounted&&<DebugGround key={`ground-${session.generation}`} session={session} vision={props.showVision} trail={props.showTrail} />}
+    </group>
   </>;
 }
 
@@ -444,8 +500,10 @@ function UnsupportedScene({ onFailure }: { onFailure: (message: string) => void 
 
 /** 使用按需绘制；画质变化时重建图形上下文，确保抗锯齿设置确实生效。 */
 export default function GameScene(props: SceneProps) {
+  const [quality,setQuality]=useState(props.quality);
+  useEffect(()=>{if(props.stage!=="launch"&&!(props.stage==="watch"&&props.session.engine.player.activity.kind==="entering"))setQuality(props.quality);},[props.quality,props.stage,props.session.engine.player.activity.kind]);
   if (typeof WebGLRenderingContext === "undefined") return <UnsupportedScene onFailure={props.onFailure} />;
-  return <Canvas key={props.quality} frameloop="demand" shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维画面。</span>}>
-    <Contents {...props} />
+  return <Canvas key={quality} frameloop="demand" shadows={quality === "standard"} dpr={quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维画面。</span>}>
+    <Contents {...props} quality={quality} />
   </Canvas>;
 }

@@ -16,7 +16,7 @@ export class FollowCamera {
   reset() { this.bearing = undefined; }
 
   /** Reuse numeric output each frame; retract before obstacles and release slowly after clearance. */
-  update(pose: ActorPose, orbit: CameraOrbit, delta: number, snap = false, reducedMotion = false) {
+  update(pose: ActorPose, orbit: CameraOrbit, delta: number, snap = false, reducedMotion = false, definition?:import("../../shared/world").WorldDefinition) {
     const initial = this.bearing === undefined;
     if (initial) this.bearing = pose.yaw;
     const dt = Math.max(0, Math.min(0.1, delta));
@@ -31,7 +31,17 @@ export class FollowCamera {
     this.position.x = this.target.x + dx;
     this.position.y = this.target.y + dy;
     this.position.z = this.target.z + dz;
-    const safe = cameraFraction(this.target, this.position);
+    // Stay above the actual stair/landing under the camera, rather than looking through its lip.
+    for(const entry of definition?.entrances??[]){
+      const along=(this.position.x-entry.top.x)*entry.inward.x+(this.position.z-entry.top.y)*entry.inward.y;
+      const across=-(this.position.x-entry.top.x)*entry.inward.y+(this.position.z-entry.top.y)*entry.inward.x;
+      const playerAlong=(pose.x-entry.top.x)*entry.inward.x+(pose.z-entry.top.y)*entry.inward.y;
+      if(along>=-4.3&&along<=8&&Math.abs(across)<entry.width/2&&playerAlong<8&&playerAlong>=-.1){
+        const floor=along<0?4:along>6?0:4*(1-along/6);
+        this.position.y=Math.max(floor+1.65,Math.min(floor+2.35,this.position.y));
+      }
+    }
+    const safe = cameraFraction(this.target, this.position, definition);
     if (initial || snap || reducedMotion || safe < this.fraction) {
       this.fraction = safe;
       this.releaseDelay = safe < 1 ? 0.15 : 0;
@@ -41,7 +51,7 @@ export class FollowCamera {
       if (this.releaseDelay === 0) this.fraction += (safe - this.fraction) * (1 - Math.exp(-dt * 4));
     }
     this.position.x = this.target.x + dx * this.fraction;
-    this.position.y = this.target.y + dy * this.fraction;
+    this.position.y = this.target.y + (this.position.y - this.target.y) * this.fraction;
     this.position.z = this.target.z + dz * this.fraction;
     this.settled = Math.hypot(this.target.x - pose.x, this.target.y - pose.y - 1.25, this.target.z - pose.z) < 0.001
       && Math.abs(safe - this.fraction) * orbit.distance < 0.001;

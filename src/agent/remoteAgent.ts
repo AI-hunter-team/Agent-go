@@ -162,7 +162,7 @@ export const Api = {
   /** 以当前配置整理开局指导。 */
   normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
   /** 创建会话前就引用凭据，避免并发换模型使正在创建的对局失效。 */
-  createSession: async (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout, prepared?: { preparationId: string; sceneId: string; seed: number }) => {
+  createSession: async (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout, prepared?: { preparationId: string; sceneId: string; seed: number; world?: import("../shared/world").WorldDescriptor }) => {
     const token = activeModelToken;
     if (token) tokenUsers.set(token, (tokenUsers.get(token) ?? 0) + 1);
     try {
@@ -193,7 +193,7 @@ export class RemoteAgent implements Agent {
   private constructor(private sessionId: string) {}
 
   /** 创建局内远程 Agent。 */
-  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout, prepared?: { preparationId: string; sceneId: string; seed: number }): Promise<RemoteAgent> {
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout, prepared?: { preparationId: string; sceneId: string; seed: number; world?: import("../shared/world").WorldDescriptor }): Promise<RemoteAgent> {
     const { sessionId } = await Api.createSession(guidance, normalized, runId, settings, loadout, prepared);
     return new RemoteAgent(sessionId);
   }

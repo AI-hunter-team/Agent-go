@@ -1,9 +1,7 @@
+import type { PublicStationMap } from "../src/shared/world";
 import type { AgentAction } from "../src/shared/types";
 import { ATTRACTIONS, FACILITIES, NAV_NODES } from "../src/sim/layout";
 import { assertSafeText, SafetyError } from "./security";
-
-const FACILITY_IDS = FACILITIES.map((f) => f.id);
-const TARGETS = [...NAV_NODES.map((n) => n.id), ...FACILITY_IDS];
 
 const reason = {
   type: "string",
@@ -27,7 +25,9 @@ function tool(name: string, description: string, properties: Record<string, unkn
 }
 
 /** Kept in a fixed order so the prompt prefix stays cacheable. */
-export const AGENT_TOOLS = [
+export function agentTools(map?:PublicStationMap) {
+  const FACILITY_IDS=(map?.facilities??FACILITIES).map(f=>f.id), TARGETS=[...(map?.nodes??NAV_NODES).map(n=>n.id),...FACILITY_IDS];
+  return [
   tool("move_to", "走到某个地点或某个设施当前队尾；可从入口直接选择公开地图中的设施，无需先经过大厅中部等导航点。如果正在排队，会离开队伍并失去位次。", {
     target: { type: "string", enum: TARGETS, description: "地点编号或设施编号" },
   }),
@@ -45,12 +45,15 @@ export const AGENT_TOOLS = [
   tool("give", "把持有物交给可见人物。", {itemId:{type:"string"},npcId:{type:"string"}}),
   tool("drop", "放下或丢下持有物。", {itemId:{type:"string"},mode:{type:"string",enum:["place","drop"]}}),
   tool("talk", "向可见乘客说话、协商或交换。对方自主回复，实际结果由环境裁定。", {npcId:{type:"string"},message:{type:"string",maxLength:200},goal:{type:"string",enum:["chat","ask_ticket","trade","yield","persuade","threaten","bribe"]},offerItemId:{anyOf:[{type:"string"},{type:"null"}]}}),
-  tool("inspect_attraction","自主关注可见商业设施；glance 减速 3 秒，linger 停留 6 秒。",{attraction:{type:"string",enum:ATTRACTIONS.map(a=>a.id)},mode:{type:"string",enum:["glance","linger"]}}),
+  tool("inspect_attraction","自主关注可见商业设施；glance 减速 3 秒，linger 停留 6 秒。",{attraction:{type:"string",enum:(map?.attractions??ATTRACTIONS).map(a=>a.id)},mode:{type:"string",enum:["glance","linger"]}}),
   tool("act", "用自然语言提出具体游戏行动，由环境解释与裁定，不能宣布成功。", {instruction:{type:"string",maxLength:200}}),
 ];
+}
+export const AGENT_TOOLS=agentTools();
 
 /** Convert a tool call into an action, rejecting anything malformed. */
-export function parseToolUse(name: string, input: unknown): { action: AgentAction } | { error: string } {
+export function parseToolUse(name: string, input: unknown, map?:PublicStationMap): { action: AgentAction } | { error: string } {
+  const FACILITY_IDS=(map?.facilities??FACILITIES).map(f=>f.id), TARGETS=[...(map?.nodes??NAV_NODES).map(n=>n.id),...FACILITY_IDS];
   if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "工具参数必须是对象" };
   const i = input as Record<string, unknown>;
   const allowed: Record<string, string[]> = {
@@ -91,7 +94,7 @@ export function parseToolUse(name: string, input: unknown): { action: AgentActio
     case "operate_switch":
       return { action: { type: "operate_switch", reason: why } };
     case "inspect_attraction":
-      if (typeof i.attraction === "string" && ATTRACTIONS.some(a => a.id === i.attraction) && (i.mode === "glance" || i.mode === "linger"))
+      if (typeof i.attraction === "string" && (map?.attractions??ATTRACTIONS).some(a => a.id === i.attraction) && (i.mode === "glance" || i.mode === "linger"))
         return { action: { type: "inspect_attraction", attraction: i.attraction, mode: i.mode, reason: why } };
       return { error: "inspect_attraction 需要有效设施和 glance 或 linger 方式" };
     case "wait": {

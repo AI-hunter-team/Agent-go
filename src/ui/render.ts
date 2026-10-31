@@ -1,3 +1,4 @@
+import { displayFloor, worldViewBounds } from "../sim/entranceGeometry";
 import { captureScene } from "./presentation";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import type { Engine } from "../sim/engine";
@@ -56,6 +57,7 @@ export type { ViewOptions as RenderOptions } from "./presentation";
 import type { ViewOptions as RenderOptions } from "./presentation";
 
 export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts: RenderOptions) {
+  if(engine.world.definition.generatorVersion==="metro-v1"){drawGeneratedStation(ctx,engine,opts);return;}
   const { world, guards, player } = engine;
   const replay = opts.replay;
   const playerPos = replay ? replay.position : player.pos;
@@ -379,4 +381,26 @@ function polyline(ctx: CanvasRenderingContext2D, pts: readonly Vec[]) {
   ctx.beginPath();
   pts.forEach((p, i) => (i === 0 ? ctx.moveTo(px(p.x), px(p.y)) : ctx.lineTo(px(p.x), px(p.y))));
   ctx.stroke();
+}
+
+function drawGeneratedStation(ctx:CanvasRenderingContext2D,engine:Engine,opts:RenderOptions) {
+ const d=engine.world.definition,l=d.layout, gap=4,b=worldViewBounds(d);
+ ctx.save();ctx.clearRect(0,0,b.w*SCALE,(b.h*2+gap)*SCALE);
+ for(const [index,floor] of d.floors.entries()){
+  ctx.save();ctx.translate(-b.x*SCALE,(index*(b.h+gap)-b.y)*SCALE);ctx.fillStyle=index?COLORS.platform:COLORS.hall;ctx.fillRect(0,0,l.WIDTH*SCALE,l.HEIGHT*SCALE);
+  ctx.fillStyle=COLORS.ink;ctx.font="16px Microsoft YaHei";ctx.fillText(`${d.name} · ${index?"B2 岛式站台":"B1 站厅"}`,10,22);
+  const rectangles=index?(l.MOVE_BLOCKERS.filter(r=>r.floorId==="platform")):[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS,...l.PILLARS,...(l.openings??[])];
+  ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
+  for(const f of l.FACILITIES.filter(f=>(f.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=f.kind==="tvm"?COLORS.ochre:f.kind==="security"?COLORS.securityEdge:COLORS.green;ctx.fillRect(px(f.pos.x)-5,px(f.pos.y)-8,10,16);ctx.fillStyle=COLORS.ink;ctx.font="11px sans-serif";ctx.fillText(f.id,px(f.pos.x)+7,px(f.pos.y));}
+  for(const detail of d.details.filter(v=>v.pos.floorId===floor.id)){ctx.fillStyle=COLORS.ochre;const r=detail.body;if(r)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));}
+  for(const item of captureScene(engine).items)if(displayFloor(item.floorId)===floor.id){ctx.fillStyle=COLORS.ochre;ctx.fillRect(px(item.x)-3,px(item.z)-3,6,6);}
+  for(const node of l.NAV_NODES.filter(n=>(n.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=COLORS.inkSoft;ctx.font="9px sans-serif";ctx.fillText(node.label,px(node.pos.x),px(node.pos.y)-8);}
+  if(!index)for(const e of d.entrances??[]){const r=e.bounds;ctx.fillStyle=COLORS.stairs;ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));ctx.strokeStyle=COLORS.stairsEdge;ctx.strokeRect(px(r.x),px(r.y),px(r.w),px(r.h));for(let i=0;i<24;i++){const x=e.top.x+e.inward.x*i/4,y=e.top.y+e.inward.y*i/4;line(ctx,{x:x-e.inward.y*e.width/2,y:y+e.inward.x*e.width/2},{x:x+e.inward.y*e.width/2,y:y-e.inward.x*e.width/2});}ctx.fillStyle=COLORS.ink;ctx.fillText(`${e.id}口 ↓ 站厅`,px(e.top.x),px(e.top.y)-8);}
+  const snapshot=captureScene(engine);
+  for(const actor of snapshot.actors.values())if(displayFloor(actor.floorId)===floor.id&&!(actor.id==="player"&&opts.replay)){ctx.fillStyle=actor.id==="player"?COLORS.player:COLORS.inkSoft;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z),actor.id==="player"?6:4,0,Math.PI*2);ctx.fill();}
+  const trail=opts.replay?.trail??(opts.showTrail?engine.trail:[]);ctx.strokeStyle=COLORS.brick;ctx.beginPath();let drawing=false;for(const p of trail){if(displayFloor(p.floorId)!==floor.id){drawing=false;continue;}if(drawing)ctx.lineTo(px(p.x),px(p.y));else ctx.moveTo(px(p.x),px(p.y));drawing=true;}ctx.stroke();
+  const replay=opts.replay?.position;if(replay&&displayFloor(replay.floorId)===floor.id){ctx.fillStyle=COLORS.player;ctx.beginPath();ctx.arc(px(replay.x),px(replay.y),7,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+ }
+ ctx.restore();
 }

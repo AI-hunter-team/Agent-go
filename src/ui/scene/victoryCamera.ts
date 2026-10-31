@@ -2,6 +2,8 @@ import { Vector3 } from "three";
 import type { ActorPose } from "../presentation";
 import { cameraFraction } from "./cameraCollision";
 import { constrainCabinCamera } from "./trainCabin";
+import { generatedTrainLayout } from "../../shared/generatedTrain";
+import type { WorldDefinition } from "../../shared/world";
 
 interface Shot { azimuth: number; distance: number; height: number; focus: number; offset: number; fov: number }
 const SHOT_SECONDS = 6;
@@ -53,19 +55,25 @@ export class VictoryCamera {
   }
 
   /** 将导演轨迹转换为场景坐标，保留完整主体、窄屏构图及碰撞约束。 */
-  update(pose: ActorPose, seconds: number, aspect: number, reducedMotion: boolean, assetRotation = 0, onTrain = false, viewportHeight = 720) {
+  update(pose: ActorPose, seconds: number, aspect: number, reducedMotion: boolean, assetRotation = 0, onTrain = false, viewportHeight = 720, definition?: WorldDefinition) {
     if (onTrain) {
       const t = reducedMotion ? 0 : Math.max(0, seconds - 1.5);
-      const direction = pose.z < 15 ? 1 : -1;
+      const axis = definition?.generatorVersion === "metro-v1" ? definition.layout.platformAxis : undefined;
+      const horizontal = axis?.direction === "x";
+      const along = horizontal ? pose.x : pose.z;
+      const length = horizontal ? definition!.layout.WIDTH : definition?.layout.HEIGHT ?? 0;
+      const centres = axis ? generatedTrainLayout(length).centres : [];
+      const centre = centres.length ? centres.reduce((a, b) => Math.abs(a - along) < Math.abs(b - along) ? a : b) : 15;
+      const direction = along < centre ? 1 : -1;
       // Reserve the top result and bottom actions, including short landscape screens.
       const visibleFraction = Math.min(.72, Math.max(160, viewportHeight - (viewportHeight <= 500 ? 190 : 270)) / viewportHeight);
       const fitDistance = 2.05 / (2 * Math.tan(23 * Math.PI / 180) * visibleFraction);
       const distance = Math.max(fitDistance, (3.2 + Math.sin(t / 5) * 0.15) * Math.max(1, 0.65 / Math.max(0.3, aspect)));
       this.focus.set(pose.x, pose.y + 0.85, pose.z);
-      this.desired.set(pose.x + Math.sin(t / 7) * 0.04, pose.y + 1.15 + Math.sin(t / 6) * 0.16, pose.z + direction * distance);
+      this.desired.set(pose.x + (horizontal ? direction * distance : Math.sin(t / 7) * 0.04), pose.y + 1.15 + Math.sin(t / 6) * 0.16, pose.z + (horizontal ? Math.sin(t / 7) * 0.04 : direction * distance));
       const entrance = reducedMotion || !this.captured ? 1 : smooth((seconds - this.capturedAt) / 1.5);
       this.position.lerpVectors(this.start, this.desired, entrance);
-      constrainCabinCamera(this.position, pose);
+      constrainCabinCamera(this.position, pose, definition);
       // Keep the subject centred while the initial view enters the narrow aisle.
       this.target.copy(this.focus);
       this.fov = 46;
@@ -80,7 +88,7 @@ export class VictoryCamera {
     this.position.lerpVectors(this.start, this.desired, entrance);
     this.target.lerpVectors(this.startTarget, this.focus, entrance);
     this.fov = this.startFov + (shot.fov - this.startFov) * entrance;
-    const fraction = cameraFraction(this.focus, this.position);
+    const fraction = cameraFraction(this.focus, this.position, definition);
     if (fraction < 1) this.position.lerpVectors(this.focus, this.position, fraction);
   }
 }

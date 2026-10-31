@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "geometry": "Original procedural geometry for Agent Go, reusing the project's original metro source model",
+  "textures": "Original deterministic seamless PBR pixel recipes, authored in WORLDGEN-003",
+  "textureSize": [256, 256],
+  "channels": ["color-sRGB", "normal-linear", "roughness-linear"],
+  "families": ["stone", "plaster", "steel", "concrete", "rubber", "tactile", "paint", "ribbed"],
+  "sourceFiles": ["src/assets/world-surfaces/index.ts", "src/ui/scene/generatedArchitecture.ts", "src/ui/scene/generatedProps.ts"],
+  "reusedProjectAssets": [
+    {"path": "src/assets/metro-train/index.ts", "sourceCommit": "a4664f0a29dfbc0e82a85ccc9eb95156fe8b9291"},
+    {"path": "public/assets/station-kit", "provenance": "public/assets/station-kit/sources.json"}
+  ],
+  "thirdPartyImages": [],
+  "thirdPartyModels": [],
+  "runtimeExternalRequests": false,
+  "note": "No third-party artwork or operator logos. Existing project code/library dependencies retain their original terms; this file does not change the repository licence."
+}

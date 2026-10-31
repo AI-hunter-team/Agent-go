@@ -1,3 +1,5 @@
+import { controlRoomState } from "./controlRoomLayout";
+import { displayFloor } from "../../sim/entranceGeometry";
 import { Component, Suspense, memo, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei/core/Gltf";
@@ -56,15 +58,16 @@ function ImportedModel({ url, session, actorId, reducedMotion, onLoaded }: { url
     performance.setClips(animator.performances.danceClips, animator.performances.greeting?.duration ?? 0, url);
   }, [actorId, animator, performance, url]);
   useFrame(() => {
-    const motion = session.presentation.current.actors.get(actorId)?.motion ?? "idle";
+    const control=controlRoomState(session),inRoom=actorId==="player"&&control.active;
+    const motion = inRoom?(control.walking?"walk":"idle"):session.presentation.current.actors.get(actorId)?.motion ?? "idle";
     const player = actorId === "player";
-    animator.update({ motion, delta: performance.delta, speed: session.speed, frozen: session.frozen,
+    animator.update({ motion, delta: inRoom?control.delta:performance.delta, speed: inRoom?1:session.speed, frozen: inRoom?false:session.frozen,
       reducedMotion, dance: player ? performance.dance : "", victoryTime: performance.victoryTime,
       danceTime: performance.danceTime, previousDance: player ? performance.previousDance : "", previousDanceTime: performance.previousDanceTime,
       greetingTime: player ? performance.greetingTime : null });
     // 模型 Y 才是竖直方向；骨架父节点可旋转，不能直接冻结骨骼局部 X/Z。
     constrainRootMotion();
-    if (root.current) root.current.position.y = generated.length > 0 && motion === "walk" && !reducedMotion && !(player && performance.dance) ? Math.abs(Math.sin(session.visualTime * Math.PI * 2)) * 0.025 : 0;
+    if (root.current) root.current.position.y = generated.length > 0 && motion === "walk" && !reducedMotion && !(player && performance.dance) ? Math.abs(Math.sin((inRoom?control.time:session.visualTime) * Math.PI * 2)) * 0.025 : 0;
   });
   useEffect(() => {
     const cached = blobModels.get(url) ?? { users: 0, scene };
@@ -93,8 +96,9 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
   const color = kind === "player" ? materials.blue : kind === "guard" ? materials.ink : kind === "elderly" ? materials.ochre : kind === "luggage" ? materials.sage : kind === "hurried" ? materials.brick : materials.grey;
   useFrame(() => {
     const actor = session.presentation.current.actors.get(actorId);
-    const t = session.visualTime;
-    const walk = !reducedMotion && actor?.motion === "walk" ? Math.sin(t * (kind === "hurried" ? 12 : 9)) * 0.42 : 0;
+    const control=controlRoomState(session),inRoom=actorId==="player"&&control.active;
+    const t = inRoom?control.time:session.visualTime;
+    const walk = !reducedMotion && (inRoom?control.walking:actor?.motion === "walk") ? Math.sin(t * (kind === "hurried" ? 12 : 9)) * 0.42 : 0;
     for (let i = 0; i < 2; i++) {
       if (legs[i].current) legs[i].current!.rotation.x = walk * (i ? -1 : 1);
       if (arms[i].current) arms[i].current!.rotation.x = actor?.motion === "interact" ? -0.65 : -walk * (i ? -1 : 1) * 0.7;
@@ -123,7 +127,7 @@ function GeometricPerson({ kind, session, actorId, reducedMotion }: { kind: Acto
 }
 
 /** 插值角色位置与方向，为主角和保安应用各自的模型及额外朝向。 */
-export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, onModelLoadStart, onModelLoaded, reducedMotion }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string, url?: string) => void; onModelLoadStart?: (url: string) => void; onModelLoaded?: (url: string) => void; reducedMotion: boolean }) {
+export const Character = memo(function Character({ id, kind, session, assetUrl, assetRotation, onAssetError, onModelLoadStart, onModelLoaded, reducedMotion, onSelect }: { id: string; kind: ActorFrame["kind"]; session: GameSession; assetUrl: string; assetRotation: number; onAssetError: (message: string, url?: string) => void; onModelLoadStart?: (url: string) => void; onModelLoaded?: (url: string) => void; reducedMotion: boolean; onSelect?: () => void }) {
   const root = useRef<Group>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const ring = useRef<MeshBasicMaterial>(null);
@@ -153,16 +157,17 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
   }
   /** 只在短距离点击结束时问候；胜利和重复点击由展示状态统一拒绝。 */
   function up(event: ThreeEvent<PointerEvent>) {
-    if (pointer.current.up(event)) performance.greet(reducedMotion);
+    if (pointer.current.up(event)) {if(onSelect)onSelect();else performance.greet(reducedMotion);}
   }
   useFrame(() => {
     if (!root.current) return;
     const actor = sampleActor(session.presentation, id, session.alpha, pose.current);
-    root.current.visible = !!actor;
+    root.current.visible = !!actor && (session.engine.world.definition.generatorVersion!=="metro-v1" || id==="player" || displayFloor(actor.floorId)===displayFloor(session.engine.player.pos.floorId));
     if (!actor) return;
+    const control=controlRoomState(session);if(id==="player"&&control.active)Object.assign(pose.current,control.pose);
     root.current.position.set(pose.current.x, pose.current.y, pose.current.z);
     root.current.rotation.y = pose.current.yaw;
-    if (ring.current) { ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
+    if (ring.current) { ring.current.visible=!(id==="player"&&control.active); ring.current.opacity = performance.time < performance.selectedUntil ? 1 : 0.65; ring.current.color.set(performance.time < performance.selectedUntil ? "#c69a44" : "#315c65"); }
   });
   const placeholder = kind === "player" || kind === "guard"
     ? <GeometricPerson kind={kind} session={session} actorId={id} reducedMotion={reducedMotion} />

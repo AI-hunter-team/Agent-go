@@ -1,3 +1,4 @@
+import { generatedTrainLayout } from "../shared/generatedTrain";
 import type { AlertLevel, ItemKind, FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
 import type { Engine } from "../sim/engine";
 import { STAIRS_TOP, STAIRS_BOTTOM } from "../sim/layout";
@@ -12,6 +13,7 @@ export interface ActorFrame {
   readonly x: number;
   readonly elevation?: number;
   readonly z: number;
+  readonly floorId?: string;
   readonly yaw: number;
   readonly motion: Motion;
   readonly jump: number;
@@ -26,7 +28,7 @@ export interface FacilityFrame {
 }
 export interface SceneSnapshot {
   readonly alerts: readonly {observerId: string; subjectId: string; level: AlertLevel; ring: number}[];
-  readonly items: readonly {id: string; kind: ItemKind; x: number; z: number; holderId: string | null}[];
+  readonly items: readonly {id: string; kind: ItemKind; x: number; z: number; floorId?:string; elevation?:number; holderId: string | null}[];
   readonly speech: readonly {speakerId: string; text: string; t: number}[];
   readonly t: number;
   readonly actors: ReadonlyMap<string, ActorFrame>;
@@ -55,9 +57,19 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const next = a.kind === "walking" || a.kind === "to_queue" ? a.path[0] : undefined;
     const facility = a.kind === "queued" || a.kind === "service" ? engine.world.facility(a.facility)?.def : undefined;
     const face = facility ? Object.freeze({ x: facility.pos.x, z: facility.pos.y }) : undefined;
-    let yaw = face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : old?.yaw ?? (next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : Math.PI / 2);
+    const entry=a.kind==="entering"?engine.world.definition.entrances?.find(e=>e.id===a.entranceId):undefined;
+    let yaw = entry ? Math.atan2(entry.inward.x,entry.inward.y) : face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : old?.yaw ?? (next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : Math.PI / 2);
     // Face down the aisle for the celebration; world position and score stay authoritative.
-    if (person.isPlayer && person.onTrain) yaw = person.pos.y < 15 ? 0 : Math.PI;
+    if (person.isPlayer && person.onTrain) {
+      const axis = engine.world.definition.generatorVersion === "metro-v1" ? engine.world.layout.platformAxis : undefined;
+      if (axis) {
+        const along = axis.direction === "x" ? person.pos.x : person.pos.y;
+        const length = axis.direction === "x" ? engine.world.layout.WIDTH : engine.world.layout.HEIGHT;
+        const centres = generatedTrainLayout(length).centres;
+        const centre = centres.reduce((a, b) => Math.abs(a - along) < Math.abs(b - along) ? a : b);
+        yaw = axis.direction === "x" ? (along < centre ? Math.PI / 2 : -Math.PI / 2) : (along < centre ? 0 : Math.PI);
+      } else yaw = person.pos.y < 15 ? 0 : Math.PI;
+    }
     // NPCs turn at a human pace; a blocked step must not snap them between opposite headings.
     if (!person.isPlayer && old) {
       const turn = Math.atan2(Math.sin(yaw - old.yaw), Math.cos(yaw - old.yaw));
@@ -67,7 +79,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const motion: Motion = a.kind === "escalator" ? (person.escalatorWalking ? "walk" : "idle") : (a.kind === "creative" && a.mechanic === "jump_gate" || a.kind === "acting" && a.op === "vault") ? "jump" : a.kind === "service" || (a.kind === "distracted" && !a.resume) ? "interact" : moving ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
-      elevation: platformElevation(person.pos.x),
+      floorId:person.pos.floorId, elevation: actorElevation(engine,person),
       face,
       jump: a.kind === "acting" && a.op === "vault" ? a.progress : a.kind === "creative" && a.mechanic === "jump_gate" ? Math.max(0, Math.min(1, 1 - a.remaining / RULES.jumpGateSeconds)) : 0,
     }));
@@ -75,7 +87,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
   for (const guard of engine.guards.guards) {
     const old = previous?.actors.get(guard.def.id);
     const moving = old && Math.hypot(old.x - guard.pos.x, old.z - guard.pos.y) > 0.00001;
-    actors.set(guard.def.id, Object.freeze({ id: guard.def.id, kind: "guard", x: guard.pos.x, z: guard.pos.y, yaw: Math.PI / 2 - guard.facing, motion: moving ? "walk" : "idle", jump: 0 }));
+    actors.set(guard.def.id, Object.freeze({ id: guard.def.id, kind: "guard", floorId:guard.pos.floorId, elevation:guard.pos.floorId==="platform"?-6:0, x: guard.pos.x, z: guard.pos.y, yaw: Math.PI / 2 - guard.facing, motion: moving ? "walk" : "idle", jump: 0 }));
   }
   // A renderer receives only the newest line per speaker, never stacked history.
   const speech = new Map<string, SceneSnapshot["speech"][number]>();
@@ -90,7 +102,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
   return Object.freeze({
     alerts: Object.freeze([...engine.alerts.records.values()].filter(r => r.subjectId === "player" && r.level !== "none").map(r => Object.freeze({observerId:r.observerId,subjectId:r.subjectId,level:r.level,ring:r.ring}))),
     items: Object.freeze([...engine.world.items.items.values()].filter(i => !i.used && (i.location.type === "ground" || i.location.type === "spot" || (i.location.type === "held" && i.location.slot === "hand"))).flatMap(i => {
-      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,holderId:engine.world.items.holderId(i)})] : [];
+      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,floorId:p.floorId,elevation:engine.world.definition.generatorVersion==="metro-v1"?(p.elevation??(p.floorId==="platform"?-6:0)):platformElevation(p.x),holderId:engine.world.items.holderId(i)})] : [];
     })),
     speech: Object.freeze([...speech.values()].slice(-8)),
     t: engine.t,
@@ -129,6 +141,15 @@ export function platformElevation(x: number) {
   return -2 * Math.max(0, Math.min(1, (x - STAIRS_TOP.x) / (STAIRS_BOTTOM.x - STAIRS_TOP.x)));
 }
 
+export function actorElevation(engine:Engine, person:Engine["player"]):number {
+  const d=engine.world.definition;
+  if(d.generatorVersion==="legacy-v0")return platformElevation(person.pos.x);
+  if(person.pos.elevation!==undefined)return person.pos.elevation;
+  if(person.pos.floorId==="platform")return -6;
+  const a=person.activity;
+  if(a.kind==="stairs"||a.kind==="escalator")return -6*(1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)));
+  return 0;
+}
 export interface ActorPose { x: number; y: number; z: number; yaw: number; }
 /** Reuses an output object; no allocation or React state update in the frame loop. */
 export function sampleActor(buffer: PresentationBuffer, id: string, alpha: number, out: ActorPose): ActorFrame | undefined {

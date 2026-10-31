@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import type { GameReport } from "../shared/types";
+import { BrandMark } from "./BrandMark";
 import { journeyEndOutcome } from "./reportPresentation";
 import styles from "./JourneyEnd.module.css";
 
@@ -17,7 +18,7 @@ export const JourneyEnd = forwardRef<HTMLButtonElement, Props>(function JourneyE
   const outcome = journeyEndOutcome(report);
   const success = report.status === "success";
   return <section className={styles.end} data-outcome={outcome.tone} aria-label="本局结果" hidden={hidden}>
-    <div className={styles.navigation}><span className={styles.brand}>agent-go<span>●</span></span><button onClick={onLobby}>返回大厅</button></div>
+    <div className={styles.navigation}><BrandMark className={styles.brand} /><button onClick={onLobby}>返回大厅</button></div>
     <div className={styles.result} role="status">
       {outcome.tone === "failed" && <span className={styles.failureLabel}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
