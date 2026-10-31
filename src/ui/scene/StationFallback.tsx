@@ -25,10 +25,6 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
   });
   const [x, z] = [def.pos.x, def.pos.y];
   return <group>
-    <group name="blackout-switch" position={[BLACKOUT_SWITCH.x, 1.1, BLACKOUT_SWITCH.y]}>
-      <Block position={[0, 0, 0]} scale={[0.7, 1.5, 0.28]} color={session.presentation.current.blackout.active ? "brick" : "ink"} />
-      <Block position={[-0.38, 0.05, 0]} scale={[0.06, 0.8, 0.42]} color="ochre" />
-    </group>
     {def.kind === "tvm" ? <>
       <Block position={[x, 0.82, z - TVM_MODEL_OFFSET_X]} scale={[0.85, 1.64, 0.62]} color="ink" />
       <Block position={[x, 1.15, z + 0.05]} scale={[0.6, 0.46, 0.025]} color="screen" />
@@ -53,6 +49,10 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
 
 export const StationFallback = memo(function StationFallback({ session, reducedMotion = false }: { session: GameSession; reducedMotion?: boolean }) {
   return <group>
+    <group name="blackout-switch" position={[BLACKOUT_SWITCH.x, 1.1, BLACKOUT_SWITCH.y]}>
+      <Block position={[0, 0, 0]} scale={[0.7, 1.5, 0.28]} color={session.presentation.current.blackout.active ? "brick" : "ink"} />
+      <Block position={[-0.38, 0.05, 0]} scale={[0.06, 0.8, 0.42]} color="ochre" />
+    </group>
     <Block position={[STAIRS_TOP.x / 2, -0.09, HEIGHT / 2]} scale={[STAIRS_TOP.x, 0.18, HEIGHT + 2]} color="chalk" />
     <Block position={[(STAIRS_BOTTOM.x + WIDTH) / 2, -2.09, HEIGHT / 2]} scale={[WIDTH - STAIRS_BOTTOM.x + 2, 0.18, HEIGHT + 2]} color="sage" />
     <StationDescents material={materials.sage} session={session} reducedMotion={reducedMotion} />
