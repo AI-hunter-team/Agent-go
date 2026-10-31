@@ -6,6 +6,7 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [HOME-REFRESH-001](HOME-REFRESH-001.md) | 参考图驱动的大厅首页布局、实时场景镜头及桌面/窄屏本地验证 |
 | [UI-JOURNEY-FINAL-001](UI-JOURNEY-FINAL-001.md) | 旅程界面与已合入的乘客、交互及胜利展示最终主线集成 |
 | [UI-JOURNEY-IV2-001](UI-JOURNEY-IV2-001.md) | 旅程界面与 #32 的候选集成；背包绑定、150/120 秒及离线/伪模型浏览器检查；不代表最终主线组合验收 |
 | [VICTORY-REVIEW-001](VICTORY-REVIEW-001.md) | #33 主角手势审查修复与 #34/#32 主线集成复验 |

@@ -177,20 +177,28 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
     if (settings.mode === "overview") {
       state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
     }
+    // 大厅展示车站全景；选角时重新初始化角色镜头，避免从远处穿越设施。
+    if (settings.shot === "lobby") {
+      if (size.width <= 600) {
+        state.camera.position.set(38, 2.8, 8);
+        state.camera.lookAt(51, 0.6, 19);
+      } else {
+        state.camera.position.set(36.5, 2.8, 16.3);
+        state.camera.lookAt(50, 0.5, 14.5);
+      }
+      cameraInitialized.current = false;
+      return;
+    }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
     target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
     anchor.copy(target);
     if (settings.shot && settings.shot !== "launch") {
-      const front = settings.shot !== "lobby";
       const angle = pose.current.yaw;
-      const d = front ? 4.5 : 7;
-      desired.set(target.x - Math.sin(angle) * d, target.y + (front ? 0.25 : 1), target.z - Math.cos(angle) * d);
-      if (front) {
-        const narrow = size.width < 600;
-        target.x -= Math.cos(angle) * (narrow ? 0 : 1.4);
-        target.z += Math.sin(angle) * (narrow ? 0 : 1.4);
-        if (narrow) target.y -= 0.9;
-      }
+      desired.set(target.x - Math.sin(angle) * 4.5, target.y + 0.25, target.z - Math.cos(angle) * 4.5);
+      const narrow = size.width < 600;
+      target.x -= Math.cos(angle) * (narrow ? 0 : 1.4);
+      target.z += Math.sin(angle) * (narrow ? 0 : 1.4);
+      if (narrow) target.y -= 0.9;
       const fraction = cameraFraction(anchor, desired);
       eye.copy(anchor).lerp(desired, fraction);
       if (!cameraInitialized.current || reducedMotion || fraction < 0.99) state.camera.position.copy(eye);
