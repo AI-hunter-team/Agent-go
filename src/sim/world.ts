@@ -19,6 +19,7 @@ export type Activity =
   | { kind: "waiting"; remaining: number }
   | { kind: "stairs"; remaining: number; start: Vec }
   | { kind: "reacting"; reaction: string; subjectId: string }
+  | { kind: "acting"; op: string; progress: number }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
 
@@ -88,7 +89,7 @@ export class World {
   private physicalQueue(f: Facility): string[] {
     const ids = [...(f.serving ? [f.serving.personId] : []), ...f.queue];
     for (const [id, reservation] of this.cutInReservations) {
-      if (reservation.facility !== f.def.id || this.persons.get(id)?.activity.kind !== "creative") continue;
+      if (reservation.facility !== f.def.id || !["creative","acting"].includes(this.persons.get(id)?.activity.kind ?? "")) continue;
       const before = ids.indexOf(reservation.npcId);
       if (before >= 0) ids.splice(before, 0, id);
     }
@@ -244,7 +245,7 @@ export class World {
 
   /** The only connection from the upper landing to the lower platform. */
   descendStairs(p: Person): string | null {
-    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "stairs") return "当前行动尚未完成";
+    if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs") return "当前行动尚未完成";
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
     if (dist(p.pos, STAIRS_TOP) > STAIRS_REACH) return "请先前往 STAIRS_TOP 下楼梯入口";
     this.removeFromQueue(p);
@@ -283,9 +284,11 @@ export class World {
   // ------------------------------------------------------------ simulation
 
   /** Advance people and facilities by one fixed step. */
-  stepPeopleAndFacilities() {
-    this.tickStarts.clear();
-    for (const p of this.persons.values()) this.tickStarts.set(p.id, { ...p.pos });
+  stepPeopleAndFacilities(startsCaptured = false) {
+    if (!startsCaptured) {
+      this.tickStarts.clear();
+      for (const p of this.persons.values()) this.tickStarts.set(p.id, { ...p.pos });
+    }
     for (const p of this.persons.values()) this.stepPerson(p);
     for (const f of this.facilities.values()) this.stepFacility(f);
   }

@@ -37,9 +37,12 @@ test("jump height is a visual offset, and guard facing maps the planar axes corr
   engine.guards.guards[0].facing = Math.PI;
   const buffer = new PresentationBuffer(engine);
   expect(buffer.current.actors.get("guard-A")!.yaw).toBeCloseTo(-Math.PI / 2);
+  // Isolate the active jump animation from guard failure/cancellation.
+  engine.guards.guards.splice(0);
   engine.applyAction({ type: "attempt_creative", intent: "翻闸", reason: "test" }, "jump_gate");
   for (let i = 0; i < 10; i++) engine.step();
   buffer.capture(engine);
+  expect(engine.status).toBe("running");
   const actual = { ...engine.player.pos };
   const pose = { x: 0, y: 0, z: 0, yaw: 0 };
   sampleActor(buffer, "player", 0.5, pose);

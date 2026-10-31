@@ -34,6 +34,28 @@ export class ItemSystem {
     return { ok: true, text: `已移动${ITEM_DEFS[item.kind].label}` };
   }
   holdings(personId: string): Item[] { return [...this.items.values()].filter((i) => this.holderId(i) === personId); }
+  /** Roll back both possession and audit records if any part of a trade fails. */
+  moveMany(moves: { itemId: string; to: ItemLocation }[], how = "trade"): ActionResult {
+    if (new Set(moves.map((m) => m.itemId)).size !== moves.length) return { ok: false, text: "重复物品" };
+    const shadow = new ItemSystem(this.person,this.now);
+    for (const item of this.items.values()) shadow.items.set(item.id,structuredClone(item));
+    // Stage outgoing items in the shadow only, freeing both parties' slots before
+    // checking incoming goods. Backpack children stay attached through move().
+    for (const move of moves) {
+      const item=shadow.items.get(move.itemId), pos=item?shadow.position(item):null;
+      if (!item || !pos) return {ok:false,text:"物品不存在或位置无效"};
+      const staged=shadow.move(item.id,{type:"ground",pos},how); if(!staged.ok) return staged;
+    }
+    for (const move of moves) { const result=shadow.move(move.itemId,move.to,how); if(!result.ok) return result; }
+    for (const item of this.items.values()) {
+      const next=shadow.items.get(item.id)!;
+      if(JSON.stringify(item.location)===JSON.stringify(next.location)) continue;
+      const from=this.where(item.location); item.location=structuredClone(next.location);
+      this.record(item,from,this.where(item.location),how);
+    }
+    return { ok: true, text: "交易完成" };
+  }
+  canMove(itemId: string, to: ItemLocation): boolean { const item = this.items.get(itemId); return Boolean(item && !this.validate(item,to)); }
   holderId(item: Item): string | null {
     if (item.location.type === "held") return item.location.personId;
     if (item.location.type === "container") {

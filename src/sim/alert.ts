@@ -14,6 +14,14 @@ export class AlertSystem {
   constructor(readonly bus: EventBus, private role: (id: string) => ObserverRole | undefined, private now: () => number) {}
 
   get(observerId: string, subjectId: string): AlertRecord | undefined { return this.records.get(key(observerId, subjectId)); }
+  /** Simulator-only directed response to a validated dialogue decision. */
+  raiseNpc(observerId: string, subjectId: string, causeEventId: string): AlertRecord | undefined {
+    if (this.role(observerId) !== "npc" || !this.bus.get(causeEventId)) return;
+    const id = key(observerId,subjectId), old = this.records.get(id);
+    const record: AlertRecord = { observerId, subjectId, level: "red", ring: 0, hiddenFor: 0, since: this.now(), causeEventId, reaction: null };
+    if (old?.level !== "red") this.history.push({ t: this.now(), observerId, subjectId, from: old?.level ?? "none", to: "red", cause: causeEventId });
+    this.records.set(id,record); return record;
+  }
   step(percepts: readonly Percept[], canSee: (observerId: string, subjectId: string) => boolean, dt = DT,
     frozen: (observerId: string) => boolean = () => false): AlertSignals & { changes: AlertChange[] } {
     const changes: AlertChange[] = [];

@@ -1,10 +1,13 @@
 import type {
   ActionResult,
+  ActionPlan,
   AgentAction,
+  InteractionAction,
   CreativeMechanic,
   FacilityStatus,
   GameStatus,
   Observation,
+  PlanStep,
   TimeBreakdown,
   TrailPoint,
   Trigger,
@@ -13,7 +16,10 @@ import type {
 import { EventBus } from "./events";
 import { PerceptionSystem, type Observer } from "./perception";
 import { AlertSystem } from "./alert";
-import { CreativeSystem } from "./creative";
+import { CreativeSystem } from "./actions/legacy";
+import { ActionExecutor } from "./actions/executor";
+import { DialogueSystem } from "./dialogue";
+import { buildIntentContext, parsePlan } from "./intent";
 import { GuardSystem } from "./guards";
 import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
 import { findPath, nodeById } from "./nav";
@@ -39,6 +45,8 @@ export class Engine {
   readonly npcs: NpcDirector;
   readonly npcBrain: NpcBrain;
   readonly creative: CreativeSystem;
+  readonly executor: ActionExecutor;
+  readonly dialogue: DialogueSystem;
   readonly player: Person;
 
   status: GameStatus = "running";
@@ -61,7 +69,9 @@ export class Engine {
     this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id));
     this.alerts = new AlertSystem(this.events, (id) => this.guards.guards.find((g) => g.def.id === id)?.role ?? (this.world.persons.has(id) && id !== "player" ? "npc" : undefined), () => this.t);
     this.npcBrain = new NpcBrain(this.world, this.guards, this.events, this.alerts);
-    this.creative = new CreativeSystem(this.world, this.guards, this.events, () => this.resolveInteractions(0));
+    this.dialogue = new DialogueSystem(this.world,this.events,this.alerts,this.npcBrain);
+    this.executor = new ActionExecutor({world:this.world,guards:this.guards,bus:this.events,alerts:this.alerts,brain:this.npcBrain,dialogue:this.dialogue});
+    this.creative = new CreativeSystem(this.world, this.guards, this.events, () => this.resolveInteractions(0),this.executor);
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
     this.recordTrail();
     this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内进入站台。");
@@ -91,6 +101,7 @@ export class Engine {
       const subject = this.world.persons.get(record.subjectId);
       if (guard && subject && this.guards.canSee(guard, subject.pos)) this.guards.watch(guard, subject.id, subject.pos);
     }
+    this.creative?.noteRed(result.guardRed);
     return result.guardRed;
   }
 
@@ -104,22 +115,32 @@ export class Engine {
   // ------------------------------------------------------------- stepping
 
   step() {
-    if (this.status !== "running") return;
+    if (this.status !== "running" || this.executor.pendingDialogue) return;
     const w = this.world;
     const activityBefore = this.player.activity.kind;
     w.t = round1(w.t + DT);
 
     this.npcs.step();
-    this.npcBrain.step();
+    // Actions and NPC reactions move before the world's queue/facility step.
+    // Keep one common start point for collision checks across the whole tick.
+    w.tickStarts.clear();
+    for (const person of w.persons.values()) w.tickStarts.set(person.id, { ...person.pos });
     w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, radius: personRadius("guard") }));
-    w.stepPeopleAndFacilities();
+    this.executor.step();
+    if(this.executor.pendingDialogue) {
+      const red=this.resolveInteractions(0);
+      if(red?.subjectId==="player") this.failForGuard(red.guardId,red.causeEventId);
+      this.account(activityBefore); this.collect(); return;
+    }
+    this.npcBrain.step();
+    w.stepPeopleAndFacilities(true);
     this.guards.step([...w.persons.values()].map((p) => ({ id: p.id, pos: p.pos, from: w.tickStarts.get(p.id), radius: personRadius(p.kind) })), (id) => w.persons.get(id), w.t);
     w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, from: w.collisionGuards.find((old) => old.id === g.def.id)?.pos, radius: personRadius("guard") }));
-    this.creative.step(this.player);
     this.account(activityBefore);
 
     const red = this.resolveInteractions();
     if (red?.subjectId === "player") { this.failForGuard(red.guardId, red.causeEventId); return; }
+    this.executor.finishFrame();
     if (this.player.onPlatform) {
       this.score = w.t;
       this.end("success", null);
@@ -157,6 +178,7 @@ export class Engine {
   }
 
   private end(status: GameStatus, reason: string | null) {
+    if(this.executor.busy) this.executor.cancel("本局结束，行动中断");
     this.status = status;
     this.failReason = reason;
     this.recordTrail();
@@ -170,7 +192,7 @@ export class Engine {
     else if (kind === "queued") tb.queueing += DT;
     else if (kind === "service") tb.service += DT;
     else if (kind === "waiting") tb.waiting += DT;
-    else if (kind === "creative") tb.creative += DT;
+    else if (kind === "creative" || kind === "acting") tb.creative += DT;
     else if (kind === "stairs") tb.stairs = (tb.stairs ?? 0) + DT;
     else if (kind === "idle") tb.idle += DT;
     if (Math.round(this.world.t * 10) % 5 === 0) this.recordTrail();
@@ -219,10 +241,11 @@ export class Engine {
   }
 
   /** Validate and start an action. `mechanic` is required for attempt_creative. */
-  applyAction(action: AgentAction, mechanic?: CreativeMechanic): ActionResult {
+  applyAction(action: AgentAction | InteractionAction, mechanic?: CreativeMechanic): ActionResult {
     const w = this.world;
     const p = this.player;
     if (this.status !== "running") return { ok: false, text: "本局已结束" };
+    if(this.executor.busy && action.type!=="wait") return {ok:false,text:"上一个行动尚未完成"};
     // Waiting never changes the world, so it is always allowed; anything else must not
     // interrupt a service or a creative act in progress.
     if (action.type !== "wait") {
@@ -233,6 +256,34 @@ export class Engine {
     this.wakeAt = null;
 
     switch (action.type) {
+      case "act":
+      case "take":
+      case "give":
+      case "drop":
+      case "talk": {
+        let plan: ActionPlan;
+        if (action.type === "act") {
+          plan = parsePlan(action.instruction, buildIntentContext(w, this.guards));
+        } else {
+          let step: PlanStep;
+          switch (action.type) {
+            case "give": step = { op: "give", itemId: action.itemId, toId: action.npcId }; break;
+            case "take": step = { op: "take", itemId: action.itemId }; break;
+            case "drop": step = { op: "drop", itemId: action.itemId, mode: action.mode }; break;
+            case "talk": step = { op: "talk", npcId: action.npcId, message: action.message, goal: action.goal, offerItemId: action.offerItemId }; break;
+          }
+          plan = { status: "plan", summary: "开始行动", reason: "", source: "keywords", steps: [step] };
+        }
+        const result = this.executor.start(plan);
+        const red = this.resolveInteractions(0);
+        if (red?.subjectId === "player") this.failForGuard(red.guardId, red.causeEventId);
+        return result;
+      }
+      case "traverse": {
+        if(action.route!=="stairs") return {ok:false,text:"扶梯布局尚未接入"};
+        const err=w.descendStairs(p); return {ok:!err,text:err??"开始下楼梯"};
+      }
+      case "observe": return {ok:false,text:"详细观察工具由 IV2-10 接入"};
       case "move_to": {
         const target = resolveTarget(action.target);
         if (!target) return { ok: false, text: `未知地点 ${action.target}。可用：${NAV_NODES.map((n) => n.id).join("、")}，或设施编号` };

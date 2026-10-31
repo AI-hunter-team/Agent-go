@@ -1,6 +1,6 @@
 # 交互 2.0：规则规范与技术设计
 
-状态：**规划已确认，待实施**（2026-10-31）。依据用户提供的[角色设计提案](source-角色设计.md)和当前 `main`（`d4884a8`）源码整理。本文是实现规划，尚未实现。D1–D8 已由用户确认，见 [README](README.md#已确认决定)；标注“推荐”的参数值（圆环秒数、成功率、耗时、反应评分等）仍是试玩起始值，可按测试与试玩数据调整。
+状态：**现行规则与分阶段实现规划**（2026-10-31）。原规划依据用户[角色设计提案](source-角色设计.md)及当时 `main`（`d4884a8`）；IV2-01–08 现已本地实现，后续仍是规划，具体证据与缺口见 [README 状态表](README.md#状态与后续)。D1–D8 已确认；标注“推荐”的数值仍是试玩起始值，可按测试与试玩数据调整。B2 的“现状”保留原基线快照，不代表当前实现。
 
 本文分三部分：A 规则规范（做什么）、B 技术设计（怎么做）、C 接口契约（各模块之间的约定）。任务拆分、文件归属与验收见 [tasks.md](tasks.md)。
 
@@ -444,6 +444,8 @@ export interface ActionPlan {
 export interface StepOutcome { ok: boolean; text: string; eventIds: string[] }
 ```
 
+执行器接收模拟侧校验过的闭合步骤，最多 4 步；开始时保留计划副本。每帧先推进接近/持续阶段，感知处理后在 `finishFrame()` 再校验和结算，确保最后一帧仍能被目击。中断清理 ongoing act 与队列预约。现有闸机可执行；栏杆/扶梯/扶手须由 IV2-14/15 提供几何，未接入时返回明确的前置条件失败。
+
 `contest`（`src/sim/actions/contest.ts`）推荐公式，概率夹在 [0.05, 0.95]，用每局初始化时创建并保留的 `contestRng = rng.fork("contest")` 连续抽样（每次判定调用 `contestRng.next()`，不得重新 fork）：
 
 ```
@@ -484,6 +486,8 @@ export interface NpcResponse {
 ```
 
 模拟器只执行与 `holdings`、goal 一致的决定；`flee` / `call_guard` 等价于让该 NPC 进入红色并选定对应反应。现有 `CutInDialogueRequest` / `NpcReply` 在一个里程碑内保留并由 `yield` 适配。
+
+模拟侧 `pendingDialogue` 保存到达后构造的请求，`dialogue.apply(response)` 再校验距离、持有物与轮数后结算；等待时 Engine.step 不推进世界时间。请求和回复历史由模拟器保存，单 NPC 最多三轮。交易所有物品转移原子完成；任何容量/持有校验失败均不交换。威胁在请求产生时登记 danger 行为，与回复是否同意无关。Runner 的网络编排由 IV2-10 接入。
 
 ### C7. 角色工具（新增 / 变更）
 

@@ -1,6 +1,6 @@
 # 交互 2.0：任务拆分、顺序与验收
 
-状态：**规划已确认，任务待认领**（2026-10-31）。任务编号是工作入口，不代表已分配负责人或已排期。规则与接口见 [design.md](design.md)；开工前按 [任务简报模板](../templates/task-brief.md) 为每个任务建立 `docs/tasks/IV2-xx.md`，验证写 `docs/validation/IV2-xx.md`，流程遵守 [AGENTS.md](../../AGENTS.md) 与 [DEVELOPMENT](../DEVELOPMENT.md)。
+状态：**IV2-01–08 本地实现及软件验证完成，按用户要求停在 08；09–19 待实施**（2026-10-31）。证据及尚未接入的布局/网络/展示见 [专题状态表](README.md#状态与后续)。以下保留任务范围与依赖，不代表后续已排期。规则与接口见 [design.md](design.md)；开工前按 [任务简报模板](../templates/task-brief.md) 建立 `docs/tasks/IV2-xx.md`，验证写 `docs/validation/IV2-xx.md`，流程遵守 [AGENTS.md](../../AGENTS.md) 与 [DEVELOPMENT](../DEVELOPMENT.md)。
 
 ## 给开发 Agent（Codex）的执行约定
 

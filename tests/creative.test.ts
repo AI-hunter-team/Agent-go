@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { CreativeSystem } from "../src/sim/creative";
+import { CreativeSystem } from "../src/sim/actions/legacy";
 import { GuardSystem } from "../src/sim/guards";
 import { queueSlot } from "../src/sim/layout";
 import { World } from "../src/sim/world";

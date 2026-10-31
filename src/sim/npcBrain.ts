@@ -35,6 +35,10 @@ export class NpcBrain {
       if (this.remembered.has(key)) continue;
       this.remembered.add(key);
       const e = this.bus.get(p.eventId)!;
+      if(!p.attributedTo && !this.active.has(p.observerId)) {
+        const observer=this.world.persons.get(p.observerId)!;
+        observer.facing=angleTo(observer.pos,p.pos);
+      }
       this.remember(p.observerId, { t: this.world.t, about: p.attributedTo, kind: e.kind, text: `${p.channel === "hearing" ? "听到" : "看到"}${e.kind}`, eventId: e.id });
     }
     for (const record of this.alerts.records.values()) {

@@ -74,6 +74,8 @@ export function describeActivity(world: World, p: Person): string {
       return `正在下楼梯（剩余 ${round1(a.remaining)} 秒）`;
     case "reacting":
       return ({ glance: "看了一眼", murmur: "小声议论", complain: "抱怨", argue: "争执", expel: "驱赶插队者", keep_distance: "向旁边让开", flee: "惊慌后退", confront: "上前阻拦", report: "朝保安走去" } as Record<string,string>)[a.reaction] ?? "停下观察";
+    case "acting":
+      return `正在执行 ${a.op}`;
     case "done":
       return "已进入站台";
   }
@@ -87,6 +89,7 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
     t: round1(world.t),
     self: {
       inventory: world.items.holdings(p.id).map((i) => ({ id: i.id, kind: i.kind, slot: world.items.slot(i) })),
+      action: p.activity.kind === "acting" ? {op:p.activity.op,progress:p.activity.progress} : null,
       bag: { has: Boolean(world.items.bag(p.id)), used: world.items.bagUsed(p.id), capacity: BAG_CAPACITY },
       position: { x: round1(p.pos.x), y: round1(p.pos.y) },
       zone: ZONE_LABEL[zoneOf(p.pos)],
