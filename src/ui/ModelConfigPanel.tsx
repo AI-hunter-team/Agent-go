@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Api } from "../agent/remoteAgent";
+import { isReasoningEffort, type ReasoningEffort } from "../shared/modelConfig";
 
 interface Props {
   health: { llm: boolean; model: string | null };
@@ -7,12 +8,14 @@ interface Props {
   onClose: () => void;
 }
 
+/** 配置模型与思考档位；重新启用只影响之后创建的对局。 */
 export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
-  const [baseUrl, setBaseUrl] = useState("");
+  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [verified, setVerified] = useState<{ token: string; models: string[] } | null>(null);
   const [model, setModel] = useState("");
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("none");
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState<"verify" | "enable" | "clear" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +26,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
     if (pendingToken.current) void Api.discardModel(pendingToken.current).catch(() => undefined);
   }, []);
 
+  /** 丢弃未启用的临时凭据，重置表单验证状态。 */
   const invalidate = () => {
     if (pendingToken.current) void Api.discardModel(pendingToken.current).catch(() => undefined);
     pendingToken.current = null;
@@ -32,6 +36,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
     setError(null);
   };
 
+  /** 获取模型列表，并优先选择 DeepSeek Flash。 */
   const verify = async () => {
     invalidate();
     setBusy("verify");
@@ -40,19 +45,20 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
       pendingToken.current = result.token;
       setBaseUrl(result.baseUrl);
       setVerified(result);
-      setModel(result.models[0] ?? "");
+      setModel(result.models.includes("deepseek-flash") ? "deepseek-flash" : result.models[0] ?? "deepseek-flash");
       setManual(result.models.length === 0);
       setApiKey("");
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }
   };
 
+  /** 用所选档位验证并启用配置，不更改已有对局。 */
   const enable = async () => {
     if (!verified) return;
     setBusy("enable");
     setError(null);
     try {
-      const result = await Api.enableModel(verified.token, model.trim());
+      const result = await Api.enableModel(verified.token, model.trim(), reasoningEffort);
       pendingToken.current = null;
       setEnabled(true);
       onEnabled(result);
@@ -60,6 +66,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
     finally { setBusy(null); }
   };
 
+  /** 清除之后新建对局使用的页面配置。 */
   const clear = async () => {
     setBusy("clear");
     setError(null);
@@ -74,15 +81,15 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
 
   return (
     <section className="card model-config" aria-labelledby="model-config-title" aria-busy={busy !== null}>
-      <div className="row between">
+      <div className="row between config-heading">
         <h2 id="model-config-title">模型 API 配置</h2>
         <button className="ghost" disabled={busy !== null} onClick={onClose}>返回开局设置</button>
       </div>
-      <p className="muted">连接你的 OpenAI 兼容 API，验证后选择模型来驱动角色。</p>
+      <p className="muted">连接 DeepSeek 或兼容 Responses 的 API。</p>
       <ol className="config-steps" aria-label="配置步骤">
-        <li className="on">1 填写接口</li>
-        <li className={verified ? "on" : ""}>2 选择模型</li>
-        <li className={enabled ? "on" : ""}>3 启用大模型</li>
+        <li className="on" aria-current={!verified ? "step" : undefined}>1 填写接口</li>
+        <li className={verified ? "on" : ""} aria-current={verified && !enabled ? "step" : undefined}>2 选择模型</li>
+        <li className={enabled ? "on" : ""} aria-current={enabled ? "step" : undefined}>3 启用大模型</li>
       </ol>
       {health.llm && <p className="config-status" role="status">当前已启用：<strong>{health.model}</strong></p>}
       <form onSubmit={(e) => { e.preventDefault(); void verify(); }}>
@@ -91,7 +98,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
             <span>API 域名 / Base URL</span>
             <input id="api-base-url" type="url" required value={baseUrl} placeholder="https://api.example.com/v1"
               autoComplete="off" spellCheck={false} onChange={(e) => { invalidate(); setBaseUrl(e.target.value); }} />
-            <small className="muted">只填写域名时会自动补上 /v1；也可填写完整 API 基础路径。</small>
+            <small className="muted">填写服务商提供的基础地址，无需添加 /responses。</small>
           </label>
           <div className="field">
             <label htmlFor="api-key">API Key</label>
@@ -106,23 +113,32 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
           <button type="submit" disabled={!baseUrl.trim() || !apiKey.trim()}>{busy === "verify" ? "正在连接…" : verified ? "重新验证连接" : "验证连接并获取模型"}</button>
         </fieldset>
       </form>
-      {verified && !enabled && (
+      {verified && (
         <div className="config-model-selection">
           <p className="config-status" role="status">{verified.models.length ? `认证成功，已获取 ${verified.models.length} 个模型。` : "接口未提供模型列表，请手动填写模型 ID 并验证。"}</p>
           {verified.models.length > 0 && <label className="field" htmlFor="api-model">
             <span>选择模型</span>
             <select id="api-model" disabled={busy !== null} value={manual ? "__manual__" : model} onChange={(e) => {
-              setManual(e.target.value === "__manual__"); setModel(e.target.value === "__manual__" ? "" : e.target.value); setError(null);
+              setManual(e.target.value === "__manual__"); setModel(e.target.value === "__manual__" ? "" : e.target.value); setEnabled(false); setError(null);
             }}>
               {verified.models.map((id) => <option key={id} value={id}>{id}</option>)}
               <option value="__manual__">手动填写模型 ID…</option>
             </select>
           </label>}
           {manual && <label className="field" htmlFor="api-model-manual"><span>模型 ID</span>
-            <input id="api-model-manual" value={model} maxLength={200} disabled={busy !== null} placeholder="例如 gpt-6-luna" onChange={(e) => { setModel(e.target.value); setError(null); }} />
+            <input id="api-model-manual" value={model} maxLength={200} disabled={busy !== null} placeholder="例如 deepseek-flash" onChange={(e) => { setModel(e.target.value); setEnabled(false); setError(null); }} />
           </label>}
+          <label className="field" htmlFor="api-reasoning-effort">
+            <span>思考强度</span>
+            <select id="api-reasoning-effort" value={reasoningEffort} disabled={busy !== null} onChange={(e) => {
+              if (isReasoningEffort(e.target.value)) { setReasoningEffort(e.target.value); setEnabled(false); setError(null); }
+            }}>
+              <option value="none">关闭</option><option value="low">低</option><option value="high">高</option><option value="max">最高</option>
+            </select>
+          </label>
+          <small className="muted">重新启用后用于新对局；档位不代表固定思考长度。</small>
           <p className="muted">启用时会进行一次真实工具调用，验证模型权限和兼容性，可能消耗少量 API 额度。</p>
-          <button className="primary" disabled={busy !== null || !model.trim()} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型并启用大模型"}</button>
+          <button className="primary" disabled={busy !== null || !model.trim() || enabled} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型并启用大模型"}</button>
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}

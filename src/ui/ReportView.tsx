@@ -7,18 +7,20 @@ import { DebugPanel } from "./DebugPanel";
 import { LEGACY_GAME_SETTINGS } from "../shared/gameSettings";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
-  { key: "walking", label: "行走", color: "#1f4e79" },
-  { key: "queueing", label: "排队", color: "#c3912f" },
-  { key: "service", label: "办理", color: "#6e8a74" },
+  { key: "walking", label: "行走", color: "var(--blue)" },
+  { key: "queueing", label: "排队", color: "var(--ochre)" },
+  { key: "service", label: "办理", color: "var(--green)" },
   { key: "stairs", label: "下楼梯", color: "#7a7194" },
   { key: "waiting", label: "等待", color: "#b8ad94" },
-  { key: "creative", label: "创造性行动", color: "#b4533c" },
+  { key: "creative", label: "创造性行动", color: "var(--brick)" },
   { key: "idle", label: "空闲", color: "#d9d3c4" },
 ];
 
+/** 汇总真实终局成绩、耗时与调用记录，并提供重试和报告导出。 */
 export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport; onRetry: () => void; onEdit: () => void }) {
   const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
+  // 原样导出当前报告，不改变存档字段或计分数据。
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -50,7 +52,7 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
 
       <h3>时间花在哪里</h3>
       <p className="small">{`时限 ${settings.timeLimitSeconds} 秒 · 每条开放队列 +${settings.extraQueuePeople} 人`}</p>
-      <div className="bar">
+      <div className="bar" aria-hidden="true">
         {SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0).map((s) => (
           <i
             key={s.key}
@@ -121,6 +123,7 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
   );
 }
 
+/** 按时间展示事件，允许用户切换角色感知过滤。 */
 export function EventTimeline({ report }: { report: GameReport }) {
   const [onlyPerceived, setOnlyPerceived] = useState(true);
   const events = report.events.filter((e) => !onlyPerceived || e.playerVisible);
@@ -135,8 +138,8 @@ export function EventTimeline({ report }: { report: GameReport }) {
       <ol>
         {events.map((e, i) => (
           <li key={i} className={e.playerVisible ? "" : "unseen"}>
-            <span className="time">{e.t.toFixed(1)}s</span> {e.text}
-            {!e.playerVisible && <em> （角色未感知）</em>}
+            <span className="time">{e.t.toFixed(1)}s</span><span>{e.text}
+            {!e.playerVisible && <em> （角色未感知）</em>}</span>
           </li>
         ))}
       </ol>

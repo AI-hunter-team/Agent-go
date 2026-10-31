@@ -1,6 +1,6 @@
 # Docker Compose 部署与配置
 
-适用版本：默认 `main`，已包含 Docker/Compose、页面模型配置和 3D 界面。本次集成核对基线为 `392f050034dadeaa8d7991621d0c9b7ff410ca69`（2026-10-30）；无需切换历史功能分支。
+适用版本：当前检出的开发版本。既有 main 已包含 Docker/Compose 与 3D 界面；Responses 和思考设置来自 [RESPONSES-001](tasks/RESPONSES-001.md)，其合入状态与验证以任务记录为准，不能假定远端 main 已包含本地改动。
 
 ## 1. 准备环境
 
@@ -41,9 +41,9 @@ docker compose logs -f app
 ## 3. 在页面开启大模型
 
 1. 点击开局区的「模型 API 配置」。
-2. 填写 OpenAI 兼容接口的 API 域名和 Key；只有域名时会自动补上 `/v1`，也可填写完整 API 基础路径。
+2. 填写 DeepSeek 或兼容 Responses 的基础地址和 Key，默认 `https://api.deepseek.com`；保留原路径，不自动补 `/v1`。
 3. 点击「验证连接并获取模型」。
-4. 选择模型；接口未提供模型列表时手动填写模型 ID。
+4. 选择模型和思考强度，默认 DeepSeek Flash / 关闭；可选低、高、最高。模型列表不可用时手动填写模型 ID。
 5. 点击「验证模型并启用大模型」，成功后点击「去开局」。
 
 模型启用会发起一次真实工具调用，可能消耗少量供应商额度；失败时显示原因，不会启用该模型。Key 不写入浏览器存储或镜像，只在临时内存中持有。刷新页面需重新填写；容器重启会清空临时配置和对局。
@@ -53,10 +53,13 @@ docker compose logs -f app
 没有 `.env` 也可以使用上一节的页面配置。如果希望提供服务端默认模型，在 `Agent-go-docker` 目录创建 `.env`，按自己的接口替换示例值：
 
 ```dotenv
-AGENT_PROVIDER=openai
-OPENAI_BASE_URL=https://api.example.com/v1
+AGENT_PROVIDER=responses
+OPENAI_BASE_URL=https://api.deepseek.com
 OPENAI_API_KEY=your-api-key
-AGENT_MODEL=your-model-id
+AGENT_MODEL=deepseek-flash
+OPENAI_REASONING_EFFORT=none
+OPENAI_STREAM=1
+DECISION_MAX_TOKENS=4096
 APP_PORT=8080
 ```
 
@@ -72,7 +75,7 @@ docker compose up -d --force-recreate --wait
 
 默认 `APP_HOST=127.0.0.1` 只允许宿主机访问。如需局域网访问，可在 `.env` 中明确设置 `APP_HOST=0.0.0.0` 后重建容器，并使用宿主机 IP 访问。应用没有新增账号鉴权或 TLS；公网托管应另行配置访问控制与 HTTPS。
 
-已有 Anthropic 服务端配置也可以使用：将 `AGENT_PROVIDER` 设为 `anthropic`，填写 `ANTHROPIC_API_KEY` 或 `ANTHROPIC_AUTH_TOKEN`，并设置对应的 `AGENT_MODEL`；可选 `ANTHROPIC_BASE_URL`。页面自定义接口入口使用 OpenAI 兼容协议。
+旧 `AGENT_PROVIDER=openai` 作为 Responses 别名。Anthropic 原生通道已移除，须自行配置支持 Responses 的地址、模型和 Key；不会自动挪用旧密钥。`DECISION_THINKING_TOKENS`、`AGENT_FALLBACK` 已停用。总输出预算包括思考；页面档位独立于服务端默认值，重新启用只影响新对局。
 
 ## 5. 连接宿主机上的模型网关
 

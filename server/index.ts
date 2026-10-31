@@ -4,15 +4,16 @@ import { createApp } from "./app";
 import { createLlm } from "./llm";
 import { SessionStore } from "./sessions";
 import { debugLoggerFromEnv } from "./debug";
-import { configFromEnv } from "./claude";
+import { configFromEnv } from "./modelSettings";
 
 const llm = createLlm();
 const debugLogger = debugLoggerFromEnv();
-const provider = process.env.AGENT_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "anthropic");
+const provider = "responses";
+if (process.env.DECISION_THINKING_TOKENS !== undefined) console.warn("DECISION_THINKING_TOKENS 已停用；使用 OPENAI_REASONING_EFFORT 与 DECISION_MAX_TOKENS。");
 const config = configFromEnv({ ...process.env, AGENT_MODEL: llm?.model ?? process.env.AGENT_MODEL });
 const app = createApp({ llm, sessions: new SessionStore(), frontendDir: process.env.NODE_ENV === "production" ? resolve("dist") : undefined, debugLogger, modelParameters: {
   provider,
-  ...config, model: llm?.model ?? null, effort: provider === "openai" ? config.reasoningEffort : "low", timeoutMs: 20_000, transportRetries: 0,
+  ...config, model: llm?.model ?? null, effort: config.reasoningEffort, timeoutMs: 20_000, transportRetries: 0,
 } });
 
 const port = Number(process.env.PORT ?? 8787);
@@ -24,6 +25,7 @@ const server = app.listen(port, host, () => {
 });
 
 let closing = false;
+/** 优雅停止 HTTP 服务，最多等待 10 秒释放连接。 */
 const shutdown = () => {
   if (closing) return;
   closing = true;

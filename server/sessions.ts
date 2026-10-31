@@ -1,7 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
 import type { NormalizedGuidance } from "../src/shared/types";
-import type { ChatMessage } from "./openai";
+import type { ResponseItem } from "./responsesTypes";
 import { assertSafeText, validateNormalized } from "./security";
 import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettings";
 
@@ -12,10 +11,9 @@ export interface Session {
   runId: string;
   guidance: string;
   normalized: NormalizedGuidance | null;
-  messages: Anthropic.Beta.BetaMessageParam[];
-  chatMessages: ChatMessage[];
+  responseItems: ResponseItem[];
   /** Every tool id must be answered, even when a batched response is rejected. */
-  pendingToolUseIds: string[];
+  pendingCallIds: string[];
   lastUsed: number;
 }
 
@@ -24,6 +22,7 @@ const TTL_MS = 30 * 60 * 1000;
 export class SessionStore {
   private sessions = new Map<string, Session>();
 
+  /** 新建一局独立历史，冻结本局游戏设置。 */
   create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings: Partial<GameSettings> = {}): Session {
     assertSafeText(guidance);
     validateNormalized(normalized);
@@ -34,15 +33,15 @@ export class SessionStore {
       runId: runId || randomUUID(),
       guidance,
       normalized,
-      messages: [],
-      chatMessages: [],
-      pendingToolUseIds: [],
+      responseItems: [],
+      pendingCallIds: [],
       lastUsed: Date.now(),
     };
     this.sessions.set(s.id, s);
     return s;
   }
 
+  /** 读取会话并刷新最后访问时间。 */
   get(id: string): Session | undefined {
     const s = this.sessions.get(id);
     if (s) s.lastUsed = Date.now();
@@ -54,10 +53,12 @@ export class SessionStore {
     return this.sessions.delete(id);
   }
 
+  /** 返回当前保留的会话数量。 */
   get size(): number {
     return this.sessions.size;
   }
 
+  /** 清理超时会话，不跨局保留模型历史。 */
   private sweep() {
     const cutoff = Date.now() - TTL_MS;
     for (const [id, s] of this.sessions) if (s.lastUsed < cutoff) this.sessions.delete(id);
