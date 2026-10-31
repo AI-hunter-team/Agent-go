@@ -6,6 +6,8 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [NPC-DETAIL-PR-001](NPC-DETAIL-PR-001.md) | 原普通乘客外观移植到新地图主线，独立工作区的软件和浏览器复验 |
+| [NPC-DETAIL-001](NPC-DETAIL-001.md) | 普通乘客外观的三轮本地开发与旧基线验证快照 |
 | [CI-SESSION-001](CI-SESSION-001.md) | PR #30合并后Windows双整局报告比较超时，限定六个种子的执行预算；保留全部518项检查及产品时限 |
 | [CAMERA-STABILITY-001](CAMERA-STABILITY-001.md) | 跟随镜头稳定、被占最终队尾等候及 NPC 转向限速；整合地图 main 两处冲突，最终 518 测试/类型/构建通过，生产离线 seed 1、180 秒时限下 131.4 秒乘梯；PR #30 交付 |
 | [STATION-PR-002](STATION-PR-002.md) | 显示修复与栏杆整合 PR，同步角色/失败复盘 main 的4处冲突及本轮集成验证 |
