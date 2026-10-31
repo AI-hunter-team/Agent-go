@@ -1,7 +1,8 @@
 import type { Vec } from "../shared/types";
-import { angleTo, dist, inViewCone, lineOfSight, moveToward } from "./geometry";
+import { angleTo, dist, inViewCone, lineOfSight } from "./geometry";
 import { SIGHT_OCCLUDERS } from "./layout";
 import { DT, GUARDS, RULES, type GuardDef } from "./scenario";
+import { personRadius, steer, type MovingBody } from "./movement";
 
 export interface Guard {
   def: GuardDef;
@@ -28,7 +29,7 @@ export class GuardSystem {
     }));
   }
 
-  step() {
+  step(people: readonly MovingBody[] = []) {
     for (const g of this.guards) {
       if (g.lookAt) {
         g.facing = angleTo(g.pos, g.lookAt.point);
@@ -50,7 +51,7 @@ export class GuardSystem {
       }
       const dest = g.def.route[g.target];
       g.facing = angleTo(g.pos, dest);
-      g.pos = moveToward(g.pos, dest, g.def.speed * DT);
+      g.pos = steer(g.pos, dest, g.def.speed * DT, personRadius("guard"), people, false);
       if (dist(g.pos, dest) < 1e-6) {
         g.target = (g.target + 1) % g.def.route.length;
         g.pauseLeft = g.def.pauseSeconds;

@@ -18,7 +18,7 @@ function setup() {
   const p = w.addPerson("player", queueSlot(f.def, 4), { isPlayer: true });
   p.activity = { kind: "queued", facility: "S2" }; f.queue.push(p.id);
   const c = new CreativeSystem(w, new GuardSystem());
-  const step = () => { for (let i = 0; i < 16; i++) { w.stepPeopleAndFacilities(); c.step(p); } };
+  const step = () => { for (let i = 0; i < 100 && p.activity.kind === "creative"; i++) { w.stepPeopleAndFacilities(); c.step(p); } };
   return { w, f, p, people, c, step };
 }
 
