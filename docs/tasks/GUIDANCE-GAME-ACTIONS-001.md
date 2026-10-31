@@ -1,6 +1,6 @@
 # GUIDANCE-GAME-ACTIONS-001：修复初始方案误拒游戏行动
 
-状态：本地实现及软件检查完成，待集成与真实模型验收。流程见 [DEVELOPMENT](../DEVELOPMENT.md)。
+状态：已提交并推送，创建 [PR #70](https://github.com/AI-hunter-team/Agent-go/pull/70) 待审查，未合入；真实模型验收未运行。流程见 [DEVELOPMENT](../DEVELOPMENT.md)。
 
 ## 目标与分工
 
@@ -45,3 +45,4 @@
 - 本聊天 Codex 负责串行交付两个独立分支，各自仅提交所属源码、测试及任务记录；不混入随机关闭修复或主工作区迁移文档。
 - 已 `git fetch origin` 核实目标主线仍为基线 `fa5551b8ac725377ace494866141e7109342cee2`，无需解决主线冲突。既有 799 项、类型及构建结果对应本次代码；本阶段仅补文档并重查完整 diff 与暂存空白。
 - PR 目标 `main`、head `codex/guidance-game-actions`；仓库简报及验证记录随分支提交，PR 描述按模板列范围、模型未实测限制、回退及交接入口。最终 PR URL 与 head SHA 以对应 PR 为准；未合并、未部署，人工审查未进行。
+- 交付成功：[PR #70](https://github.com/AI-hunter-team/Agent-go/pull/70)，实现提交 `561199f6b0cb3552dbfadf6bb84dd20fa7505d04`。提交推送后分支干净，后续文档提交仅补本链接；PR 为 open、非草稿、目标 main，未合并，未启用自动合并。

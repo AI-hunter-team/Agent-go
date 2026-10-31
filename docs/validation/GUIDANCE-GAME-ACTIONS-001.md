@@ -1,6 +1,6 @@
 # GUIDANCE-GAME-ACTIONS-001 验证报告
 
-状态：本地验证快照，不代表真实模型验收或已合入。流程见 [DEVELOPMENT](../DEVELOPMENT.md)。
+状态：本地验证及 [PR #70](https://github.com/AI-hunter-team/Agent-go/pull/70) 交付快照，不代表真实模型验收或已合入。流程见 [DEVELOPMENT](../DEVELOPMENT.md)。
 
 ## 版本与环境
 
@@ -44,3 +44,4 @@
 - 上述未提交状态为软件验证时的快照。用户随后确认授权本任务与随机关闭修复分别 commit、推送并创建 PR，明确不合并 main。
 - `git fetch origin` 后 `origin/main` 仍为 `fa5551b8ac725377ace494866141e7109342cee2`；源码与 799 项测试/类型/构建通过时相同。本阶段仅补交付记录并检查文档、完整及暂存 diff，不重复业务测试。
 - 创建目标：head `codex/guidance-game-actions` → `main`；远端 PR/CI 以对应分支的 PR 为准，不将本地结果冒称为远端通过。真实模型、浏览器及人工审查均未进行；未授权合并或部署。
+- 实际交付：[PR #70](https://github.com/AI-hunter-team/Agent-go/pull/70) 已创建，open、非草稿、未合并，实现提交 `561199f6b0cb3552dbfadf6bb84dd20fa7505d04`。本阶段完整/暂存 diff、新文档链接及空白检查通过。未启用自动合并，未部署。
