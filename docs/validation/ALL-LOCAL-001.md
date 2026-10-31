@@ -20,7 +20,7 @@
 - 外观组合冲突位于 `App.tsx`、`GameScene.tsx` 及四份工作/索引文档。手工把主角/保安 URL、方向和错误回调与性能设置组合，保留随机种子、按需渲染、限帧、简化乘客和低频 HUD；全部工作记录保留双方条目。
 - 没有新增玩法、协议或业务函数。`Character.tsx` 与外观模块采用已提交源功能；模型动作/世界坐标、导入边界和存储职责沿用 [AVATAR-001](../tasks/AVATAR-001.md) 与 [GUARD-002](../tasks/GUARD-002.md)。
 
-## 实际检查
+## 初轮组合检查（未含 PR #23）
 
 环境：Windows、Node `v24.21.0`、npm `12.1.0`。最终集成使用独立的现有 `pr18-merge` worktree；清空该预览服务进程的模型凭据环境变量，仅运行离线页面，没有调用真实模型。
 
@@ -53,3 +53,14 @@
 - 构建集中复制至原项目本地 `artifacts/all-local/` 后核对文件哈希；不覆盖其他历史产物，不入库截图与构建。
 - 用户已授权普通 push、PR 和合入，未授权部署或真实模型。人工审查未进行，不冒称批准。
 - 最终合入后仅在确认各工作区干净时将原目录切到最新 main；源提交与源分支仍保留，无破坏性清理。实际最终提交、远端 CI 与合入以本次 PR 为准。
+
+## 追加：同步正式站厅 main（当前最终组合）
+
+- 初轮 `e0b6b35` 的 [Windows/Ubuntu CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41175102568) 与 [Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41175102567) 全通过，但 main 已合入 PR #23，GitHub 合并返回冲突。随后将 main `1866824` 整合入本分支。
+- 已完整核对 STATION-INTEGRATION-001 简报和 App/GameScene 相关代码，保留正式站厅模型、栏杆、布光、模拟器几何及上游测试；没有更改这些规则。
+- 修复内部错误通道冲突：`onStationAssetError` 只更新站厅提示；`retryScene` 清除此提示并重挂载场景，保留角色选择和对局；`Contents` 分别使用站厅、主角、保安错误回调。`StationLighting` 保留上游行为并补职责注释。HTTP、动作和报告格式未改。
+- 同一锁文件下 `npm run typecheck`、`npm test -- --maxWorkers=2`、`npm run build` 均通过；48 文件 / 416 项，未新增用例、未改时限/断言，新增计数来自上游已有检查。
+- 实际生产页面：正式站厅与主角/保安设置共存，正常新页面的 error 日志为空。仅对本地测试标签页临时拦截站厅 manifest：出现站厅专属失败/重试提示，两组角色设置和选择仍保留；解除拦截后点重试，提示清除并恢复正式素材。临时网络拦截与禁缓存均已还原，测试标签页已关闭。
+- 当前截图 `artifacts/all-local/settings-station.png`（早期截图保留为初轮证据）。未重跑整局或付费调用，也未重复上游的全套资产验收。
+- 当前构建保存为原项目本地 `artifacts/all-local/final/dist/` 与 `final/build/server.js`；初轮构建仍保留，最终交付以 final 目录为准。
+- 后续仅更新同一 [PR #24](https://github.com/AI-hunter-team/Agent-go/pull/24)，以该最新头的 CI/合入结果为准，不把初轮检查冒充新头通过。

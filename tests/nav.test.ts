@@ -48,8 +48,8 @@ describe("sight", () => {
     expect(lineOfSight({ x: 22, y: 15 }, { x: 30, y: 15 }, SIGHT_OCCLUDERS)).toBe(true);
   });
 
-  test("security wall blocks sight elsewhere", () => {
-    expect(lineOfSight({ x: 22, y: 10 }, { x: 30, y: 10 }, SIGHT_OCCLUDERS)).toBe(false);
+  test("security railings permit sight outside the service openings", () => {
+    expect(lineOfSight({ x: 22, y: 10 }, { x: 30, y: 10 }, SIGHT_OCCLUDERS)).toBe(true);
   });
 
   test("pillars block sight", () => {

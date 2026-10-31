@@ -26,11 +26,11 @@ describe("guards", () => {
     expect(gs.canSee(a, { x: 39, y: 12 })).toBe(false);
   });
 
-  test("guards cannot see through the security wall", () => {
+  test("guards see through security railings, subject to the same view cone", () => {
     const gs = stationary();
     const a = gs.guards[0];
     a.facing = Math.PI; // turn west
-    expect(gs.canSee(a, { x: 24, y: 10 })).toBe(false);
+    expect(gs.canSee(a, { x: 24, y: 10 })).toBe(true);
     expect(gs.canSee(a, { x: 24, y: 15 })).toBe(true); // through the S2 opening
   });
 

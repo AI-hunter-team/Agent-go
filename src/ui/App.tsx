@@ -67,6 +67,7 @@ export function App() {
   const [renderer, setRenderer] = useState<"3d" | "2d">("3d");
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [sceneFailure, setSceneFailure] = useState<string | null>(null);
+  const [stationAssetError, setStationAssetError] = useState("");
   const [showVision, setShowVision] = useState(false);
   const [showTrail, setShowTrail] = useState(false);
   const [assetInput, setAssetInput] = useState("");
@@ -81,6 +82,8 @@ export function App() {
   optionsRef.current = { showVision, showTrail, thinking: session.runner?.phase === "thinking", trail: session.engine.trail };
   // 模型加载错误反馈到主角自己的外观设置，不影响保安模型。
   const onAssetError = avatar.onError;
+  // 站厅素材失败单独反馈，避免覆盖主角或保安的模型导入状态。
+  const onStationAssetError = useCallback((message: string) => setStationAssetError(message), []);
   // 将三维故障反馈到可恢复的场景状态。
   const onSceneFailure = useCallback((message: string) => setSceneFailure(message), []);
   const runner = session.runner;
@@ -142,8 +145,8 @@ export function App() {
     const nextSeed = randomSeed(seed);
     setSeed(nextSeed); session.preview(nextSeed);
   };
-  /** 重新挂载失败场景，不重新启动模拟。 */
-  const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
+  /** 清除站厅素材提示并重新挂载三维场景，保留对局与两组角色外观。 */
+  const retryScene = () => { setSceneFailure(null); setStationAssetError(""); setSceneAttempt((value) => value + 1); };
   /** 复用主角外观管理器校验和加载调试路径，保留显示设置中的导入状态。 */
   const applyAsset = (path: string) => { setAssetInput(path); avatar.applyPath(path); };
   const fallback = <div className={styles.sceneError} role="alert"><h2>三维画面需要重新连接</h2><p>{sceneFailure ?? "浏览器无法建立三维画面。对局与报告仍然保留。"}</p><div className="row"><button onClick={retryScene}>重试三维</button><button onClick={() => setRenderer("2d")}>进入二维调试</button></div></div>;
@@ -164,7 +167,7 @@ export function App() {
         <div className={styles.scene}>
           {renderer === "2d" ? <MapCanvas engineRef={engineRef} optionsRef={optionsRef} /> : sceneFailure ? fallback : <SceneBoundary key={sceneAttempt} fallback={fallback}>
             <Suspense fallback={<div className={styles.loading}><span className={styles.loader} />正在搭建交通剧场…</div>}>
-              <GameScene session={session} camera={camera} quality={display.quality} targetFps={display.targetFps} simpleCrowd={display.simpleCrowd} reducedMotion={reducedMotion} assetUrl={avatar.url} assetRotation={avatar.rotation} guardAssetUrl={guardAvatar.url} guardAssetRotation={guardAvatar.rotation} onAssetError={onAssetError} onGuardAssetError={guardAvatar.onError} onFailure={onSceneFailure} metrics={metrics} showVision={showVision} showTrail={showTrail} />
+              <GameScene session={session} camera={camera} quality={display.quality} targetFps={display.targetFps} simpleCrowd={display.simpleCrowd} reducedMotion={reducedMotion} assetUrl={avatar.url} assetRotation={avatar.rotation} guardAssetUrl={guardAvatar.url} guardAssetRotation={guardAvatar.rotation} onAssetError={onAssetError} onGuardAssetError={guardAvatar.onError} onStationAssetError={onStationAssetError} onFailure={onSceneFailure} metrics={metrics} showVision={showVision} showTrail={showTrail} />
             </Suspense>
           </SceneBoundary>}
         </div>
@@ -185,6 +188,7 @@ export function App() {
         <div className={styles.ticketHeading}><span>METRO / JOURNEY</span><span>NO. {String(seed).padStart(4, "0")}</span></div>
         <div className={styles.sidebarBody}>
           {error && <div className="error" role="alert">{error}</div>}
+          {stationAssetError && <div className="error" role="status">{stationAssetError}<button onClick={retryScene}>重试三维素材</button></div>}
           {intent === "setup" && showModelConfig && <ModelConfigPanel health={health} onClose={() => setShowModelConfig(false)} onEnabled={(value) => {
             setHealth(value);
             setAgentKind(value.llm ? "llm" : "offline");
@@ -213,6 +217,6 @@ export function App() {
         <div className={styles.ticketFoot}><span>一步一步，直到抵达。</span><span className={styles.ticketMark} aria-hidden="true">AG / 01</span></div>
       </aside>
     </main>
-    <footer className={styles.footer}><span>自然语言指导 · 自主行动 · 动态世界</span><span>{playing ? "观看角色，发现计划之外的可能。" : "在显示设置中导入自己的主角模型。"}</span><span>TRANSIT THEATRE / V1</span></footer>
+    <footer className={styles.footer}><span>自然语言指导 · 自主行动 · 动态世界</span><span>{playing ? "观看角色，发现计划之外的可能。" : "站厅已接入正式素材，可在显示设置中导入角色模型。"}</span><span>TRANSIT THEATRE / V1</span></footer>
   </div></TooltipProvider>;
 }
