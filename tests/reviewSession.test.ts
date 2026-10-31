@@ -6,7 +6,7 @@ import { ReviewFailure } from "../src/shared/review";
 const review = { analysis, model: "test", usage: null, latencyMs: 1 };
 const draft: DraftResult = { guidance: "稳妥通关，比较换队总耗时。", model: "test", usage: null, latencyMs: 1 };
 function setup() {
-  const api = { review: vi.fn(async () => review), draftGuidance: vi.fn(async () => draft) };
+  const api = { reviewStatus: vi.fn(async () => ({ available: true })), review: vi.fn(async () => review), draftGuidance: vi.fn(async () => draft) };
   return { api, session: new ReviewSession(failedReport(), api) };
 }
 test("deduplicates automatic review, selects nothing, and does not alter original guidance", async () => {
@@ -26,6 +26,46 @@ test("sends only selected strategies and exposes a draft without implicitly adop
   expect(session.exportData().selectedStrategyIds).toEqual(["steady"]);
   session.setEditedGuidance("🚇".repeat(301)); expect(session.canApply).toBe(false);
   session.setEditedGuidance("🚇".repeat(300)); expect(session.canApply).toBe(true);
+});
+
+test("one selected-strategy action returns the prepared prompt for opening game setup", async () => {
+  const { api, session } = setup(); await session.ensureReview();
+  expect(await session.generateDraft()).toBeNull();
+  session.toggle("steady");
+  expect(await session.generateDraft()).toBe(draft.guidance);
+  expect(api.draftGuidance).toHaveBeenCalledWith("", [analysis.strategies[1]]);
+});
+
+test("duplicate submissions and changed selections never return a stale setup prompt", async () => {
+  const { api, session } = setup(); await session.ensureReview(); session.toggle("observe");
+  let complete!: (value: DraftResult) => void;
+  api.draftGuidance.mockImplementationOnce(() => new Promise(r => { complete = r; }));
+  const pending = session.generateDraft();
+  expect(await session.generateDraft()).toBeNull();
+  session.toggle("steady");
+  complete(draft);
+  expect(await pending).toBeNull();
+  expect(api.draftGuidance).toHaveBeenCalledTimes(1);
+});
+
+test("a failed strategy merge stays on the report instead of returning a setup prompt", async () => {
+  const { api, session } = setup(); await session.ensureReview(); session.toggle("observe");
+  api.draftGuidance.mockRejectedValueOnce(new Error("请稍后重试"));
+  expect(await session.generateDraft()).toBeNull();
+  expect(session.state.draftStatus).toBe("error");
+  expect(session.state.draftError).toBe("请稍后重试");
+});
+test("leaving the review invalidates a pending setup prompt and allows a fresh request", async () => {
+  const { api, session } = setup(); await session.ensureReview(); session.toggle("observe");
+  let complete!: (value: DraftResult) => void;
+  api.draftGuidance.mockImplementationOnce(() => new Promise(r => { complete = r; }));
+  const pending = session.generateDraft();
+  session.cancelDraft();
+  expect(await session.generateDraft()).toBe(draft.guidance);
+  complete({ ...draft, guidance: "旧页面的指导" });
+  expect(await pending).toBeNull();
+  expect(session.state.editedGuidance).toBe(draft.guidance);
+  expect(session.exportData().reviewDraftHistory).toHaveLength(2);
 });
 test("changing selections invalidates an old in-flight draft without stale overwrites", async () => {
   const { api, session } = setup(); await session.ensureReview();
@@ -66,4 +106,44 @@ test("failed paid calls remain in exported usage after a successful retry", asyn
   await session.ensureReview(); await session.ensureReview();
   expect(session.exportData().reviewAttempts).toHaveLength(2);
   expect(session.exportData().reviewAttempts?.[0].usage?.outputTokens).toBe(80);
+});
+
+
+test("server availability triggers one automatic analysis without a browser model", async () => {
+  const { api, session } = setup();
+  await Promise.all([session.checkService(true), session.checkService(true)]);
+  expect(session.state.serviceStatus).toBe("available");
+  expect(session.state.status).toBe("ready");
+  expect(api.reviewStatus).toHaveBeenCalledTimes(1);
+  expect(api.review).toHaveBeenCalledTimes(1);
+});
+
+test("offline reports wait for the player before using the server review service", async () => {
+  const { api, session } = setup();
+  await session.checkService(false);
+  expect(session.state.serviceStatus).toBe("available");
+  expect(api.review).not.toHaveBeenCalled();
+  await session.ensureReview();
+  expect(session.state.status).toBe("ready");
+});
+
+test("unavailable review service can recover without asking the player for credentials", async () => {
+  const { api, session } = setup();
+  api.reviewStatus.mockResolvedValueOnce({ available: false });
+  await session.checkService(true);
+  expect(session.state.serviceStatus).toBe("unavailable");
+  expect(api.review).not.toHaveBeenCalled();
+  await session.checkService(true);
+  expect(session.state.status).toBe("ready");
+});
+
+test("a review service connection error is visible and a retry clears it", async () => {
+  const { api, session } = setup();
+  api.reviewStatus.mockRejectedValueOnce(new Error("无法连接复盘服务"));
+  await session.checkService(false);
+  expect(session.state.serviceStatus).toBe("error");
+  expect(session.state.serviceError).toBe("无法连接复盘服务");
+  await session.checkService(false);
+  expect(session.state.serviceStatus).toBe("available");
+  expect(session.state.serviceError).toBeNull();
 });

@@ -86,23 +86,26 @@
 .controls button { min-height: 46px; border-radius: 14px; }
 .controls button[aria-pressed=true] { background: #ffd000; }
 .runInfo { position: absolute; bottom: 24px; left: 24px; }
-.review { position: absolute; z-index: 40; inset: 24px 5% 112px; padding: 30px; overflow-y: auto; }
+.review { position: absolute; z-index: 40; inset: 24px max(5%, calc((100% - 960px) / 2)) 24px; display: flex; flex-direction: column; padding: 0 36px 16px; overflow: hidden; }
 .review[hidden] { display: none; }
-.reviewHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
-.reviewHeading h1 { margin: 0; font-size: 30px; }
+.reviewHeading { z-index: 2; display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 24px 0 18px; border-bottom: 1px solid var(--line); background: #fff; }
+.reviewHeading h1 { margin: 0; font-size: 26px; }
+.reviewHeading p { margin: 4px 0 0; }
 .reviewHeading button { flex-shrink: 0; }
-.reviewGrid { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 36px; }
-.reviewGrid > div { min-width: 0; }
+.reviewGrid { display: flex; flex: 1; min-height: 0; }
+.reviewGrid > div { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.reviewGrid :global(.report) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.reviewGrid :global(.report-content) { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 0 10px 20px 0; scroll-padding-top: 80px; }
 .reviewGrid :global(.verdict strong) { font-size: 42px; font-weight: 800; }
 .reviewGrid :global(.verdict .reason-text) { font-size: 22px; line-height: 1.6; }
 .review { background: #fff; animation: review-in .52s cubic-bezier(.22,.8,.26,1) both; }
 .endActions { position: absolute; z-index: 41; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 24px; width: min(420px, calc(100% - 32px)); }
+.endActions[hidden] { display: none; }
 .endActions button { flex: 1; min-width: 0; min-height: 52px; border-radius: 18px; box-shadow: 0 8px 24px #14203324; font-weight: 700; }
 .victoryControls { position: absolute; left: 24px; top: 24px; display: flex; gap: 6px; padding: 6px; background: #ffffffd9; border-radius: 18px; }
 .app[data-stage=character] .character { background: linear-gradient(90deg, #ffffff00, #ffffffb8 30%, #ffffffea); box-shadow: none; }
 .scenePlaceholder { filter: grayscale(1) blur(3px); }
 .reviewGrid :global(.station-map .map) { width: 100%; }
-.reportInfo { display: flex; flex-wrap: wrap; gap: 10px 24px; padding: 18px; border-radius: 16px; background: #f2f5f8; margin: 24px 0 16px; font-size: 13px; overflow-wrap: anywhere; }
 .loading, .sceneFailure { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 40px; background: #edf1f4; }
 .sceneFailure { z-index: 2; }
 .sceneFailure p { max-width: 480px; }
@@ -120,7 +123,7 @@
   .action { width: 250px; padding: 16px; }
   .broadcast { top: 235px; left: auto; right: 24px; transform: none; width: 220px; }
   .actionCollapsed { width: auto; padding: 6px; }
-  .review { inset: 16px 16px 112px; }
+  .review { inset: 16px; }
   .reviewGrid { grid-template-columns: 1fr; }
 }
 @media (min-width: 601px) and (max-width: 900px) {
@@ -166,7 +169,7 @@
   .controls { bottom: 12px; right: 12px; left: 12px; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 6px; }
   .controls button { padding: 8px 10px; min-height: 40px; font-size: 12px; }
   .runInfo { bottom: 78px; left: 12px; }
-  .review { inset: 12px 12px 100px; padding: 20px; }
+  .review { inset: 8px; padding: 0 18px 18px; border-radius: 22px; }
   .endActions { bottom: max(12px, env(safe-area-inset-bottom)); gap: 16px; }
   .victoryControls { top: 16px; bottom: auto; left: 12px; }
   .reviewHeading h1 { font-size: 26px; }

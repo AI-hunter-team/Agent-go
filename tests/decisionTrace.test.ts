@@ -45,7 +45,7 @@ test("a canceled pending request remains visible in the report before any decisi
   }, offlineClassifier);
   runner.start();
   runner.stop();
-  const html = renderToStaticMarkup(createElement(ReportSummary, { report: runner.report(), onRetry: () => {}, onEdit: () => {} }));
+  const html = renderToStaticMarkup(createElement(ReportSummary, { report: runner.report() }));
   expect(html).toContain("全部调用记录");
   expect(html).toContain("请求中");
   expect(html).toContain("第 1 次尝试");

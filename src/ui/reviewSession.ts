@@ -3,10 +3,13 @@ import { ReviewFailure, buildReviewInput, type DraftResult, type ReviewAttempt, 
 import { guidanceError } from "../shared/guidance";
 
 interface ReviewApi {
+  reviewStatus(): Promise<{ available: boolean }>;
   review(input: ReviewInput): Promise<ReviewResult>;
   draftGuidance(guidance: string, strategies: ReviewStrategy[]): Promise<DraftResult>;
 }
 interface ReviewState {
+  serviceStatus: "checking" | "available" | "unavailable" | "error";
+  serviceError: string | null;
   status: "idle" | "loading" | "ready" | "error";
   review: ReviewResult | null;
   error: string | null;
@@ -19,11 +22,12 @@ interface ReviewState {
 
 /** One controller per ended report. It never edits App guidance or starts a game. */
 export class ReviewSession {
-  state: ReviewState = { status: "idle", review: null, error: null, selected: [], draftStatus: "idle", draft: null, editedGuidance: "", draftError: null };
+  state: ReviewState = { serviceStatus: "checking", serviceError: null, status: "idle", review: null, error: null, selected: [], draftStatus: "idle", draft: null, editedGuidance: "", draftError: null };
   readonly originalGuidance: string;
   private readonly input: ReviewInput;
   private listeners = new Set<() => void>();
   private pending: Promise<void> | null = null;
+  private servicePending: Promise<void> | null = null;
   private draftVersion = 0;
   private draftHistory: DraftResult[] = [];
   private attempts: ReviewAttempt[] = [];
@@ -38,6 +42,18 @@ export class ReviewSession {
     this.state = { ...this.state, ...patch };
     for (const listener of this.listeners) listener();
   }
+  /** 只检查服务端复盘能力；离线局仍由玩家明确触发分析。 */
+  checkService = (automatic: boolean): Promise<void> => {
+    if (this.servicePending) return this.servicePending;
+    this.update({ serviceStatus: "checking", serviceError: null });
+    this.servicePending = this.api.reviewStatus().then(async ({ available }) => {
+      this.update({ serviceStatus: available ? "available" : "unavailable" });
+      if (available && automatic) await this.ensureReview();
+    }).catch(error => {
+      this.update({ serviceStatus: "error", serviceError: error instanceof Error ? error.message : "无法连接复盘服务，请稍后重试" });
+    }).finally(() => { this.servicePending = null; });
+    return this.servicePending;
+  };
   ensureReview = (): Promise<void> => {
     if (this.state.review) return Promise.resolve();
     if (this.pending) return this.pending;
@@ -58,8 +74,13 @@ export class ReviewSession {
     const selected = this.state.selected.includes(id) ? this.state.selected.filter(s => s !== id) : [...this.state.selected, id];
     this.update({ selected, draftStatus: "idle", draft: null, editedGuidance: "", draftError: null });
   };
-  generateDraft = async () => {
-    if (!this.state.review || !this.state.selected.length || this.state.draftStatus === "loading") return;
+  /** 页面隐藏或卸载后，旧整理结果仍计入用量，但不能触发下一局导航。 */
+  cancelDraft = () => {
+    this.draftVersion++;
+    if (this.state.draftStatus === "loading") this.update({ draftStatus: "idle" });
+  };
+  generateDraft = async (): Promise<string | null> => {
+    if (!this.state.review || !this.state.selected.length || this.state.draftStatus === "loading") return null;
     const version = ++this.draftVersion;
     const strategies = this.state.review.analysis.strategies.filter(s => this.state.selected.includes(s.id));
     this.update({ draftStatus: "loading", draftError: null });
@@ -67,12 +88,14 @@ export class ReviewSession {
       const draft = await this.api.draftGuidance(this.originalGuidance, strategies);
       this.draftHistory.push(draft);
       this.attempts.push({ model: draft.model, usage: draft.usage, latencyMs: draft.latencyMs, operation: "draft", status: "success" });
-      if (version !== this.draftVersion) { this.update({}); return; }
+      if (version !== this.draftVersion) { this.update({}); return null; }
       this.update({ draftStatus: "ready", draft, editedGuidance: draft.guidance });
+      return this.canApply ? this.state.editedGuidance : null;
     } catch (error) {
       if (error instanceof ReviewFailure && error.attempt) this.attempts.push(error.attempt);
       if (version === this.draftVersion) this.update({ draftStatus: "error", draftError: error instanceof Error ? error.message : "草稿生成失败，请重试" });
       else this.update({});
+      return null;
     }
   };
   setEditedGuidance = (editedGuidance: string) => {

@@ -6,6 +6,10 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [REVIEW-PR-001](REVIEW-PR-001.md) | 复盘界面、策略采纳和模型优先级的独立分支集成及 PR 交付检查 |
+| [REVIEW-STRATEGIES-001](REVIEW-STRATEGIES-001.md) | 策略前置、单击进入开局设置并预填，以及无费用自然超时失败样例 |
+| [REVIEW-SERVER-001](REVIEW-SERVER-001.md) | 本局用户模型优先、服务端兜底及局后复盘绑定生命周期 |
+| [REVIEW-SIMPLIFY-001](REVIEW-SIMPLIFY-001.md) | 复盘单列结构、详情折叠和固定标题；底部按钮的历史迭代由策略任务接续 |
 | [HOME-REFRESH-001](HOME-REFRESH-001.md) | 参考图驱动的大厅首页布局、实时场景镜头及桌面/窄屏本地验证 |
 | [UI-JOURNEY-FINAL-001](UI-JOURNEY-FINAL-001.md) | 旅程界面与已合入的乘客、交互及胜利展示最终主线集成 |
 | [UI-JOURNEY-IV2-001](UI-JOURNEY-IV2-001.md) | 旅程界面与 #32 的候选集成；背包绑定、150/120 秒及离线/伪模型浏览器检查；不代表最终主线组合验收 |
