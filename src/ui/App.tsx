@@ -779,6 +779,19 @@ export function App() {
               </div>
             )}
             <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录" data-scene-obstacle>
+              <div className={styles.actionInfo}>
+                <Modal
+                  title="本局信息"
+                  description="本局模型已固定，更换模型需结束本局并返回大厅。"
+                  trigger={<button>ⓘ 本局信息</button>}
+                >
+                  <p>场景：地铁末班车</p>
+                  <p>角色：{runner.journey?.characterName}</p>
+                  <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
+                  <p>情景种子：{seed}</p>
+                  <p>时限：{settings.timeLimitSeconds} 秒</p>
+                </Modal>
+              </div>
               <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
                 onClick={() => setRecordState({ generation: session.generation, expanded: !recordExpanded })}>
                 <span>{recordExpanded ? "收起行程记录" : mobile ? describeActivity(session.engine.world, session.engine.player) : "展开行程记录"}</span>
@@ -881,17 +894,6 @@ export function App() {
               <button onClick={() => session.stop()}>结束</button>
             </div>
             <div className={styles.runInfo}>
-              <Modal
-                title="本局信息"
-                description="本局模型已固定，更换模型需结束本局并返回大厅。"
-                trigger={<button>ⓘ 本局信息</button>}
-              >
-                <p>场景：地铁末班车</p>
-                <p>角色：{runner.journey?.characterName}</p>
-                <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
-                <p>情景种子：{seed}</p>
-                <p>时限：{settings.timeLimitSeconds} 秒</p>
-              </Modal>
               {j.previousRun && <button onClick={openPrevious}>上一局报告</button>}
             </div>
             </div>
