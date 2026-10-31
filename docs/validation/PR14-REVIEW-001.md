@@ -32,3 +32,12 @@
 - 实际验收：本次素材构建的浏览器范围通过；不代表正式游戏接入、全部障碍碰撞验收、真实 GPU 性能或最终美术认可。
 - 未运行：真实模型、Docker 冒烟和其他真实设备检查；本次预览修复不涉及这些路径。人工批准未进行。
 - 已合入：否；修复将以普通 git push 更新 [PR #14](https://github.com/AI-hunter-team/Agent-go/pull/14)，不执行合并或部署。回退本次修复提交即可。
+
+## 追加合并集成验证（2026-10-31）
+
+- 上述为修复阶段历史快照。用户随后明确授权合并；`4c034e5` 已普通推送成功，唯一 P2 线程已解决；[CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41162874981) 与 [Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41162874961) 均通过。
+- 新 fetch 后 main 为 `d25ac92`（PR #15）；执行 `git merge --no-commit --no-ff origin/main`，只在中央工作记录发生文本冲突。保留素材、导向修复和 DeepSeek 三条任务记录；上游业务源码未作二次修改。
+- 受测状态：原 `4c034e5` 加上述合并结果及本任务记录更新，提交前快照；环境与上一阶段相同，锁文件未变化，无需再次安装依赖。
+- `npm run typecheck`：通过，退出 0；`npm test`：通过，40 文件 / 372 项，退出 0；`npm run build`：通过，退出 0，保留原大 chunk 提示。
+- 集成未更改素材预览代码或 GLB，沿用上轮三布局浏览器证据，不重复实际操作，不追加测试。
+- 本阶段没有真实模型或部署操作。最终集成提交、远端检查和合入证据见 [PR #14](https://github.com/AI-hunter-team/Agent-go/pull/14)，仓库保留本地提交前快照，不冒称已完成最终美术验收。

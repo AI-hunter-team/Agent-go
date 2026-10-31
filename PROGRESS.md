@@ -10,6 +10,14 @@
 - 交付入口：[任务简报](docs/tasks/PR14-REVIEW-001.md)、[验证报告](docs/validation/PR14-REVIEW-001.md)、[PR #14](https://github.com/AI-hunter-team/Agent-go/pull/14)。
 - 产物：`dist/`、`build/server.js`、`dist/station-kit-preview/`；浏览器证据：`artifacts/pr14-review/`，均不提交。
 
+## 2026-10-31：PR #14 合并集成
+
+- 用户追加授权合并 PR。原修复提交 `4c034e5` 的 CI、Compose 均通过，唯一 P2 已解决。
+- main 新合入 PR #15，已把 `d25ac92` 整合进本分支；唯一冲突为中央记录的新增任务行，三条记录全部保留，DeepSeek 源码原样沿用 main。
+- 集成版本类型检查、40 文件 / 372 项现有测试、完整构建通过；没有新增或修改函数，也没有增加测试。
+- 本次更新任务简报、验证报告、中央记录、PROGRESS 与 TODO。浏览器沿用上轮证据，因无预览源码变化不重复运行。
+- 合入交付及最终 commit/远端检查结果以 [PR #14](https://github.com/AI-hunter-team/Agent-go/pull/14) 为准；不部署，不操作原工作区中的其他分支。
+
 ## 函数说明
 
 | 函数 | 本次职责或注释说明 |
