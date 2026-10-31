@@ -4,6 +4,8 @@
 
 文档身份：§1–13 保留开发前设计，§14 为原二维 MVP 实现核对；§15 是后续 3D 展示升级说明；[§16](#16-当前集成差异pr-remaining-001) 记录已合入 PR #8 的楼梯、NPC 协商、回放与报告差异。原规则及历史验收不由展示升级覆盖；当前源码和验证状态见 [文档导航](README.md)及[路线图](ROADMAP.md)。
 
+2026-10-31 后续变更：模型协议、默认模型、思考档位、预算和配置接口以 [§17](#17-responses-与思考设置responses-001) 为现行说明。此前章节的 Chat Completions、Anthropic 和独立 1024 思考预算保留为历史，不再作为当前接入方式。
+
 ## 1. 目标与范围
 
 在浏览器中跑通一局完整体验：**填写指导 → 指导整理 → 角色在二维地铁站中自主完成“买票 → 安检 → 过闸机” → 复盘**。
@@ -64,7 +66,7 @@ src/
   agent/        agent.ts heuristicAgent.ts remoteAgent.ts runner.ts
   ui/           App.tsx MapCanvas.tsx ControlPanel.tsx DecisionLog.tsx
                 ReportView.tsx render.ts format.ts styles.css main.tsx
-server/         index.ts app.ts sessions.ts prompts.ts tools.ts claude.ts structured.ts
+  server/         index.ts app.ts sessions.ts prompts.ts tools.ts responses.ts structured.ts
 tests/          *.test.ts
 docs/           产品/技术方案、导航/开发流程、路线图/工作记录、任务/验证及模板
 ```
@@ -377,7 +379,7 @@ PORT=8787
 ### 接口与报告入口
 
 - §10 之外，页面模型配置使用 `POST /api/model/verify`、`POST /api/model/enable`、`DELETE /api/model/config`；配置通过 `x-model-config` 关联当前页面，开局会话绑定所用模型。使用和有效期见 [README 模型配置](../README.md#接入真实模型)，完整校验及错误语义以 [app.ts](../server/app.ts) 为准。
-- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史和必需的 sessionId；验证对局所属页面后，仅调用开发者以 `NPC_*` 环境变量配置的独立模型，支持 Anthropic 与 OpenAI 兼容接口。页面自定义模型只驱动 Agent；无 NPC 模型返回 503、模型失败返回 502，均不授予插队许可或回退到 Agent。客户端提供的上下文不是服务端权威世界。配置与迁移见 [README](../README.md#接入真实模型)。
+- `POST /api/npc/negotiate` 接收 NPC 上下文、请求、历史和必需的 sessionId；验证对局所属页面后，仅调用开发者以 `NPC_*` 环境变量配置的独立模型，现行协议与预算见 §17。页面自定义模型只驱动 Agent；无 NPC 模型返回 503、模型失败返回 502，均不授予插队许可或回退到 Agent。客户端提供的上下文不是服务端权威世界。配置与迁移见 [README](../README.md#接入真实模型)。
 - `POST /api/session/:id/report` 上传已结束且 runId 匹配的报告，然后删除会话；记录标为 `clientReported`，不是防作弊证明。Debug 与脱敏边界见 [Debug 日志](Debug日志.md)。
 - [共享类型](../src/shared/types.ts)中轨迹点的可选 `t` 兼容旧报告；完整报告增加逐次决策调用 `attempts`、NPC 对话 `dialogues`、独立用量 `npcTotals` 与可选下楼耗时 `stairs`。只保存 API 实际返回的思考/内容块，不推测未公开推理；迟到响应仅记录，不执行。角色决策与 NPC token 分列，并非包含赛前辅助请求的全局账单。见[调用记录设计](superpowers/specs/2026-10-30-decision-trace-design.md)。
 
@@ -385,3 +387,35 @@ PORT=8787
 
 - [TrajectoryReplay](../src/ui/TrajectoryReplay.tsx) 是独立二维历史地图，展示角色位置、已走路线和决策，支持播放、暂停、倍速、拖动与决策跳转；不倒退实时世界、不重建 NPC/设施历史，也不产生新的模型调用。旧报告缺失时间戳时按兼容逻辑播放。见[回放设计](superpowers/specs/2026-10-30-trajectory-replay-design.md)。
 - 主观战仍为同一模拟器驱动的 3D，会话模型隔离与 Debug 保留。集成软件检查、离线浏览器整局/回放/JSON 和远端 CI 的范围见集成报告及 PR；不据此宣布 Chrome、完整性能或真实模型整局验收通过。
+
+## 17. Responses 与思考设置（RESPONSES-001）
+
+身份：2026-10-31 本地实施说明，尚未提交或合入。用户确认实施完整迁移计划，并选择默认 DeepSeek Flash、页面四档思考、取消独立 1024 思考限制；授权与范围见[任务简报](tasks/RESPONSES-001.md)，验证见[验证报告](validation/RESPONSES-001.md)。本节取代前述模型协议及预算说明，不改变世界规则和计分。
+
+### 调用与预算
+
+- 所有模型请求统一由 [ResponsesLlmService](../server/responses.ts) 发出，包括角色决策、指导整理、创意分类、NPC 对话及启用探测。旧 Chat Completions、Anthropic 原生实现与 SDK 已移除；离线 Agent 保留。
+- 默认基础地址 `https://api.deepseek.com`、模型 `deepseek-flash`、`reasoning.effort=none`。请求采用 `instructions/input`、平铺 function 工具和 `text.format` JSON Schema，所有领域结果仍作本地校验。
+- `DECISION_MAX_TOKENS` 默认 4096，统一作为每个请求的 `max_output_tokens`，包括思考、文本及工具参数。完整动作可以含超过 1024 的思考 token；总输出超限、截断、拒绝或非法动作均不执行。
+- `DECISION_THINKING_TOKENS` 已停用，旧值不参与预算；启动时提示迁移。档位仅支持 `none/low/high/max`，不是精确长度限制。高档位可能触及总输出上限或 20 秒超时，不保证更好的成绩。
+- `AGENT_PROVIDER=responses` 是默认，旧值 `openai` 作为别名；`anthropic` 明确报迁移错误，不挪用凭据。`AGENT_FALLBACK` 已失效，无协议/模型自动回退和传输重试。
+- 主线 NPC 独立配置保留：`createNpcLlm` 只读取开发者的 `NPC_MODEL`、`NPC_OPENAI_BASE_URL` 和 `NPC_OPENAI_API_KEY`；不继承 Agent 凭据或页面档位。NPC 同样使用 Responses，关闭思考、非流式，沿用 `DECISION_MAX_TOKENS` 总预算；旧原生 Anthropic NPC 配置明确要求迁移。
+
+### 历史与流式
+
+- [SessionStore](../server/sessions.ts) 每局保存 Responses items，按原顺序重发完整历史；`function_call_output.call_id` 对应原工具调用。公开推理或不透明加密条目原样保留，空 assistant 不进入历史。
+- 请求设置 `store:false`，不使用 `previous_response_id` 或 Conversations。为兼容 OpenAI 请求 `reasoning.encrypted_content`；DeepSeek 对不支持的 include 忽略并使用其公开 reasoning content，依据[官方兼容说明](https://api-docs.deepseek.com/guides/responses_api/)。
+- DeepSeek 忽略禁止并行工具的参数，应用独立要求恰好一个工具。失败动作的每个可重放调用均得到明确“未执行”结果，不冒用上一个动作的执行结果；不完整或结构非法的条目不污染后续历史，原始输出仍留在报告。
+- [Responses SSE](../server/responsesStream.ts) 以 completed/incomplete/failed 终态携带的完整 response 为权威，不等待 DONE，不重复合并增量。断流、缺少终态和状态冲突均失败；终态失败的 usage 仍记录。
+
+### 页面配置和内部接口
+
+- `POST /api/model/enable { model, reasoningEffort? }`：缺省 none，合法值为 none/low/high/max；非法值返回 400，不调用模型。供应商拒绝档位/参数时探测失败返回 422，不降档、不覆盖旧配置。响应仍是 `{ llm: true, model }`。
+- 基础地址不自动补 /v1；服务端从原基础路径请求 /models 与 /responses。模型列表 404/405 时仍可手动填写模型 ID。
+- 页面思考强度显示关闭/低/高/最高，初始关闭；页面值独立于服务端 `OPENAI_REASONING_EFFORT`。总输出预算与流式开关继续来自环境配置。
+- 每局绑定创建时的模型实例和参数；重新启用同 token 或切换配置均不改变旧局。浏览器按会话保存配置 token 引用，旧凭据最后一局结束才释放；闲置 TTL 和跨配置隔离仍有效。
+- DecisionResult、NpcReply 等业务返回形状不变；`output.content` 是 Responses items，`stopReason` 保存终态或失败原因。Debug 记录真实生效的档位、预算、工具数量、返回用量；推理内容与凭据在服务端日志中脱敏。
+
+### 迁移与回退
+
+现有 .env 不自动改写。使用旧 Chat Completions 网关或 Anthropic 原生地址时，须自行提供支持 Responses 的地址和凭据；不能把 /models 成功视为 Responses 可用。正在旧进程内的会话不做协议转换，升级重启后重新开局。回退通过本任务代码变更恢复旧实现，不通过运行时隐式切换协议。

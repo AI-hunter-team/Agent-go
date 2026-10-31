@@ -9,6 +9,7 @@ import type { FrameMetrics } from "../frameMetrics";
 import { sampleActor } from "../presentation";
 import { Station } from "./Station";
 import { Character } from "./Character";
+import { SimpleCrowd } from "./SimpleCrowd";
 import { cameraFraction } from "./cameraCollision";
 
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; }
@@ -16,6 +17,8 @@ export interface SceneProps {
   session: GameSession;
   camera: CameraSettings;
   quality: "standard" | "low";
+  targetFps: 60 | 30 | 15;
+  simpleCrowd: boolean;
   reducedMotion: boolean;
   assetUrl: string;
   onAssetError: (message: string) => void;
@@ -25,8 +28,42 @@ export interface SceneProps {
   showTrail: boolean;
 }
 
+/** 按目标频率唤醒按需渲染；空闲或隐藏时休眠，阶段与采样变化可立即唤醒。 */
+function RenderSchedule({ session, targetFps, metrics }: Pick<SceneProps, "session" | "targetFps" | "metrics">) {
+  const invalidate = useThree((state) => state.invalidate);
+  useEffect(() => {
+    let raf = 0;
+    let last = 0;
+    const interval = 1000 / targetFps;
+    /** 只为运行或主动采样续订帧，累计余量避免高刷屏下的限帧漂移。 */
+    const frame = (now: number) => {
+      raf = 0;
+      if (document.hidden || (session.frozen && !metrics.active)) return;
+      if (now - last >= interval) {
+        const elapsed = now - last;
+        last = now - Math.max(0, elapsed % interval);
+        invalidate();
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    /** 状态改变或标签页重新可见时补绘一次，静止场景也能响应设置和镜头。 */
+    const wake = () => {
+      cancelAnimationFrame(raf); raf = 0;
+      if (document.hidden) return;
+      invalidate(); last = performance.now();
+      if (!session.frozen || metrics.active) raf = requestAnimationFrame(frame);
+    };
+    const unsubscribe = session.subscribe(wake);
+    document.addEventListener("visibilitychange", wake);
+    wake();
+    return () => { unsubscribe(); document.removeEventListener("visibilitychange", wake); cancelAnimationFrame(raf); };
+  }, [session, targetFps, metrics, invalidate]);
+  return null;
+}
+
+/** 更新跟随/总览相机，仅在镜头尚未停稳时继续补绘静止场景。 */
 function CameraRig({ session, settings, reducedMotion }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean }) {
-  const { gl, size, set } = useThree();
+  const { gl, size, set, invalidate } = useThree();
   const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 160), overview: new OrthographicCamera(-35, 35, 20, -20, 0.1, 180) }), []);
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; pointer: number } | null>(null);
@@ -46,27 +83,33 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
   useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; initial.current = true; }, [settings.reset, session.generation]);
   useEffect(() => {
     const canvas = gl.domElement;
+    /** 记录跟随相机的拖动起点。 */
     const down = (event: PointerEvent) => {
       if (event.button !== 0 || settings.mode !== "follow") return;
       drag.current = { x: event.clientX, y: event.clientY, pointer: event.pointerId };
       canvas.setPointerCapture(event.pointerId);
     };
+    /** 拖动调整环绕角度，并唤醒静止画面。 */
     const move = (event: PointerEvent) => {
       if (!drag.current || drag.current.pointer !== event.pointerId) return;
       orbit.current.yaw -= (event.clientX - drag.current.x) * 0.006;
       orbit.current.pitch = Math.max(-0.04, Math.min(0.65, orbit.current.pitch + (event.clientY - drag.current.y) * 0.004));
       drag.current.x = event.clientX; drag.current.y = event.clientY;
+      invalidate();
     };
+    /** 结束相机拖动。 */
     const up = () => { drag.current = null; };
+    /** 缩放跟随镜头，并唤醒静止画面。 */
     const wheel = (event: WheelEvent) => {
       if (settings.mode !== "follow") return;
       event.preventDefault(); orbit.current.distance = Math.max(2.2, Math.min(9, orbit.current.distance + event.deltaY * 0.006));
+      invalidate();
     };
     canvas.addEventListener("pointerdown", down); canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("wheel", wheel); drag.current = null; };
-  }, [gl, settings.mode]);
+  }, [gl, settings.mode, invalidate]);
   useFrame((state, delta) => {
     const { target, desired, eye } = vectors;
     if (settings.mode === "overview") {
@@ -84,10 +127,12 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     const safeFraction = cameraFraction(target, state.camera.position);
     if (safeFraction < 1) state.camera.position.lerpVectors(target, state.camera.position, safeFraction);
     state.camera.lookAt(target);
+    if (session.frozen && state.camera.position.distanceToSquared(eye) > 0.00001) invalidate();
   });
   return null;
 }
 
+/** 绘制开发用保安视距示意，不参与实际发现判定。 */
 function GuardVision({ id, session }: { id: string; session: GameSession }) {
   const mesh = useRef<Mesh>(null);
   useFrame(() => {
@@ -98,6 +143,7 @@ function GuardVision({ id, session }: { id: string; session: GameSession }) {
   return <mesh ref={mesh}><circleGeometry args={[RULES.guardRange, 40, -half, half * 2]} /><meshBasicMaterial color="#7f9485" transparent opacity={0.18} depthWrite={false} /></mesh>;
 }
 
+/** 绘制可选的视距、历史轨迹和当前路径。 */
 function DebugGround({ session, vision, trail }: { session: GameSession; vision: boolean; trail: boolean }) {
   const player = session.presentation.current.actors.get("player");
   const points = session.engine.trail;
@@ -132,13 +178,16 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   </group>;
 }
 
+/** 组装场景并记录实际渲染开销；节能设置只改变展示层。 */
 function Contents(props: SceneProps) {
   const { session, metrics } = props;
   const { gl } = useThree();
+  const wasSampling = useRef(false);
   useEffect(() => {
     const context = gl.getContext();
     const extension = context.getExtension("WEBGL_debug_renderer_info");
     metrics.environment = { gpu: extension ? context.getParameter(extension.UNMASKED_RENDERER_WEBGL) : context.getParameter(context.RENDERER), userAgent: navigator.userAgent, dpr: gl.getPixelRatio(), width: gl.domElement.width, height: gl.domElement.height, quality: props.quality };
+    /** 将图形上下文丢失转为可恢复提示。 */
     const lost = (event: Event) => { event.preventDefault(); props.onFailure("图形上下文已丢失。可重试三维画面，或使用二维调试继续查看本局。"); };
     gl.domElement.addEventListener("webglcontextlost", lost);
     return () => gl.domElement.removeEventListener("webglcontextlost", lost);
@@ -147,22 +196,34 @@ function Contents(props: SceneProps) {
     metrics.environment.actors = session.presentation.current.actors.size;
     metrics.environment.width = gl.domElement.width; metrics.environment.height = gl.domElement.height;
     metrics.environment.dpr = gl.getPixelRatio();
-    metrics.push(delta);
+    metrics.environment.targetFps = props.targetFps;
+    metrics.environment.simpleCrowd = Number(props.simpleCrowd);
+    metrics.environment.drawCalls = gl.info.render.calls;
+    metrics.environment.triangles = gl.info.render.triangles;
+    metrics.environment.renderedFrames = Number(metrics.environment.renderedFrames ?? 0) + 1;
+    const sampling = metrics.active;
+    if (sampling && wasSampling.current) metrics.push(delta);
+    wasSampling.current = metrics.active;
+    // 唤醒后的首帧不包含休眠时长；采样完成只通知一次，不恢复空闲轮询。
+    if (sampling && !metrics.active) queueMicrotask(() => session.notify());
   });
   const actors = [...session.presentation.current.actors.values()];
   return <>
+    <RenderSchedule session={session} targetFps={props.targetFps} metrics={metrics} />
     <color attach="background" args={["#dddcd1"]} />
     <ambientLight intensity={1.35} />
     <directionalLight position={[-8, 28, -12]} intensity={3} castShadow={props.quality === "standard"} shadow-mapSize={[1024, 1024]} shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={40} shadow-camera-bottom={-40} shadow-camera-far={100} shadow-normalBias={0.04} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
     <Station session={session} />
-    {actors.map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
+    {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
+    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
 }
 
+/** 使用按需绘制；画质变化时重建图形上下文，确保抗锯齿设置确实生效。 */
 export default function GameScene(props: SceneProps) {
-  return <Canvas shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维调试地图。</span>}>
+  return <Canvas key={props.quality} frameloop="demand" shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维调试地图。</span>}>
     <Contents {...props} />
   </Canvas>;
 }

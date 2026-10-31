@@ -21,7 +21,7 @@ DEBUG_LOG_DIR=logs
 - `byOperationMs`：首次决策、重试、创造性归类、NPC 协商；`byStageMs`：按发起调用时的角色状态归入买票、安检、过闸或下楼梯。两者是同一批等待的不同视角，不能相加。
 - `providerWaitHeadersMs`：请求发出至收到响应头。非流式时通常含网络、供应商排队和生成；流式时后续生成发生在读体阶段，不能直接跨模式比较头部等待。`providerReadBodyMs`：读取响应体，流式时包含后续生成等待。
 - 单次调用新增可选 `streaming` 与 `firstBodyByteMs`：流式模式及从请求开始至首个非空响应体片段的时间（毫秒），不是首个可见 token 或完整动作时间，可能是心跳；非流式未单独测量，值为 `null`。完整调用耗时仍为 `totalMs`。旧报告缺少这些字段仍可读取。
-- 流式调用的可选 `streamSummary` 只保存计数：响应字节 `bytes`、SSE data 事件数 `events`（包含 DONE）、工具调用片段数 `toolCallDeltas`、文本字符数 `contentChars`、`doneReceived` 与 `usageReceived`。片段数不是工具总数；心跳注释不计事件；缺失 usage 仍为未知。这些字段不保存正文或工具参数，旧报告缺少时仍兼容。
+- 流式调用的可选 `streamSummary` 只保存字节、SSE 事件数、工具参数增量数、文本字符数及结束/用量标记。Responses 的 `doneReceived` 表示收到 completed/incomplete/failed 终态，不是旧 DONE。片段数不是工具总数；`toolCallCount` 单列最终响应中的 function_call 数量；心跳不计事件，缺失 usage 为未知。旧报告缺少新字段仍兼容。
 - `otherMs`：总等待扣除以上供应商细分后的剩余，含浏览器到本机 API 往返、解析和未细分等待；不能解释为纯本地计算时间。缺少细分的调用数单列。
 - `internalReasoningMs` 始终为 `null`：供应商没有提供内部推理耗时，不能把响应头等待当作纯推理时间。
 
@@ -34,12 +34,12 @@ DEBUG_LOG_DIR=logs
 | 数据 | 内容 |
 |---|---|
 | 对局参数 | 种子、Agent 类型、模拟规则、固定步长、时间/决策预算 |
-| 操作参数 | 配置模型、供应商、思考预算、输出预算、强度、超时、回退配置 |
+| 操作参数 | 本局实际配置模型、Responses 协议、总输出预算、思考档位、流式、超时 |
 | 单次调用 | 操作类型、任务阶段、决策序号、局部观察、触发原因、重试上下文、动作、错误、usage |
 | 模型传输 | endpoint（去除查询参数及 URL 凭据）、请求字节数、消息数量、工具名/选择、schema、HTTP 状态、供应商请求 ID、实际响应模型、停止原因、token、耗时 |
 | 生命周期 | `session_start`、`model_operation`、`run_report`、`session_end` |
 
-`model_operation` 可包含多个底层调用，例如启用的供应商回退；文件中的操作耗时不包含日志写盘，浏览器等待会包含 API 响应前的写盘耗时。最终 `run_report` 标记为 `clientReported`，来自本机可信客户端，不作为防作弊权威记录。
+`model_operation` 保留底层调用列表；当前每个操作只发送一次 Responses 请求，没有协议或模型回退。文件中的操作耗时不包含日志写盘，浏览器等待会包含 API 响应前的写盘耗时。最终 `run_report` 标记为 `clientReported`，来自本机可信客户端，不作为防作弊权威记录。
 
 局内结束后，前端先将最终报告提交到 `/api/session/:id/report`，再删除会话；服务端核对运行 ID 和结束状态。离线 Agent 没有服务端会话，仅在页面导出。文件写入失败会告警，不阻断对局；断网或报告过大等保存失败时，仍可在页面导出报告。
 
@@ -53,14 +53,14 @@ Docker Compose 使用 `debug-logs` 命名卷挂载 `/app/logs`，容器以 node 
 
 文件名为 `debug-UTC日期-进程号-分片.jsonl`，逐条串行追加，约 10 MiB 后切换分片；单条超大记录可以超过此值。新建目录权限为 0700，文件为 0600（已有目录权限不改变）。日期使用 UTC；没有自动清理旧文件，需要按磁盘容量自行归档或删除。
 
-`.env`、`logs/` 和 `*.jsonl` 已加入 Git 忽略。推送的是功能源码、测试和说明，运行日志不提交到 GitHub；这次提交不部署公网服务。思考预算 1024 与总输出保护值 4096 仍分开配置。
+`.env`、`logs/` 和 `*.jsonl` 已加入 Git 忽略。运行日志不提交到 GitHub。独立 1024 思考限制已取消，所有请求统一使用可配置的总输出预算，默认 4096；服务端还会脱敏 Responses reasoning/reasoning_text items 与 encrypted_content。
 
 
 ## 流式与延迟配置
 
 兼容接口默认 `OPENAI_STREAM=1`（HTTP SSE），日志包装器直接透传分片，不预先读完整个响应。服务端收齐完整动作和流结束后才执行既有校验，并将完整 JSON 决策返回浏览器；尚未向浏览器逐 token 展示模型内容。没有迁移为 WebSocket。
 
-`gpt-6-luna` 默认推理强度为 `none`，其他兼容模型保留 `low`；`OPENAI_REASONING_EFFORT` 可显式配置 `none/minimal/low/medium/high`，是否支持由服务商和模型决定。恢复原有更多推理使用 `OPENAI_REASONING_EFFORT=low`，不支持流式则设置 `OPENAI_STREAM=0`；更改后重启 API 并重新启用页面配置/开新局。不会因流式失败自动切换协议或增加隐藏的付费请求。页面模型配置沿用服务端的这些性能参数及预算，凭据仍按页面隔离。
+所有模型默认 `none`，`OPENAI_REASONING_EFFORT` 可设 `none/low/high/max`，控制服务端默认配置。页面独立选择关闭/低/高/最高，缺省关闭；重新启用只影响新对局，旧局的 Debug 继续记录旧档位。页面仍共用服务端的总输出预算与流式开关。供应商不支持档位时明确失败，不自动降档或改协议；不支持流式可设置 `OPENAI_STREAM=0` 后重启并重新启用。
 
 降低推理强度可能影响复杂策略与沟通质量。八次小请求的实际延迟、缓存差异及局限见 [LLM-LATENCY-001](validation/LLM-LATENCY-001.md)；该结果不证明完整对局质量、稳定时延或纯内部推理耗时。官方依据：[延迟优化](https://developers.openai.com/api/docs/guides/latency-optimization)、[推理强度](https://developers.openai.com/api/docs/guides/reasoning)；兼容接口支持需实测，不能直接从官方接口推断。
 

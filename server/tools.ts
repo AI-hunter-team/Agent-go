@@ -1,4 +1,3 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentAction } from "../src/shared/types";
 import { FACILITIES, NAV_NODES } from "../src/sim/layout";
 import { assertSafeText, SafetyError } from "./security";
@@ -11,12 +10,14 @@ const reason = {
   description: "给玩家看的一句话决策理由，不超过 40 字",
 } as const;
 
-function tool(name: string, description: string, properties: Record<string, unknown>): Anthropic.Beta.BetaTool {
+/** 生成供应商无关的 Responses function schema。 */
+function tool(name: string, description: string, properties: Record<string, unknown>) {
   return {
+    type: "function" as const,
     name,
     description,
     strict: true,
-    input_schema: {
+    parameters: {
       type: "object",
       properties: { ...properties, reason },
       required: [...Object.keys(properties), "reason"],
@@ -26,7 +27,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
 }
 
 /** Kept in a fixed order so the prompt prefix stays cacheable. */
-export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
+export const AGENT_TOOLS = [
   tool("move_to", "走到某个地点或某个设施附近；可从入口直接选择公开地图中的设施，无需先经过大厅中部等导航点。如果正在排队，会离开队伍并失去位次。", {
     target: { type: "string", enum: TARGETS, description: "地点编号或设施编号" },
   }),

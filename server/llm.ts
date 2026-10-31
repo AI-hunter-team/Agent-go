@@ -1,51 +1,29 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { LlmService, NpcService } from "./app";
-import { ClaudeDecider, configFromEnv } from "./claude";
-import { OpenAIClient, OpenAILlmService } from "./openai";
-import { classifyIntent, negotiateNpc, normalizeGuidance } from "./structured";
+import { configFromEnv, npcConfigFromEnv, DEFAULT_BASE_URL } from "./modelSettings";
+import { ResponsesClient, ResponsesLlmService } from "./responses";
 import { debugFetch } from "./debug";
 
-/** Map only developer NPC settings; do not inherit any Agent configuration. */
+/** NPC 独立使用开发者的模型、地址和凭据，采用相同 Responses 协议与总预算。 */
 export function createNpcLlm(env: NodeJS.ProcessEnv = process.env): NpcService | null {
   if (!env.NPC_MODEL?.trim()) return null;
-  const llm = createLlm({
-    AGENT_PROVIDER: env.NPC_PROVIDER,
-    AGENT_MODEL: env.NPC_MODEL.trim(),
-    AGENT_FALLBACK: "off",
-    OPENAI_API_KEY: env.NPC_OPENAI_API_KEY,
-    OPENAI_STREAM: "0",
-    OPENAI_BASE_URL: env.NPC_OPENAI_BASE_URL || "https://api.openai.com/v1",
-    ANTHROPIC_API_KEY: env.NPC_ANTHROPIC_API_KEY,
-    ANTHROPIC_AUTH_TOKEN: env.NPC_ANTHROPIC_AUTH_TOKEN,
-    ANTHROPIC_BASE_URL: env.NPC_ANTHROPIC_BASE_URL || "https://api.anthropic.com",
-  });
-  return llm?.negotiate ? { model: llm.model, negotiate: (request) => llm.negotiate!(request) } : null;
+  const provider = env.NPC_PROVIDER || "responses";
+  if (provider === "anthropic" || (!env.NPC_PROVIDER && !env.NPC_OPENAI_API_KEY && (env.NPC_ANTHROPIC_API_KEY || env.NPC_ANTHROPIC_AUTH_TOKEN))) {
+    throw new Error("NPC Anthropic 原生通道已停用，请显式配置 NPC Responses 地址和 NPC_OPENAI_API_KEY");
+  }
+  if (!["responses", "openai"].includes(provider)) throw new Error("未知 NPC_PROVIDER：" + provider);
+  if (!env.NPC_OPENAI_API_KEY) return null;
+  const cfg = npcConfigFromEnv(env);
+  return new ResponsesLlmService(new ResponsesClient(env.NPC_OPENAI_BASE_URL || DEFAULT_BASE_URL, env.NPC_OPENAI_API_KEY, debugFetch(), { stream: cfg.openaiStream }), cfg);
 }
 
+/** 创建唯一的 Responses 通道；没有凭据时保留离线运行。 */
 export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | null {
-  const provider = env.AGENT_PROVIDER || (env.OPENAI_API_KEY ? "openai" : "anthropic");
-  if (provider === "openai") {
-    if (!env.OPENAI_API_KEY) return null;
-    const cfg = configFromEnv({ ...env, AGENT_MODEL: env.AGENT_MODEL || "gpt-6-luna", AGENT_FALLBACK: "off" });
-    return new OpenAILlmService(new OpenAIClient(env.OPENAI_BASE_URL || "https://api.openai.com/v1", env.OPENAI_API_KEY, debugFetch(), { stream: cfg.openaiStream }), cfg);
+  const provider = env.AGENT_PROVIDER || "responses";
+  if (provider === "anthropic" || (!env.AGENT_PROVIDER && !env.OPENAI_API_KEY && (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN))) {
+    throw new Error("Anthropic 原生通道已停用，请配置 Responses 基础地址、OPENAI_API_KEY 和 AGENT_MODEL；不会自动挪用旧密钥");
   }
-  if (provider !== "anthropic") throw new Error(`未知 AGENT_PROVIDER：${provider}`);
-  if (!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.AGENT_FORCE_LLM)) return null;
-  const client = new Anthropic({
-    apiKey: env.ANTHROPIC_API_KEY ?? null,
-    authToken: env.ANTHROPIC_AUTH_TOKEN ?? null,
-    baseURL: env.ANTHROPIC_BASE_URL,
-    timeout: 20_000,
-    maxRetries: 0,
-    fetch: debugFetch(),
-  });
+  if (!["responses", "openai"].includes(provider)) throw new Error("未知 AGENT_PROVIDER：" + provider);
+  if (!env.OPENAI_API_KEY) return null;
   const cfg = configFromEnv(env);
-  const decider = new ClaudeDecider(client, cfg);
-  return {
-    model: cfg.model,
-    decide: (session, turn) => decider.decide(session, turn),
-    normalize: (text) => normalizeGuidance(client, cfg, text),
-    classify: (intent, observation) => classifyIntent(client, cfg, intent, observation),
-    negotiate: (request) => negotiateNpc(client, cfg, request),
-  };
+  return new ResponsesLlmService(new ResponsesClient(env.OPENAI_BASE_URL || DEFAULT_BASE_URL, env.OPENAI_API_KEY, debugFetch(), { stream: cfg.openaiStream }), cfg);
 }

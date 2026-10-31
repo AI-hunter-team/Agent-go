@@ -2,8 +2,8 @@ import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app";
-import { createLlm } from "../server/llm";
-import { configFromEnv } from "../server/claude";
+import { createLlm, createNpcLlm } from "../server/llm";
+import { configFromEnv, npcConfigFromEnv, DEFAULT_BASE_URL } from "../server/modelSettings";
 import { SessionStore } from "../server/sessions";
 import { debugLoggerFromEnv } from "../server/debug";
 import type { OperationDebug } from "../src/shared/debug";
@@ -14,12 +14,14 @@ import { Engine } from "../src/sim/engine";
 
 // Opt-in paid integration test. Never included in npm test.
 const llm = createLlm();
+const npcLlm = createNpcLlm();
 const budgets = configFromEnv({ ...process.env, AGENT_MODEL: llm?.model ?? process.env.AGENT_MODEL });
 if (!llm) throw new Error("请先在 .env 配置模型凭据");
 const sessions = new SessionStore();
-const server = createApp({ llm, sessions, debugLogger: debugLoggerFromEnv(), modelParameters: { ...budgets, model: llm.model, effort: (process.env.AGENT_PROVIDER === "openai" || process.env.OPENAI_API_KEY) ? budgets.reasoningEffort : "low", timeoutMs: 20_000 } }).listen(0, "127.0.0.1");
+const server = createApp({ llm, npcLlm, sessions, debugLogger: debugLoggerFromEnv(), modelParameters: { ...budgets, provider: "responses", model: llm.model, effort: budgets.reasoningEffort, timeoutMs: 20_000 }, npcModelParameters: { ...npcConfigFromEnv(), provider: "responses", model: npcLlm?.model ?? null, effort: "none", timeoutMs: 20_000 } }).listen(0, "127.0.0.1");
 await new Promise<void>((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+/** 调用实测专用本地 API；本脚本仅在明确授权付费测试后运行。 */
 async function api<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
   const response = await fetch(base + path, {
     method, headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(30_000),
@@ -83,10 +85,10 @@ try {
   await mkdir(outputDir, { recursive: true });
   const filename = `${outputDir}/${testedAt.replace(/[:.]/g, "-")}.json`;
   const summary = {
-    testedAt, model: llm.model, provider: process.env.AGENT_PROVIDER,
-    baseURL: process.env.OPENAI_BASE_URL, decisionMaxTokens: budgets.maxTokens,
-    thinkingMaxTokens: budgets.maxThinkingTokens,
-    thinkingEnforcement: "prompt-and-usage-check; no provider-side numeric reasoning cap",
+    testedAt, model: llm.model, provider: "responses",
+    baseURL: process.env.OPENAI_BASE_URL || DEFAULT_BASE_URL, decisionMaxTokens: budgets.maxTokens,
+    reasoningEffort: budgets.reasoningEffort,
+    thinkingEnforcement: "effort setting; shared total-output token cap",
     requestCount: requests.length,
     requestErrors: requests.filter((r) => r.error).length,
     reportedModels: [...new Set(requests.map((r) => r.model).filter(Boolean))],
@@ -101,4 +103,4 @@ try {
   console.log(JSON.stringify({ stage: "saved", filename, requests: summary.requestCount, errors: summary.requestErrors }));
   await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
 }
-if (!cases.length || cases.some((c) => c.report.status !== "success") || requests.some((r) => r.error || r.model !== llm.model || (r.usage?.thinkingTokens ?? 0) > budgets.maxThinkingTokens) || classifications.some((c) => c.result.source !== "llm" || c.result.mechanic !== c.expected)) process.exitCode = 1;
+if (!cases.length || cases.some((c) => c.report.status !== "success") || requests.some((r) => r.error || r.model !== llm.model || (r.usage?.outputTokens ?? 0) > budgets.maxTokens) || classifications.some((c) => c.result.source !== "llm" || c.result.mechanic !== c.expected)) process.exitCode = 1;
