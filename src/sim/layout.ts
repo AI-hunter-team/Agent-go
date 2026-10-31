@@ -26,6 +26,13 @@ export const BOARDING_INTERVAL = 1;
 export const ESCALATOR_CAPACITY = 14;
 export const RAILING_X = SECURITY_X;
 export const RAILING_SEGMENTS = [{ minY: 8, maxY: 12 }, { minY: 18, maxY: 21 }];
+/** Hall-side standing spots in front of each low segment, close enough to vault from. */
+export const RAILING_APPROACHES = [
+  { id: "RAIL_N", label: "安检墙北段低栏杆前（售票厅侧）", pos: { x: RAILING_X - 0.7, y: 10 } },
+  { id: "RAIL_S", label: "安检墙南段低栏杆前（售票厅侧）", pos: { x: RAILING_X - 0.7, y: 19.5 } },
+];
+/** Vaulting the security railing needs the player on the hall side, beside a low segment. */
+export const atRailing = (p: Vec) => p.x < RAILING_X && RAILING_X - p.x <= 1.8 && RAILING_SEGMENTS.some(s => p.y >= s.minY && p.y <= s.maxY);
 export const STAIRS_REACH = 0.8;
 export const QUEUE_SPACING = 0.8;
 
@@ -158,6 +165,7 @@ export const NAV_NODES: NavNode[] = [
   { id: "HALL_N", label: "售票厅北侧", pos: { x: 19, y: 8 } },
   { id: "HALL_C", label: "售票厅中部", pos: { x: 19, y: 15 } },
   { id: "HALL_S", label: "售票厅南侧", pos: { x: 19, y: 22 } },
+  ...RAILING_APPROACHES,
   { id: "CONC_N", label: "安检后大厅北侧", pos: { x: 31, y: 7 } },
   { id: "CONC_C", label: "安检后大厅中部", pos: { x: 31, y: 15 } },
   { id: "CONC_S", label: "安检后大厅南侧", pos: { x: 31, y: 23 } },

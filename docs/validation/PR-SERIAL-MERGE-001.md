@@ -18,7 +18,7 @@
 ## #33 与 #35
 
 - #33 已整合 #34/#32；拖动离开角色后返回误触发招呼的问题已在浏览器复现并修复。合成版本 662 项测试、构建及离线到站/舞蹈/镜头复验通过，详见 [VICTORY-REVIEW-001](VICTORY-REVIEW-001.md)。集成头 `39daf71ca6765743dcae2e4c3684bc856909b114` 的 Ubuntu、Windows、Compose 检查通过，审查线程经验证解决；以 squash 提交 `db499ec4fd0f1dfb17a4b20441cbabf9b077c6c7` 合入 main。
-- #35 已吸收 #33 合入后的 main；保留旅程开局、交互与胜利展示，解决页面/镜头/共享文档冲突。本地 670 项测试及浏览器复验详见 [UI-JOURNEY-FINAL-001](UI-JOURNEY-FINAL-001.md)；远端 CI 和合入以 PR 为准。
+- #35 已吸收 #33 合入后的 main，并接续其他工作合入的 #36 `09a315a`；保留旅程开局、交互与胜利展示，解决页面/镜头/共享文档冲突。本地 674 项测试及浏览器复验详见 [UI-JOURNEY-FINAL-001](UI-JOURNEY-FINAL-001.md)；远端 CI 和合入以 PR 为准。
 
 ## 限制
 
