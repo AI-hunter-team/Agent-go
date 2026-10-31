@@ -9,3 +9,6 @@ export const LOUNGE={
 
 /** 门框与墙面导向线共享收口尺寸，避免移动门洞后黄线穿进门框。 */
 export const LOUNGE_PORTAL={innerHalfSpan:.8,innerJambWidth:.12,innerHeaderBottom:2.49,innerHeaderHeight:.12,outerHalfSpan:1.1,outerJambWidth:.22,outerHeaderBottom:3,outerHeaderHeight:.2} as const;
+
+/** The private branch ends at the public landing edge; keep its opening and camera envelope aligned. */
+export const LOUNGE_JOIN={nearZ:1.125,wallLength:1.3,wallCenterX:-2.4} as const;

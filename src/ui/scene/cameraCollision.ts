@@ -1,3 +1,6 @@
+import { LOUNGE_JOIN } from "./loungeLayout";
+import { connectorSlabBoxes } from "../../shared/connectorGeometry";
+import { subtractRect } from "../../shared/stationFootprint";
 import { propDefinition } from "../../shared/stationProps";
 import type { WorldDefinition } from "../../shared/world";
 import { ATTRACTIONS, FACILITIES, GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, WIDTH } from "../../sim/layout";
@@ -25,7 +28,8 @@ const CAMERA_BOXES: CameraBox[] = [
 /** Cut the hall's outer walls at the same doorway used by each entry passage. */
 function generatedEnvelope(d: WorldDefinition): CameraBox[] {
   const l=d.layout, out:CameraBox[]=[];
-  for(const edge of [{axis:"x",at:0,length:l.HEIGHT},{axis:"x",at:l.WIDTH,length:l.HEIGHT},{axis:"z",at:0,length:l.WIDTH},{axis:"z",at:l.HEIGHT,length:l.WIDTH}]) {
+  if(d.architecture?.walls)for(const w of d.architecture.walls){const horizontal=w.from.y===w.to.y,len=Math.hypot(w.to.x-w.from.x,w.to.y-w.from.y);out.push(horizontal?bounds(w.from.x,0,w.from.y-.15,len,w.height,.3):bounds(w.from.x-.15,0,w.from.y,.3,w.height,len));}
+  for(const edge of d.architecture?.walls?[]:[{axis:"x",at:0,length:l.HEIGHT},{axis:"x",at:l.WIDTH,length:l.HEIGHT},{axis:"z",at:0,length:l.WIDTH},{axis:"z",at:l.HEIGHT,length:l.WIDTH}]) {
     const add=(start:number,length:number,base:number,height:number)=>out.push(edge.axis==="x"?bounds(edge.at-.15,base,start,.3,height,length):bounds(start,base,edge.at-.15,length,height,.3));
     add(0,edge.length,-6,6);add(0,edge.length,2.8,3.2);
     const doors=(d.entrances??[]).filter(e=>Math.abs((edge.axis==="x"?e.foot.x:e.foot.y)-edge.at)<.01).map(e=>({start:(edge.axis==="x"?e.foot.y:e.foot.x)-e.width/2,end:(edge.axis==="x"?e.foot.y:e.foot.x)+e.width/2})).sort((a,b)=>a.start-b.start);
@@ -39,7 +43,7 @@ function generatedEnvelope(d: WorldDefinition): CameraBox[] {
       const w=Math.abs(e.inward.x)*width+Math.abs(e.inward.y)*depth, h=Math.abs(e.inward.y)*width+Math.abs(e.inward.x)*depth;
       out.push(bounds(cx-w/2,base,cz-h/2,w,height,h));
     };
-    for(let x=-4.25;x<8;x+=.5){const floor=x<0?4:x>6?0:4*(1-x/6);for(const side of [-1,1]){if(e.id==="A"&&side===-1&&x< -2.4)continue;block(x,side*(e.width/2+.09),floor,2.8,.5,.18);}block(x,0,floor+2.8,.15,.5,e.width+.36);}
+    for(let x=-4.25;x<8;x+=.5){const floor=x<0?4:x>6?0:4*(1-x/6);for(const side of [-1,1]){if(e.id==="A"&&side===-1&&x< -LOUNGE_JOIN.nearZ)continue;block(x,side*(e.width/2+.09),floor,2.8,.5,.18);}block(x,0,floor+2.8,.15,.5,e.width+.36);}
     block(-4.5,0,4,2.8,.15,e.width);
   }
   return out;
@@ -50,15 +54,18 @@ export function cameraFraction(target: Point3, desired: Point3, definition?:impo
   const delta = { x: desired.x - target.x, y: desired.y - target.y, z: desired.z - target.z };
   let nearest = 1;
   const l=definition?.layout;
-  let boxes=definition&&definition.generatorVersion!=="legacy-v0" ? generatedBoxes.get(definition):undefined;
-  if(!boxes){boxes=definition&&definition.generatorVersion!=="legacy-v0"&&l ? [
-    ...l.PILLARS.map(r=>bounds(r.x,0,r.y,r.w,6,r.h)),
+  let boxes=definition && definition.generatorVersion !== "legacy-v0" ? generatedBoxes.get(definition):undefined;
+  if(!boxes){boxes=definition && definition.generatorVersion !== "legacy-v0"&&l ? [
+    ...l.PILLARS.map(r=>bounds(r.x,r.floorId==="platform"?-6:0,r.y,r.w,definition.architecture?3.6:6,r.h)),
+    ...(definition.architecture?.areas.filter(a=>a.floorId==="concourse").flatMap(a=>{let pieces=[a.bounds];for(const h of l.openings??[])pieces=pieces.flatMap(r=>subtractRect(r,h));return pieces.map(r=>bounds(r.x,-.24,r.y,r.w,.24,r.h));})??[]),
+    ...(definition.architecture?.volumes.filter(v=>v.kind==="room").map(v=>bounds(v.bounds.x,v.floorId==="platform"?-6:0,v.bounds.y,v.bounds.w,v.height,v.bounds.h))??[]),
     ...[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS].map(r=>bounds(r.x,0,r.y,r.w,1.1,r.h)),
     ...l.FACILITIES.flatMap(f=>facilitySolids(f.kind,f.pos,f.queueDirection).map(r=>bounds(r.x,0,r.y,r.w,f.kind==="tvm"?1.8:f.kind==="security"?2.5:1.1,r.h))),
     ...(definition.props??[]).flatMap(p=>p.body?[bounds(p.body.x,p.pos.floorId==='platform'?-6:0,p.body.y,p.body.w,propDefinition(p.assetId).size[1],p.body.h)]:[]),
     ...definition.details.flatMap(d=>d.body?[bounds(d.body.x,d.pos.floorId==="platform"?-6:0,d.body.y,d.body.w,2.5,d.body.h)]:[]),
+    ...connectorSlabBoxes(definition.connectors),
     ...generatedEnvelope(definition),
-    bounds(0,6,0,l.WIDTH,.2,l.HEIGHT),
+    bounds(0,definition.architecture?3.6:6,0,l.WIDTH,.2,l.HEIGHT),
   ]:CAMERA_BOXES;
   if(definition&&definition.generatorVersion!=="legacy-v0")generatedBoxes.set(definition,boxes);}
   for (const box of boxes) {

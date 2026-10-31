@@ -1,4 +1,4 @@
-import { generatedTrainLayout } from "../shared/generatedTrain";
+import { worldTrainLayout } from "../shared/generatedTrain";
 import type { AlertLevel, ItemKind, FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
 import type { Engine } from "../sim/engine";
 import { STAIRS_TOP, STAIRS_BOTTOM } from "../sim/layout";
@@ -64,8 +64,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
       const axis = engine.world.definition.generatorVersion !== "legacy-v0" ? engine.world.layout.platformAxis : undefined;
       if (axis) {
         const along = axis.direction === "x" ? person.pos.x : person.pos.y;
-        const length = axis.direction === "x" ? engine.world.layout.WIDTH : engine.world.layout.HEIGHT;
-        const centres = generatedTrainLayout(length).centres;
+        const centres = worldTrainLayout(engine.world.definition).centres;
         const centre = centres.reduce((a, b) => Math.abs(a - along) < Math.abs(b - along) ? a : b);
         yaw = axis.direction === "x" ? (along < centre ? Math.PI / 2 : -Math.PI / 2) : (along < centre ? 0 : Math.PI);
       } else yaw = person.pos.y < 15 ? 0 : Math.PI;

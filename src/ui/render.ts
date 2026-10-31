@@ -1,3 +1,4 @@
+import { platformClearanceBlocks } from "../shared/connectorGeometry";
 import { displayFloor, worldViewBounds } from "../sim/entranceGeometry";
 import { captureScene } from "./presentation";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
@@ -389,10 +390,14 @@ function drawGeneratedStation(ctx:CanvasRenderingContext2D,engine:Engine,opts:Re
  const d=engine.world.definition,l=d.layout, gap=4,b=worldViewBounds(d);
  ctx.save();ctx.clearRect(0,0,b.w*SCALE,(b.h*2+gap)*SCALE);
  for(const [index,floor] of d.floors.entries()){
-  ctx.save();ctx.translate(-b.x*SCALE,(index*(b.h+gap)-b.y)*SCALE);ctx.fillStyle=index?COLORS.platform:COLORS.hall;ctx.fillRect(0,0,l.WIDTH*SCALE,l.HEIGHT*SCALE);
-  ctx.fillStyle=COLORS.ink;ctx.font="16px Microsoft YaHei";ctx.fillText(`${d.name} · ${index?"B2 岛式站台":"B1 站厅"}`,10,22);
-  const rectangles=index?(l.MOVE_BLOCKERS.filter(r=>r.floorId==="platform")):[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS,...l.PILLARS,...(l.openings??[])];
-  ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
+  ctx.save();ctx.translate(-b.x*SCALE,(index*(b.h+gap)-b.y)*SCALE);ctx.fillStyle=index?COLORS.platform:COLORS.hall;
+  if(d.architecture)for(const a of d.architecture.areas.filter(a=>a.floorId===floor.id))ctx.fillRect(px(a.bounds.x),px(a.bounds.y),px(a.bounds.w),px(a.bounds.h));
+  else ctx.fillRect(0,0,l.WIDTH*SCALE,l.HEIGHT*SCALE);
+
+  const rectangles=index?([...l.MOVE_BLOCKERS,...l.PILLARS].filter(r=>r.floorId==="platform")):[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS,...l.PILLARS,...(l.openings??[])];
+  rectangles.push(...platformClearanceBlocks(d.connectors).filter(v=>v.bounds.floorId===floor.id).map(v=>v.bounds));
+  if(d.architecture)rectangles.push(...d.architecture.volumes.filter(v=>v.kind==="room"&&v.floorId===floor.id).map(v=>v.bounds));
+  ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles.filter(r=>(r.floorId??"concourse")===floor.id||index&&r.floorId==="platform"))ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
   for(const f of l.FACILITIES.filter(f=>(f.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=f.kind==="tvm"?COLORS.ochre:f.kind==="security"?COLORS.securityEdge:COLORS.green;ctx.fillRect(px(f.pos.x)-5,px(f.pos.y)-8,10,16);ctx.fillStyle=COLORS.ink;ctx.font="11px sans-serif";ctx.fillText(f.id,px(f.pos.x)+7,px(f.pos.y));}
   for(const p of d.props??[]){if(p.pos.floorId!==floor.id||!p.body)continue;ctx.fillStyle=p.assetId.startsWith('plant')?'#537e58':'#88978a';ctx.fillRect(px(p.body.x),px(p.body.y),px(p.body.w),px(p.body.h));}
   for(const detail of d.details.filter(v=>v.pos.floorId===floor.id)){ctx.fillStyle=COLORS.ochre;const r=detail.body;if(r)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));}
@@ -403,6 +408,10 @@ function drawGeneratedStation(ctx:CanvasRenderingContext2D,engine:Engine,opts:Re
   for(const actor of snapshot.actors.values())if(displayFloor(actor.floorId)===floor.id&&!(actor.id==="player"&&opts.replay)){ctx.fillStyle=actor.id==="player"?COLORS.player:COLORS.inkSoft;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z),actor.id==="player"?6:4,0,Math.PI*2);ctx.fill();}
   const trail=opts.replay?.trail??(opts.showTrail?engine.trail:[]);ctx.strokeStyle=COLORS.brick;ctx.beginPath();let drawing=false;for(const p of trail){if(displayFloor(p.floorId)!==floor.id){drawing=false;continue;}if(drawing)ctx.lineTo(px(p.x),px(p.y));else ctx.moveTo(px(p.x),px(p.y));drawing=true;}ctx.stroke();
   const replay=opts.replay?.position;if(replay&&displayFloor(replay.floorId)===floor.id){ctx.fillStyle=COLORS.player;ctx.beginPath();ctx.arc(px(replay.x),px(replay.y),7,0,Math.PI*2);ctx.fill();}
+  // Draw the floor label above the map instead of letting equipment rooms cover its text.
+  const title=`${d.name} · ${index?"B2 岛式站台":"B1 站厅"}`,labelX=px(b.x)+8,labelY=px(b.y)+8;
+  ctx.font="16px Microsoft YaHei";ctx.fillStyle=COLORS.hall;ctx.fillRect(labelX-4,labelY-4,ctx.measureText(title).width+12,26);
+  ctx.fillStyle=COLORS.ink;ctx.fillText(title,labelX,labelY+16);
   ctx.restore();
  }
  ctx.restore();

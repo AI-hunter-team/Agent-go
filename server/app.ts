@@ -393,6 +393,6 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
 
 function requestedMap(seed:number, world?:WorldDescriptor) {
   if(world===undefined)return undefined;
-  if(!world||Object.keys(world).some(k=>!["generatorVersion","layoutHash"].includes(k))||!["metro-v1","metro-v2"].includes(world.generatorVersion))throw new Error("未知世界版本");
+  if(!world||Object.keys(world).some(k=>!["generatorVersion","layoutHash"].includes(k))||!["metro-v1","metro-v2","metro-v3"].includes(world.generatorVersion))throw new Error("未知世界版本");
   const d=restoreWorld(seed,world);if(!d)throw new Error("地图摘要不一致");return publicMap(d);
 }

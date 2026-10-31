@@ -21,7 +21,7 @@
 | 既有 MVP 验收证据 | [验收记录](验收记录.md) | 历史快照；其中测试数和浏览器成绩不是本次重跑结果 |
 | PR 交付信息 | [GitHub PR 模板](../.github/pull_request_template.md) | 负责人、范围、接口、验证、风险、回退和交接均可从 PR 找到 |
 
-世界生成器的数据、分层、事件与兼容入口见 [WORLDGEN-001 实现说明](world-generation/README.md)，实际结果见对应验证记录；入站通道与连续乘客来源增量见[WORLDGEN-002](tasks/WORLDGEN-002.md)，正式列车/楼扶梯及表面材质见[WORLDGEN-003](tasks/WORLDGEN-003.md)与[素材说明](../design/world-generation/README.md)，站内设施及 `metro-v2` 见[站内资产说明](../design/station-detail/README.md)与[整合验证](validation/STATION-DETAIL-PR-001.md)。休息室、03品牌、独立创建界面和连续入场见[CONTROLROOM-004](tasks/CONTROLROOM-004.md)及[实现说明](world-generation/README.md#休息室与创建世界controlroom-004)。小地图、当前路线和多层视图见[MINIMAP-001](tasks/MINIMAP-001.md)。独立资产展厅入口为 `/showroom.html`，范围和使用方式见[SHOWROOM-001](tasks/SHOWROOM-001.md)。
+V3最新实机回归与斜板/二维修复见[WORLDGEN-V3-004](validation/WORLDGEN-V3-004.md)；三类建筑与M3本地交付见[WORLDGEN-V3-003](tasks/WORLDGEN-V3-003.md)及[验证](validation/WORLDGEN-V3-003.md)，新建默认V3，?worldgen=v2保留回退；比例修正与站长随机化历史见[WORLDGEN-V3-002](tasks/WORLDGEN-V3-002.md)及[验证](validation/WORLDGEN-V3-002.md)；初版建筑/多连接器与90模型融合见[WORLDGEN-V3-001](tasks/WORLDGEN-V3-001.md)及[验证](validation/WORLDGEN-V3-001.md)；建筑样板历史见[WORLDGEN-V2-001](tasks/WORLDGEN-V2-001.md)。世界生成器的数据、分层、事件与兼容入口见 [WORLDGEN-001 实现说明](world-generation/README.md)，实际结果见对应验证记录；入站通道与连续乘客来源增量见[WORLDGEN-002](tasks/WORLDGEN-002.md)，正式列车/楼扶梯及表面材质见[WORLDGEN-003](tasks/WORLDGEN-003.md)与[素材说明](../design/world-generation/README.md)，站内设施及 `metro-v2` 见[站内资产说明](../design/station-detail/README.md)与[整合验证](validation/STATION-DETAIL-PR-001.md)。休息室、03品牌、独立创建界面和连续入场见[CONTROLROOM-004](tasks/CONTROLROOM-004.md)及[实现说明](world-generation/README.md#休息室与创建世界controlroom-004)。小地图、当前路线和多层视图见[MINIMAP-001](tasks/MINIMAP-001.md)。独立资产展厅入口为 `/showroom.html`，范围和使用方式见[SHOWROOM-001](tasks/SHOWROOM-001.md)。
 
 ## 架构与接口入口
 

@@ -186,7 +186,7 @@ export interface NpcResponse extends ModelMetadata {
 
 /** C7 actions consumed by AgentAction and the engine. */
 export type InteractionAction = (
-  | { type: "traverse"; route: "stairs" | "escalator"; walking?: boolean }
+  | { type: "traverse"; connectorId?: string; route: "stairs" | "escalator"; walking?: boolean }
   | { type: "observe"; targetId: string }
   | { type: "take"; itemId: string }
   | { type: "give"; itemId: string; npcId: string }

@@ -9,13 +9,18 @@ export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
 export const GUARD_COLLISION_RADIUS = 0.84;
 export const personRadius = (kind: PassengerKind | "guard") => kind === "guard" ? GUARD_COLLISION_RADIUS : kind === "luggage" ? 0.48 : 0.32;
 
-export function createMovement(layout: StationLayout = legacyLayout) {
+export function createMovement(layout: StationLayout = legacyLayout, extraSolids: readonly Rect[] = []) {
 const {FACILITIES,PILLARS,ATTRACTIONS,MOVE_BLOCKERS,SECURITY_BARRIERS,GATE_BARRIERS,WIDTH,HEIGHT}=layout;
 const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos, f.queueDirection));
-const solids = [...(layout.solids??[]), ...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
+const solids = [...extraSolids, ...(layout.solids??[]), ...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
 /** Shared by persistent route planning and the per-tick collision sweep. */
 const SCENERY_OBSTACLES: readonly Rect[] = [...(layout.openings ? [...MOVE_BLOCKERS,...(layout.openingBlocks??layout.openings)] : MOVE_BLOCKERS.slice(0, 3)), ...solids];
 
+// Static scenery is immutable during a world. Reuse body-inflated rectangles
+// instead of filtering and allocating them for every visibility-graph edge.
+const sceneryByFloor=new Map<string,Rect[]>(),inflatedScenery=new Map<string,Rect[]>();
+for(const r of SCENERY_OBSTACLES){const floor=r.floorId??"concourse",rows=sceneryByFloor.get(floor)??[];rows.push(r);sceneryByFloor.set(floor,rows);}
+function sceneryFor(floor:string,radius:number){const key=`${floor}:${radius}`;let rows=inflatedScenery.get(key);if(!rows){rows=(sceneryByFloor.get(floor)??[]).map(r=>({x:r.x-radius,y:r.y-radius,w:r.w+radius*2,h:r.h+radius*2}));inflatedScenery.set(key,rows);}return rows;}
 /** Service may cross its scanner/gate opening, but never a solid side barrier. */
 function clearServiceExit(from: Vec, to: Vec, radius: number): boolean {
   return [...SECURITY_BARRIERS, ...GATE_BARRIERS, ...solids].filter(r=>(r.floorId??"concourse")===(from.floorId??"concourse")).every((obstacle) => {
@@ -55,8 +60,9 @@ function clearOfPeople(from: Vec, to: Vec, radius: number, others: readonly Movi
 function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
   if (to.x < radius || to.x > WIDTH - radius || to.y < radius || to.y > HEIGHT - radius) return false;
   if ((from.floorId ?? "concourse") !== (to.floorId ?? "concourse")) return false;
-  return SCENERY_OBSTACLES.filter(obstacle => (obstacle.floorId ?? "concourse") === (from.floorId ?? "concourse")).every((obstacle) => {
-    const r = { x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + radius * 2, h: obstacle.h + radius * 2 };
+  const minX=Math.min(from.x,to.x),maxX=Math.max(from.x,to.x),minY=Math.min(from.y,to.y),maxY=Math.max(from.y,to.y);
+  return sceneryFor(from.floorId??"concourse",radius).every(r => {
+    if(maxX<r.x||minX>r.x+r.w||maxY<r.y||minY>r.y+r.h)return true;
     // Keep existing point-nav corner/fixture positions recoverable, but never cross a wall.
     if (contains(r, from)) return !contains(r, to) || dist(to, { x: r.x + r.w / 2, y: r.y + r.h / 2 }) > dist(from, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
     return !segmentIntersectsRect(from, to, r);

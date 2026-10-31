@@ -3,11 +3,19 @@ import type { WorldDefinition } from "./world";
 import type { Vec } from "./types";
 
 /** Geometry is shared by both the generated mesh and the simulation. */
-export function generatedTrainLayout(length: number) {
-  const count = Math.max(1, Math.min(3, Math.floor((length - 1 - 23.117) / 23.4) + 1)), spacing = 23.4;
+export function generatedTrainLayout(length: number, carCount?:number) {
+  const legacyCount=Math.max(1,Math.min(3,Math.floor((length-1-23.117)/23.4)+1));
+  const count=carCount??legacyCount,spacing=23.4;
+  if(!Number.isInteger(count)||count<1||count>6||(carCount!==undefined&&(count-1)*spacing+23.117>length))throw new RangeError("列车编组超出站台长度");
   const start = (length - (count - 1) * spacing) / 2;
   return { count, centres: Array.from({ length: count }, (_, i) => start + i * spacing), railTop: -METRO_PROFILE.floor,
     trackCentre: 7 + METRO_PROFILE.exteriorHalfWidth + METRO_PROFILE.platformGap, scale: [1, 1, 1] as [number, number, number] };
+}
+
+/** All current consumers resolve the explicit consist; older worlds retain their original cap. */
+export function worldTrainLayout(d:WorldDefinition){
+ const length=d.layout.platformAxis?.direction==="y"?d.layout.HEIGHT:d.layout.WIDTH;
+ return generatedTrainLayout(length,d.train?.carCount);
 }
 
 export interface GeneratedTrainDoor { id: string; label: string; pos: Vec; boardingPath: Vec[]; carCentre: number; side: -1 | 1 }
@@ -23,8 +31,7 @@ export function generatedPlatformPoint(definition: WorldDefinition, longitudinal
 export function generatedTrainDoors(definition: WorldDefinition): GeneratedTrainDoor[] {
   const axis = definition.layout.platformAxis;
   if (!axis) return [];
-  const length = axis.direction === "y" ? definition.layout.HEIGHT : definition.layout.WIDTH;
-  const layout = generatedTrainLayout(length), result: GeneratedTrainDoor[] = [];
+  const layout = worldTrainLayout(definition), result: GeneratedTrainDoor[] = [];
   for (const side of [-1, 1] as const) for (const [car, centre] of layout.centres.entries()) {
     const kind = car === 0 || car === layout.count - 1 ? "head" : "trailer";
     const direction = car === 0 ? -1 : 1;

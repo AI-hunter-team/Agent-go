@@ -224,10 +224,14 @@ export class Engine {
   }
 
   private recordTrail() {
-    const a=this.player.activity;
-    const transit=a.kind==="stairs"||a.kind==="escalator";
-    const progress=a.kind==="entering"?a.progress:transit?1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)):undefined;
-    const point = { ...(this.world.definition.generatorVersion!=="legacy-v0"?{floorId:this.player.pos.floorId,elevation:this.player.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector:a.kind as "stairs"|"escalator",progress}:{})}:{}), t: this.t, ...this.player.pos };
+    const a=this.player.activity,p=this.player;
+    const normal=a.kind==="stairs"||a.kind==="escalator",acting=a.kind==="acting"&&p.pos.floorId?.startsWith("transit:");
+    const activeId=normal?a.connectorId:acting?p.pos.floorId!.slice("transit:".length):undefined;
+    const active=this.world.definition.connectors?.find(c=>c.id===activeId);
+    const transit=normal||acting;
+    const progress=a.kind==="entering"?a.progress:normal?1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)):acting?Math.max(0,Math.min(1,-(p.pos.elevation??0)/6)):undefined;
+    const connector=normal?a.kind:active?.kind??"stairs";
+    const point = { ...(this.world.definition.generatorVersion!=="legacy-v0"?{floorId:p.pos.floorId,elevation:p.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector,...(activeId?{connectorId:activeId}:{}),progress}:{})}:{}),t:this.t,...p.pos };
     if (this.trail.at(-1)?.t === this.t) this.trail[this.trail.length - 1] = point;
     else this.trail.push(point);
   }
@@ -319,7 +323,7 @@ export class Engine {
         return result;
       }
       case "traverse": {
-        const err=w.traverse(p, action.route, action.walking); return {ok:!err,text:err??"开始下楼梯"};
+        const err=w.traverse(p, action.route, action.walking, action.connectorId); return {ok:!err,text:err??"开始下楼梯"};
       }
       case "observe": {
         const n = w.persons.get(action.targetId);

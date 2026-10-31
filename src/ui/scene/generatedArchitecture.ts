@@ -1,7 +1,9 @@
+import { LOUNGE_JOIN } from "./loungeLayout";
+import { CONNECTOR_SLAB_DEPTH } from "../../shared/connectorGeometry";
 import { CatmullRomCurve3, ExtrudeGeometry, Mesh, MeshStandardMaterial, Shape, TubeGeometry, Vector3 } from "three";
 import type { WorldDefinition, EntranceDefinition } from "../../shared/world";
 import { createMetroCar, metroMaterials, METRO } from "../../assets/metro-train";
-import { generatedTrainLayout } from "../../shared/generatedTrain";
+import { worldTrainLayout } from "../../shared/generatedTrain";
 export { generatedTrainLayout } from "../../shared/generatedTrain";
 import type { GeneratedPalette } from "./generatedSurfaces";
 import { SurfaceBuilder, disposeSurfaceGeometry, type XYZ } from "./surfaceGeometry";
@@ -14,7 +16,7 @@ export function stairFlight(p: GeneratedPalette, run: number, drop: number, widt
     profile.lineTo((i + 1) * going, -(i + 1) * rise - .035);
     if (i < count - 1) profile.lineTo((i + 1) * going, -(i + 2) * rise - .035);
   }
-  profile.lineTo(run, -drop - .26); profile.lineTo(0, -.26); profile.closePath();
+  profile.lineTo(run, -drop - CONNECTOR_SLAB_DEPTH); profile.lineTo(0, -CONNECTOR_SLAB_DEPTH); profile.closePath();
   const slab = new ExtrudeGeometry(profile, { depth: width, bevelEnabled: false }); slab.translate(0, 0, -width / 2); b.add(escalator ? p.dark : p.concrete, slab);
   for (let i = 0; i < count; i++) {
     const x = (i + .5) * going, y = -(i + 1) * rise;
@@ -64,7 +66,7 @@ export function texturedMetroMaterials(p: GeneratedPalette) {
 
 export function createGeneratedPlatform(d: WorldDefinition, p: GeneratedPalette, openFront = false) {
   const side = d.layout.platformAxis?.direction === "y", length = side ? d.layout.HEIGHT : d.layout.WIDTH;
-  const centre = d.layout.platformAxis?.center ?? d.layout.HEIGHT / 2, b = new SurfaceBuilder(), layout = generatedTrainLayout(length);
+  const centre = d.layout.platformAxis?.center ?? d.layout.HEIGHT / 2, b = new SurfaceBuilder(), layout = worldTrainLayout(d);
   b.box(p.stone, [length, .28, 14], [length / 2, -.14, 0]);
   for (const direction of [-1, 1]) {
     const track = direction * layout.trackCentre;
@@ -136,7 +138,7 @@ export function createEntrancePassage(e: EntranceDefinition, p: GeneratedPalette
   for (const s of [-1, 1]) {
     for (const [x, y, length] of [[-2.25, 4, 4.5], [7, 0, 2]]) {
       const sideDoor = privateDock && s === -1 && x < 0;
-      const span = sideDoor ? 2.4 : length, centre = sideDoor ? -1.2 : x;
+      const span = sideDoor ? LOUNGE_JOIN.nearZ : length, centre = sideDoor ? -LOUNGE_JOIN.nearZ/2 : x;
       b.box(p.wall, [span, 2.8, .18], [centre, y + 1.4, s * (e.width / 2 + .09)]);
       b.box(p.sage, [span, .65, .025], [centre, y + .33, s * (e.width / 2 - .008)]);
     }

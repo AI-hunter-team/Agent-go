@@ -1,3 +1,4 @@
+import { previewWorldVersion } from "./worldVersion";
 import type { WorldDefinition } from "../shared/world";
 import { createdWorld, matchesCreatedWorld, type CreatedWorld, type WorldSeedSource } from "./worldCreation";
 import { useWorldLibrary, type SavedWorld } from "./worldLibrary";
@@ -405,7 +406,7 @@ export function useJourney(interval: number) {
   // A fresh scenario must update the preview, saved record and selected descriptor together.
   const previewSeed = (nextSeed: number) => {
     if (nextSeed === seed) { session.preview(seed, settings, { backpack }); return null; }
-    const definition = generateWorld(nextSeed);
+    const definition = generateWorld(nextSeed,{generatorVersion:previewWorldVersion()});
     const choice = { ...createdWorld(definition, { mode: "random", value: String(nextSeed) }), id: crypto.randomUUID() };
     const record: SavedWorld = { ...choice, id: choice.id, schemaVersion: 1, createdAt: Date.now(), updatedAt: Date.now(), preferences: { settings: { ...settings }, backpack, characterId, kind, guidance } };
     session.preview(nextSeed, settings, { backpack }, definition);

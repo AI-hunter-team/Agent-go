@@ -1,3 +1,4 @@
+import { actorConnector } from "../connectors";
 import type { ActionPlan, ActionResult, EntityRef, Item, ItemLocation, PlanStep, StepOutcome, Vec, WorldEvent } from "../../shared/types";
 import type { AlertSystem } from "../alert";
 import { ITEM_DEFS } from "../content/items";
@@ -199,7 +200,7 @@ export class ActionExecutor {
         } else a.remaining += DT;
         return;
       }
-      p.pos = world.definition.generatorVersion!=="legacy-v0"&&a.step.op==="slide_handrail"?{...next,floorId:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
+      p.pos = world.definition.generatorVersion!=="legacy-v0"&&a.step.op==="slide_handrail"?{...next,floorId:p.transitConnectorId?`transit:${p.transitConnectorId}`:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
     }
     if (a.step.op === "force_cut_in") {
       const npc = world.persons.get(a.step.npcId)!,
@@ -260,18 +261,21 @@ export class ActionExecutor {
     this.resetActivity();
     if (this.traversal) {
       const p = this.context.world.player!, a = this.traversal;
-      p.pos.y = a.kind === "escalator" ? this.context.world.layout.ESCALATOR_TOP.y : a.start.y;
+      p.pos.y = a.kind === "escalator" ? this.escalatorTop.y : a.start.y;
       p.activity = { ...a };
       this.traversal = null;
     }
     if (interrupted?.op === "slide_handrail") {
       const p=this.context.world.player!;
-      const duration=Math.max(.1,Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-p.pos.x,this.context.world.layout.STAIRS_BOTTOM.y-p.pos.y)/Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-this.context.world.layout.STAIRS_TOP.x,this.context.world.layout.STAIRS_BOTTOM.y-this.context.world.layout.STAIRS_TOP.y)*STAIRS_SECONDS);
-      p.activity={kind:"stairs",remaining:duration,duration,start:{...p.pos},end:this.context.world.layout.STAIRS_BOTTOM};
+      const duration=Math.max(.1,Math.hypot(this.stairsBottom.x-p.pos.x,this.stairsBottom.y-p.pos.y)/Math.hypot(this.stairsBottom.x-this.stairsTop.x,this.stairsBottom.y-this.stairsTop.y)*STAIRS_SECONDS);
+      p.activity={kind:"stairs",connectorId:actorConnector(this.context.world,p,"stairs")?.id,remaining:duration,duration,start:{...p.pos},end:this.stairsBottom};
     }
     this.context.world.notifyPlayer("action_interrupted", text);
     if (consent) this.onConsentComplete?.(consent.npcId, { ok: false, text });
   }
+  private get stairsTop(){return actorConnector(this.context.world,this.context.world.player!,"stairs")?.from??this.context.world.layout.STAIRS_TOP;}
+  private get stairsBottom(){return actorConnector(this.context.world,this.context.world.player!,"stairs")?.to??this.context.world.layout.STAIRS_BOTTOM;}
+  private get escalatorTop(){return actorConnector(this.context.world,this.context.world.player!,"escalator")?.from??this.context.world.layout.ESCALATOR_TOP;}
   private resetActivity() {
     const p = this.context.world.player!;
     this.keepQueue = false;
@@ -302,7 +306,7 @@ export class ActionExecutor {
   private isQueuing(p: Person): boolean {
     if (p.activity.kind === "queued") return Boolean(this.context.world.queuePosition(p));
     if (p.activity.kind === "to_queue") return this.context.world.facility(p.activity.facility)?.status === "open";
-    if (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue") return this.context.world.transit.queue.includes(p.id);
+    if (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue") return this.context.world.transit.forPerson(p).queue.includes(p.id);
     return false;
   }
   /**
@@ -440,7 +444,7 @@ export class ActionExecutor {
       const dest = this.current?.dest;
       if (settling && step.obstacle !== "escalator_side" && dest && !this.context.world.spatial.clearOfPeople(p.pos, dest, personRadius(p.kind), w.collisionBodies(p.id))) return "落地点被占用";
     }
-    if (step.op === "slide_handrail" && !settling && (!p.passedGate || p.onPlatform || dist(p.pos, this.context.world.layout.STAIRS_TOP) > STAIRS_REACH)) return "请先通过闸机并靠近楼梯扶手入口";
+    if (step.op === "slide_handrail" && !settling && (!p.passedGate || p.onPlatform || dist(p.pos, this.stairsTop) > STAIRS_REACH)) return "请先通过闸机并靠近楼梯扶手入口";
     return null;
   }
   private prepare() {
@@ -483,19 +487,21 @@ export class ActionExecutor {
       x: this.context.world.layout.GATE_X + 1.4,
       y: Math.min(this.context.world.layout.HEIGHT - 1, Math.max(1, p.pos.y))
     };
-    if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="gate") {
+    if(w.definition.generatorVersion !== "legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="gate") {
       const nearest=[...w.facilities.values()].filter(f=>f.def.kind==="gate").sort((a,b)=>dist(p.pos,a.def.pos)-dist(p.pos,b.def.pos))[0];a.dest={...nearest.def.exit!};
     }
     if (a.step.op === "vault" && a.step.obstacle === "railing") a.dest = { x: this.context.world.layout.RAILING_X + 1.4, y: p.pos.y };
-if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="railing") {
+if(w.definition.generatorVersion !== "legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="railing") {
       const point=w.layout.RAILING_APPROACHES[0].pos, f=w.layout.FACILITIES.find(f=>f.kind==="security")!,q=f.queueDirection??{x:-1,y:0};a.dest={...point,x:point.x-q.x*2.1,y:point.y-q.y*2.1};
     }
-    if (a.step.op === "vault" && a.step.obstacle === "escalator_side") a.dest = { x: p.pos.x, y: this.context.world.layout.STAIRS_TOP.y };
-    if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="escalator_side"){
-      const progress=this.traversal?1-this.traversal.remaining/(this.traversal.duration??10):0,from=w.layout.STAIRS_TOP,to=w.layout.STAIRS_BOTTOM;
-      a.dest={x:from.x+(to.x-from.x)*progress,y:from.y+(to.y-from.y)*progress,floorId:"transit:stairs",elevation:-6*progress};
+    if (a.step.op === "vault" && a.step.obstacle === "escalator_side") a.dest = { x: p.pos.x, y: this.stairsTop.y };
+    if(w.definition.generatorVersion !== "legacy-v0"&&a.step.op==="vault"&&a.step.obstacle==="escalator_side"){
+      const progress=this.traversal?1-this.traversal.remaining/(this.traversal.duration??10):0,from=(actorConnector(w,p,"stairs")?.from??w.layout.STAIRS_TOP),to=(actorConnector(w,p,"stairs")?.to??w.layout.STAIRS_BOTTOM);
+      const stairs=actorConnector(w,p,"stairs");if(stairs)p.transitConnectorId=stairs.id;
+      a.dest={x:from.x+(to.x-from.x)*progress,y:from.y+(to.y-from.y)*progress,floorId:p.transitConnectorId?`transit:${p.transitConnectorId}`:"transit:stairs",elevation:-6*progress};
     }
-    if (a.step.op === "slide_handrail") a.dest = { ...this.context.world.layout.STAIRS_BOTTOM };
+    if(a.step.op === "slide_handrail"&&w.definition.connectors)p.transitConnectorId=actorConnector(w,p,"stairs")?.id;
+    if (a.step.op === "slide_handrail") a.dest = { ...this.stairsBottom };
     if (a.step.op === "force_cut_in") {
       const npc = w.persons.get(a.step.npcId)!,
         q = w.queuePosition(npc)!;
@@ -605,8 +611,8 @@ if(w.definition.generatorVersion!=="legacy-v0"&&a.step.op==="vault"&&a.step.obst
       if (s.obstacle === "railing") { p.pos = { ...a.dest! }; p.screened = true; return { ok: true, text: "翻过安检栏杆，进入大厅；尚未过闸" }; }
       if (s.obstacle === "escalator_side") {
         p.pos = { ...a.dest! };
-        const remaining = Math.max(.1, Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-p.pos.x,this.context.world.layout.STAIRS_BOTTOM.y-p.pos.y)/Math.hypot(this.context.world.layout.STAIRS_BOTTOM.x-this.context.world.layout.STAIRS_TOP.x,this.context.world.layout.STAIRS_BOTTOM.y-this.context.world.layout.STAIRS_TOP.y) * STAIRS_SECONDS);
-        p.activity = { kind: "stairs", route: "stairs", remaining, duration: remaining, start: { ...p.pos }, end: this.context.world.layout.STAIRS_BOTTOM };
+        const remaining = Math.max(.1, Math.hypot(this.stairsBottom.x-p.pos.x,this.stairsBottom.y-p.pos.y)/Math.hypot(this.stairsBottom.x-this.stairsTop.x,this.stairsBottom.y-this.stairsTop.y) * STAIRS_SECONDS);
+        p.activity = { kind: "stairs", connectorId:actorConnector(w,p,"stairs")?.id, route: "stairs", remaining, duration: remaining, start: { ...p.pos }, end: this.stairsBottom };
         this.traversal = null;
         return { ok: true, text: "翻出扶梯侧边，改从楼梯下行" };
       }

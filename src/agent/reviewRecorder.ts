@@ -14,7 +14,7 @@ export class ReviewRecorder {
         serving: f.serving ? { personId: f.serving.personId, remaining: f.serving.remaining } : null,
       })),
       guards: engine.guards.guards.map(g => ({ id: g.def.id, position: { ...g.pos }, facing: g.facing })),
-      transit: { queue: [...engine.world.transit.queue], riders: [...engine.world.persons.values()]
+      transit: { queue: engine.world.transit.queues().flat(), riders: [...engine.world.persons.values()]
         .flatMap(p => p.activity.kind === "escalator" ? [{ id: p.id, remaining: p.activity.remaining }] : []) },
     });
   }

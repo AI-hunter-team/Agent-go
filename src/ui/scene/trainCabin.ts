@@ -2,16 +2,15 @@ import { TRAIN_CENTRE_X } from "../../sim/layout";
 import type { ActorPose } from "../presentation";
 import type { Point3 } from "./cameraCollision";
 import { METRO_PROFILE } from "../../shared/metro";
-import { generatedTrainLayout } from "../../shared/generatedTrain";
+import { worldTrainLayout } from "../../shared/generatedTrain";
 import type { WorldDefinition } from "../../shared/world";
 
 /** The existing car's aisle, below its interior ceiling and inside both end walls. */
 export function constrainCabinCamera(position: Point3, pose: ActorPose, definition?: WorldDefinition) {
   if (definition && definition.generatorVersion !== "legacy-v0" && definition.layout.platformAxis) {
     const axis = definition.layout.platformAxis, horizontal = axis.direction === "x";
-    const length = horizontal ? definition.layout.WIDTH : definition.layout.HEIGHT;
     const along = horizontal ? pose.x : pose.z, across = horizontal ? pose.z - axis.center : axis.center - pose.x;
-    const layout = generatedTrainLayout(length), centre = layout.centres.reduce((a, b) => Math.abs(a - along) < Math.abs(b - along) ? a : b);
+    const layout = worldTrainLayout(definition), centre = layout.centres.reduce((a, b) => Math.abs(a - along) < Math.abs(b - along) ? a : b);
     const side = across < 0 ? -1 : 1, track = side * layout.trackCentre;
     let cameraAlong = horizontal ? position.x : position.z;
     let cameraAcross = horizontal ? position.z - axis.center : axis.center - position.x;

@@ -85,9 +85,9 @@ export class NpcDirector {
       const p=w.addPerson(s.kind, pos, { hasTicket: s.hasCard, irritable: s.irritable });
       if (entrance) w.entry.begin(p, entrance, lane, true);
       if(w.definition.generatorVersion!=="legacy-v0"&&this.ambientRng.chance(.2)) {
-        const detail=w.definition.details.find(d=>d.family==="entrance")!;
-        const node={pos:{...detail.pos,x:detail.pos.x+2,y:detail.pos.y-1}};
-        p.ambient={label:this.ambientRng.pick(["查看入口信息","短暂停留休息","等候同行者"]),point:node.pos,remaining:this.ambientRng.range(8,20),started:false};
+        const detail=w.definition.details.find(d=>d.family==="entrance");
+        if(detail){const node={pos:{...detail.pos,x:detail.pos.x+2,y:detail.pos.y-1}};
+        p.ambient={label:this.ambientRng.pick(["查看入口信息","短暂停留休息","等候同行者"]),point:node.pos,remaining:this.ambientRng.range(8,20),started:false};}
       }
     }
     while (this.events.length && this.events[0].t <= w.t) this.apply(this.events.shift()!);

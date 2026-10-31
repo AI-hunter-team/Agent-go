@@ -1,3 +1,4 @@
+import { previewWorldVersion } from "./worldVersion";
 import { generateWorld } from "../sim/worldDefinition";
 import type { Agent, Classifier } from "../agent/agent";
 import { GameRunner, type RunnerOptions } from "../agent/runner";
@@ -18,7 +19,7 @@ export class GameSession {
   private listeners = new Set<() => void>();
 
   constructor(seed = 1, settings: Partial<GameSettings> = {}, loadout?: import("../shared/interaction").Loadout, readonly generated=false) {
-    this.engine = new Engine(seed, settings, undefined, loadout, this.generated ? generateWorld(seed) : undefined);
+    this.engine = new Engine(seed, settings, undefined, loadout, this.generated ? generateWorld(seed,{generatorVersion:previewWorldVersion()}) : undefined);
     this.presentation = new PresentationBuffer(this.engine);
   }
   subscribe(listener: () => void) {
@@ -35,7 +36,7 @@ export class GameSession {
     this.generation++;
     if (this.runner && this.runner.phase !== "ended") this.runner.stop();
     this.runner = null;
-    this.engine = new Engine(seed, settings, undefined, loadout, this.generated ? definition ?? (this.engine.seed===seed?this.engine.world.definition:generateWorld(seed)) : undefined);
+    this.engine = new Engine(seed, settings, undefined, loadout, this.generated ? definition ?? (this.engine.seed===seed?this.engine.world.definition:generateWorld(seed,{generatorVersion:previewWorldVersion()})) : undefined);
     this.accumulator = 0;
     this.paused = false;
     this.presentation.reset(this.engine);
