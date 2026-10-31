@@ -5,7 +5,7 @@ import type { DialogueSystem } from "../dialogue";
 import type { EventBus } from "../events";
 import { angleDiff, angleTo, dist, lineOfSight } from "../geometry";
 import type { GuardSystem } from "../guards";
-import { GATE_X, RAILING_X, RAILING_SEGMENTS, STAIRS_TOP, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, ESCALATOR_TOP, HEIGHT, ITEM_SPOTS, NAV_NODES, SIGHT_OCCLUDERS, zoneOf } from "../layout";
+import { atRailing, GATE_X, RAILING_APPROACHES, RAILING_X, STAIRS_TOP, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, ESCALATOR_TOP, HEIGHT, ITEM_SPOTS, NAV_NODES, SIGHT_OCCLUDERS, zoneOf } from "../layout";
 import { clearOfPeople, clearOfScenery, personRadius } from "../movement";
 import { findPath } from "../nav";
 import type { NpcBrain } from "../npcBrain";
@@ -86,15 +86,19 @@ export class ActionExecutor {
       ok: false,
       text: typeof plan?.reason === "string" && plan.reason ? plan.reason : "计划必须包含 1–4 个合法步骤"
     };
-    const first = structuredClone(plan.steps[0]),
+    this.queue = structuredClone(plan.steps);
+    const first = this.railingLead(this.queue.shift()!),
       error = this.validate(first, false);
-    if (error) return {
-      ok: false,
-      text: error
-    };
+    if (error) {
+      this.queue = [];
+      return {
+        ok: false,
+        text: error
+      };
+    }
+    this.queue.unshift(first);
     this.context.world.finishAttention(p, "转向行动");
     this.traversal = p.activity.kind === "escalator" ? structuredClone(p.activity) : null;
-    this.queue = structuredClone(plan.steps);
     this.outcomes = [];
     this.next();
     return {
@@ -103,11 +107,12 @@ export class ActionExecutor {
     };
   }
   private next() {
-    const step = this.queue.shift();
-    if (!step) {
+    const queued = this.queue.shift();
+    if (!queued) {
       this.resetActivity();
       return;
     }
+    const step = this.railingLead(queued);
     const error = this.validate(step, false);
     if (error) {
       this.fail(error);
@@ -295,6 +300,31 @@ export class ActionExecutor {
     if (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue") return this.context.world.transit.queue.includes(p.id);
     return false;
   }
+  /**
+   * A railing vault always starts beside a low segment on the hall side. When the
+   * player is elsewhere in the hall, walk to the nearest segment first; an approach
+   * that cannot reach the hall side (e.g. a concourse node) is replaced by that walk.
+   * Re-queues the vault and returns the step to run now.
+   */
+  private railingLead(step: PlanStep): PlanStep {
+    const p = this.context.world.player!,
+      isRailingVault = (s?: PlanStep) => s?.op === "vault" && s.obstacle === "railing";
+    if (step.op === "approach" && isRailingVault(this.queue[0])) {
+      const point = this.target(step);
+      if (!point || !findPath(p.pos, point)) step = this.queue.shift()!;
+    }
+    if (!isRailingVault(step) || p.pos.x >= RAILING_X || atRailing(p.pos)) return step;
+    const spot = RAILING_APPROACHES.filter(r => dist(p.pos, r.pos) > 1 && findPath(p.pos, r.pos)).sort((a, b) => dist(p.pos, a.pos) - dist(p.pos, b.pos))[0];
+    if (!spot) return step;
+    this.queue.unshift(step);
+    return {
+      op: "approach",
+      target: {
+        kind: "node",
+        id: spot.id
+      }
+    };
+  }
   private target(step: PlanStep): Vec | null {
     const w = this.context.world;
     switch (step.op) {
@@ -399,7 +429,7 @@ export class ActionExecutor {
     if (step.op === "vault") {
       if (!settling) {
         if (step.obstacle === "gate" && (zoneOf(p.pos) !== "concourse" || GATE_X - p.pos.x > RULES.jumpGateDistance)) return "只能在安检后大厅、靠近闸机线翻越闸机";
-        if (step.obstacle === "railing" && (p.pos.x >= RAILING_X || RAILING_X - p.pos.x > 1.8 || !RAILING_SEGMENTS.some(s => p.pos.y >= s.minY && p.pos.y <= s.maxY))) return "请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
+        if (step.obstacle === "railing" && !atRailing(p.pos)) return "请靠近安检墙的低栏杆段（y=8–12 或 18–21）";
         if (step.obstacle === "escalator_side" && !(p.activity.kind === "escalator")) return "只能在下行扶梯上翻出侧边";
       }
       const dest = this.current?.dest;
