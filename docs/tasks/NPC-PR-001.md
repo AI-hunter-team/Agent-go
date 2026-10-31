@@ -29,4 +29,4 @@
 - 执行 `npm run typecheck`、`npm test`、`npm run build`、`git diff --check`、暂存后 `git diff --cached --check`。
 - 浏览器验证离线流程及资产场景兼容；保留未验证的正式资产/真实模型/性能范围。
 - 报告：[NPC-PR-001](../validation/NPC-PR-001.md)。人工审查未进行，AI/自动审查意见按事实核对，不冒充人工批准。
-- 集成目标 main；GitHub PR、合并 SHA、CI 状态与清理清单完成后补充。回退为 revert 本次实现/兼容提交；分支可按保留 SHA 恢复。
+- 集成目标 main；[PR #17](https://github.com/AI-hunter-team/Agent-go/pull/17)，集成后 381 项检查及离线浏览器通过；删除前恢复清单已入报告，最终合并 SHA、CI 状态和清理结果在 PR 正文追加。回退为 revert 本次实现/兼容提交；分支可按保留 SHA 恢复。

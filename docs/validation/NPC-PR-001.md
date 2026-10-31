@@ -25,3 +25,37 @@
 - 原人物修复与最新 main 兼容集成完成；类型/381 项自动化/构建及限定范围离线浏览器验收通过，待远端 CI 与合入。
 - 人工审查未进行；AI 审查若有意见由本次执行者按代码/测试事实核对，不代表人工批准。
 - 尚未合入；清理清单及恢复用 SHA 完成后记录。
+
+## PR 与清理交接
+
+- [PR #17](https://github.com/AI-hunter-team/Agent-go/pull/17)；合并及清理操作的最终 SHA、CI 链接和实际删除/保留数量追加在该 PR 正文，便于合入后继续记事实，不把计划写为完成。
+- 下表为删除前清单（13 个既有本地分支、11 个 origin 分支），全部经 `merge-base --is-ancestor <SHA> origin/main` 核对。合并后执行前会再核对远端准确 SHA、开放 PR 与 worktree；引用变化则保留。干净 worktree 仅 detach，目录和文件保留；本任务分支也仅在实际合并后按同样标准清理，最终 head 可由 PR 恢复。
+- 保留 `codex/random-facility-failures`（PR #16 开放）；保留 `codex/startup-api-config`（worktree 有其他任务未提交工作）；保留 main、mvp-dev、已有 detached worktree 和 previous-origin。
+- 恢复示例：`git branch <原分支名> <表中SHA>`；远端确需恢复时由对应负责人另行推送，不触碰原工作区的无关改动。
+
+| 引用 | 恢复 SHA | 删除依据（执行前仍需复核） |
+|---|---|---|
+| `codex/agent-go-branding` | `54e21972f57a7cfa4776854b81536d720a6109b8` | main 可达；PR #9 |
+| `codex/debug-ai-timing` | `de7796de2d2e6c6f7b64e2a395d58444fe689ac8` | main 可达 |
+| `codex/debug-ai-timing-logs` | `286926402cd90948ad9bc55e8315d025544ea886` | main 可达；PR #3 |
+| `codex/docker-compose` | `6b889d4e45bbabef473f2000102240bee12e9520` | main 可达；PR #5 |
+| `codex/docs-compose-guide` | `7b9f7cec15ac9a2b646177553233a242233d8a41` | main 可达 |
+| `codex/luna-api-thinking-budget` | `66d7ede44f8824bb99326998a51fd98b1e644c6c` | main 可达；PR #1 |
+| `codex/model-api-settings` | `b16f7e3f2887eb383d146160cf419e19a8e86f19` | main 可达；PR #4 |
+| `codex/model-latency` | `053e51c6aef719fde81693a9eddd155b2be990f3` | main 可达；PR #11 |
+| `codex/model-opening-autonomy` | `4b602d9c626da39d5d0c162c3a32c6976e4839d8` | main 可达；PR #10 |
+| `codex/pr7-conflict-resolution` | `5bafcdb36478d318d5a310e2b243053be48d0840` | main 可达；PR #7 |
+| `codex/preserve-creative-guidance` | `9dffc2ac839cd20e277972b3d90262ea01fb9633` | main 可达；PR #12 |
+| `codex/remaining-pr6-integration` | `b7e4317b86059c684384e483f3d61ed62b1c3a8f` | main 可达；PR #6 |
+| `codex/remaining-pr8-integration` | `9c8acd5aa19c90160c9fb4a0451c225c6a15735b` | main 可达；PR #8 |
+| `origin/codex/agent-go-branding` | `54e21972f57a7cfa4776854b81536d720a6109b8` | main 可达；PR #9 |
+| `origin/codex/debug-ai-timing-logs` | `286926402cd90948ad9bc55e8315d025544ea886` | main 可达；PR #3 |
+| `origin/codex/docker-compose` | `6b889d4e45bbabef473f2000102240bee12e9520` | main 可达；PR #5 |
+| `origin/codex/docs-collaboration` | `63faa5e4cd37938df83a873e2a2ac8039f7c8acd` | main 可达；PR #2 |
+| `origin/codex/docs-compose-guide` | `b7e4317b86059c684384e483f3d61ed62b1c3a8f` | main 可达；PR #6 |
+| `origin/codex/fix-deepseek-thinking` | `4301fcc14e9897fcefe67b3eb77aac7cb234dac2` | main 可达；PR #15 |
+| `origin/codex/luna-api-thinking-budget` | `66d7ede44f8824bb99326998a51fd98b1e644c6c` | main 可达；PR #1 |
+| `origin/codex/model-api-settings` | `b16f7e3f2887eb383d146160cf419e19a8e86f19` | main 可达；PR #4 |
+| `origin/codex/model-opening-autonomy` | `4b602d9c626da39d5d0c162c3a32c6976e4839d8` | main 可达；PR #10 |
+| `origin/codex/preserve-creative-guidance` | `9dffc2ac839cd20e277972b3d90262ea01fb9633` | main 可达；PR #12 |
+| `origin/codex/trajectory-replay` | `9c8acd5aa19c90160c9fb4a0451c225c6a15735b` | main 可达；PR #8 |
