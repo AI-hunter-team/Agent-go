@@ -86,7 +86,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
         <h2 id="model-config-title">模型 API 配置</h2>
         <button className="ghost" disabled={busy !== null} onClick={onClose}>{closeLabel}</button>
       </div>
-      <p className="muted">连接 DeepSeek 或兼容 Responses 的 API。NPC 使用开发者配置的独立模型。</p>
+      <p className="muted">连接 DeepSeek 或兼容 Responses 的 API。本局 Agent 与 NPC 对话使用同一模型配置。</p>
       <ol className="config-steps" aria-label="配置步骤">
         <li className="on" aria-current={!verified ? "step" : undefined}>1 填写接口</li>
         <li className={verified ? "on" : ""} aria-current={verified && !enabled ? "step" : undefined}>2 选择模型</li>

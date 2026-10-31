@@ -1,6 +1,8 @@
 import { AlertBadge, SceneItems } from "./Interactions";
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Html } from "@react-three/drei/web/Html";
+import { useProgress } from "@react-three/drei/core/Progress";
 import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { WIDTH, HEIGHT } from "../../sim/layout";
@@ -13,11 +15,12 @@ import { Station } from "./Station";
 import { Character } from "./Character";
 import { SimpleCrowd } from "./SimpleCrowd";
 import { FollowCamera } from "./followCamera";
+import { cameraFraction } from "./cameraCollision";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 import { getScenePerformance } from "./scenePerformance";
 import { VictoryCamera } from "./victoryCamera";
 
-export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; }
+export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
 export interface SceneProps {
   session: GameSession;
   camera: CameraSettings;
@@ -36,6 +39,8 @@ export interface SceneProps {
   metrics: FrameMetrics;
   showVision: boolean;
   showTrail: boolean;
+  onCameraReady?: () => void;
+  thought?: "thinking" | "ready" | null;
 }
 
 /** 按目标频率唤醒按需渲染；空闲或隐藏时休眠，阶段与采样变化可立即唤醒。 */
@@ -82,15 +87,20 @@ function RenderSchedule({ session, targetFps, metrics, reducedMotion }: Pick<Sce
   return null;
 }
 
-/** 编排跟随、总览和胜利长镜头；手动接管保留已有镜头防抖与碰撞。 */
-function CameraRig({ session, settings, reducedMotion, assetRotation }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean; assetRotation: number }) {
+/** 编排准备、跟随、总览和胜利镜头，并在开局就位后通知旅程流程。 */
+function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean; assetRotation: number; onReady?: () => void }) {
   const { gl, size, set, get, invalidate } = useThree();
   const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 240), overview: new OrthographicCamera(-50, 50, 30, -30, 0.1, 240) }), []);
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; pointer: number } | null>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const follow = useMemo(() => new FollowCamera(), []);
+  const vectors = useMemo(() => ({ target: new Vector3(), desired: new Vector3(), eye: new Vector3(), anchor: new Vector3() }), []);
   const initial = useRef(true);
+  const cameraInitialized = useRef(false);
+  const readyKey = useRef("");
+  const assetsLoading = useProgress(state => state.active);
+  useEffect(() => { invalidate(); }, [assetsLoading, invalidate]);
   const performanceState = getScenePerformance(session);
   const cinematic = performanceState.cinematic;
   const victory = useMemo(() => new VictoryCamera(), [session.generation]);
@@ -112,7 +122,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation }: { sessio
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
   }, [cameras, set, get, settings.mode, size.width, size.height, cinematic, victory, direction]);
-  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; invalidate(); }, [settings.reset, session.generation, follow, invalidate]);
+  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; invalidate(); }, [settings.reset, settings.shot, session.generation, follow, invalidate]);
   useEffect(() => {
     const canvas = gl.domElement;
     /** 手动拖动从电影镜头当前位置接续，不突然跳回角色背后。 */
@@ -128,7 +138,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation }: { sessio
     };
     /** 记录跟随相机的拖动起点。 */
     const down = (event: PointerEvent) => {
-      if (event.button !== 0 || (!performanceState.cinematic && settings.mode !== "follow")) return;
+      if (event.button !== 0 || (settings.shot && settings.shot !== "launch") || (!performanceState.cinematic && settings.mode !== "follow")) return;
       drag.current = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, pointer: event.pointerId };
       canvas.setPointerCapture(event.pointerId);
     };
@@ -146,7 +156,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation }: { sessio
     const up = () => { drag.current = null; };
     /** 缩放跟随镜头，并唤醒静止画面。 */
     const wheel = (event: WheelEvent) => {
-      if (!performanceState.cinematic && settings.mode !== "follow") return;
+      if (settings.shot || (!performanceState.cinematic && settings.mode !== "follow")) return;
       takeControl();
       event.preventDefault(); orbit.current.distance = Math.max(2.2, Math.min(9, orbit.current.distance + event.deltaY * 0.006));
       invalidate();
@@ -155,24 +165,70 @@ function CameraRig({ session, settings, reducedMotion, assetRotation }: { sessio
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("wheel", wheel, { passive: false });
     return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("wheel", wheel); drag.current = null; };
-  }, [gl, get, settings.mode, invalidate, performanceState, session, follow]);
+  }, [gl, get, settings.mode, settings.shot, invalidate, performanceState, session, follow]);
   useFrame((state, delta) => {
     if (performanceState.cinematic) {
       sampleActor(session.presentation, "player", session.alpha, pose.current);
       victory.update(pose.current, performanceState.victoryTime, size.width / Math.max(1, size.height), reducedMotion, assetRotation);
       state.camera.position.copy(victory.position); state.camera.lookAt(victory.target); return;
     }
+    const { target, desired, eye, anchor } = vectors;
     if (settings.mode === "overview") {
       state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
     }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
+    target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
+    anchor.copy(target);
+    if (settings.shot && settings.shot !== "launch") {
+      const front = settings.shot !== "lobby";
+      const angle = pose.current.yaw;
+      const d = front ? 4.5 : 7;
+      desired.set(target.x - Math.sin(angle) * d, target.y + (front ? 0.25 : 1), target.z - Math.cos(angle) * d);
+      if (front) {
+        const narrow = size.width < 600;
+        target.x -= Math.cos(angle) * (narrow ? 0 : 1.4);
+        target.z += Math.sin(angle) * (narrow ? 0 : 1.4);
+        if (narrow) target.y -= 0.9;
+      }
+      const fraction = cameraFraction(anchor, desired);
+      eye.copy(anchor).lerp(desired, fraction);
+      if (!cameraInitialized.current || reducedMotion || fraction < 0.99) state.camera.position.copy(eye);
+      else state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
+      const safeFraction = cameraFraction(anchor, state.camera.position);
+      if (safeFraction < 1) state.camera.position.lerpVectors(anchor, state.camera.position, safeFraction);
+      state.camera.lookAt(target);
+      cameraInitialized.current = true;
+      if (session.frozen && state.camera.position.distanceToSquared(eye) > 0.00001) invalidate();
+      return;
+    }
     follow.update(pose.current, orbit.current, delta, initial.current, reducedMotion);
     initial.current = false;
-    state.camera.position.set(follow.position.x, follow.position.y, follow.position.z);
-    state.camera.lookAt(follow.target.x, follow.target.y, follow.target.z);
-    if (session.frozen && !follow.settled) invalidate();
+    eye.set(follow.position.x, follow.position.y, follow.position.z);
+    target.set(follow.target.x, follow.target.y, follow.target.z);
+    if (size.width < 600) target.y -= 0.55;
+    if (settings.shot === "launch" && cameraInitialized.current && !reducedMotion) {
+      state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
+      const safeFraction = cameraFraction(anchor, state.camera.position);
+      if (safeFraction < 1) state.camera.position.lerpVectors(anchor, state.camera.position, safeFraction);
+    } else state.camera.position.copy(eye);
+    state.camera.lookAt(target);
+    cameraInitialized.current = true;
+    const key = `${settings.reset}:${settings.shot}`;
+    if (settings.shot === "launch" && !assetsLoading && readyKey.current !== key && state.camera.position.distanceToSquared(eye) < 0.0001 && follow.settled) {
+      readyKey.current = key; queueMicrotask(() => onReady?.());
+    }
+    if (session.frozen && (!follow.settled || state.camera.position.distanceToSquared(eye) > 0.00001)) invalidate();
   });
   return null;
+}
+
+function ThoughtBubble({ session, state }: { session: GameSession; state: "thinking" | "ready" }) {
+  const node = useRef<import("three").Group>(null);
+  useFrame(() => {
+    const actor = session.presentation.current.actors.get("player");
+    if (node.current && actor) node.current.position.set(actor.x, (actor.elevation ?? 0) + 2.05, actor.z);
+  });
+  return <group ref={node}><Html center style={{ pointerEvents: "none" }}><div className="thought-bubble" aria-hidden="true">{state === "ready" ? "💡" : <><i /><i /><i /></>}</div></Html></group>;
 }
 
 /** 让键盘用户在画布聚焦后按 Enter/空格触发与点击相同的问候。 */
@@ -184,7 +240,7 @@ function CharacterKeyboard({ session, reducedMotion }: Pick<SceneProps, "session
       if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault(); getScenePerformance(session).greet(reducedMotion);
     };
-    canvas.tabIndex = 0; canvas.setAttribute("aria-label", "三维地铁站，按 Enter 或空格向大肥鱼打招呼");
+    canvas.tabIndex = 0; canvas.setAttribute("aria-label", "三维地铁站，按 Enter 或空格向角色打招呼");
     canvas.addEventListener("keydown", greet);
     return () => { canvas.removeEventListener("keydown", greet); canvas.removeAttribute("tabindex"); canvas.removeAttribute("aria-label"); };
   }, [canvas, session, reducedMotion]);
@@ -312,19 +368,26 @@ function Contents(props: SceneProps) {
     <CharacterKeyboard session={session} reducedMotion={props.reducedMotion} />
     <color attach="background" args={["#e9e1cf"]} />
     <StationLighting standard={props.quality === "standard"} />
-    <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} />
+    <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} />
     <Station session={session} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
     {actors.filter(a=>a.id!=="player").map(a=><AlertBadge key={a.id} id={a.id} session={session}/>)}
     <SceneItems session={session}/>
     {props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={`ground-${session.generation}`} session={session} vision={props.showVision} trail={props.showTrail} />
+    {props.thought && <ThoughtBubble session={session} state={props.thought} />}
   </>;
+}
+
+function UnsupportedScene({ onFailure }: { onFailure: (message: string) => void }) {
+  useEffect(() => onFailure("浏览器无法建立三维画面，请重试或使用二维画面。"), [onFailure]);
+  return null;
 }
 
 /** 使用按需绘制；画质变化时重建图形上下文，确保抗锯齿设置确实生效。 */
 export default function GameScene(props: SceneProps) {
-  return <Canvas key={props.quality} frameloop="demand" shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维调试地图。</span>}>
+  if (typeof WebGLRenderingContext === "undefined") return <UnsupportedScene onFailure={props.onFailure} />;
+  return <Canvas key={props.quality} frameloop="demand" shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维画面。</span>}>
     <Contents {...props} />
   </Canvas>;
 }

@@ -3,6 +3,8 @@ import type { ActionPlan, BossContext, NpcDialogueRequest, NpcResponse } from ".
 import { bossContextValid, validatePlan } from "./boss";
 import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDialogue";
 import express, { type NextFunction, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
+import { planToNormalized, validPlan, type JourneyInput, type JourneyPreparation, type JourneyPlan } from "../src/shared/journey";
 import { extname, resolve } from "node:path";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
@@ -27,6 +29,7 @@ export interface LlmService {
   review?(input: ReviewInput): Promise<ReviewResult>;
   draftGuidance?(guidance: string, strategies: ReviewStrategy[]): Promise<DraftResult>;
   readonly model: string;
+  prepareJourney?(input: JourneyInput): Promise<JourneyPlan>;
   decide(session: Session, turn: AgentTurn): Promise<DecisionResult>;
   normalize(text: string): Promise<NormalizedGuidance>;
   classify(intent: string, observation: Observation): Promise<CreativeClassification>;
@@ -56,6 +59,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
   type Runtime = { llm: LlmService | null; parameters: Record<string, unknown>; token: string };
   const bindings = new WeakMap<Session, Runtime>();
+  const preparations = new Map<string, { result: JourneyPreparation; input: JourneyInput; runtime: Runtime; created: number }>();
   /** 新请求使用当前页面配置；诊断与实例使用相同的设置。 */
   const runtime = (req: Request): Runtime => {
     const token = req.get("x-model-config") || "";
@@ -133,6 +137,34 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     } catch (error) { res.status(502).json({ error: "指导草稿生成失败或超过 300 字，请重试", attempt: error instanceof ReviewFailure ? error.attempt : returned ? { model: returned.model, usage: returned.usage, latencyMs: returned.latencyMs, operation: "draft", status: "error" } : null }); }
   }));
 
+  app.post("/api/journey/prepare", wrap(async (req, res) => {
+    const input = req.body as JourneyInput;
+    if (!input || input.sceneId !== "metro" || !Number.isInteger(input.seed) || input.seed < 1 || input.seed > 4294967295
+      || typeof input.autonomous !== "boolean" || !runId(input.runId) || guidanceError(input.guidance)
+      || !input.settings || gameSettingsError(input.settings) || input.settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
+      return void res.status(400).json({ error: "准备条件无效，请检查指导、种子与时限" });
+    }
+    if (Object.keys(input).some(key => !["sceneId", "seed", "settings", "loadout", "guidance", "autonomous", "runId"].includes(key))) {
+      return void res.status(400).json({ error: "准备请求包含未知字段" });
+    }
+    try { resolveLoadout(input.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
+    assertSafeText(input.guidance);
+    const current = runtime(req);
+    if (!requireLlm(current.llm, res)) return;
+    if (!current.llm!.prepareJourney) return void res.status(503).json({ error: "当前服务不支持初始规划" });
+    const { value: plan, debug } = await traceOperation({ operation: "normalize", runId: input.runId, sessionId: null },
+      { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.prepareJourney!(input));
+    if (!validPlan(plan)) return void res.status(502).json({ error: "初始方案格式无效，请重试" });
+    assertSafeText(JSON.stringify(plan));
+    const normalized = planToNormalized(plan);
+    validateNormalized(normalized);
+    const result: JourneyPreparation = { id: randomUUID(), model: current.llm!.model, normalized, plan, debug };
+    for (const [id, item] of preparations) if (Date.now() - item.created > 600_000) preparations.delete(id);
+    if (preparations.size >= 100) preparations.delete(preparations.keys().next().value!);
+    preparations.set(result.id, { result, input: structuredClone(input), runtime: current, created: Date.now() });
+    res.json(result);
+  }));
+
   app.post(
     "/api/guidance/normalize",
     wrap(async (req, res) => {
@@ -150,7 +182,26 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
 
   // 校验可选时限与固定客流，并将本局设置冻结到模型会话。
   app.post("/api/session", wrap((req, res) => {
-    const { guidance = "", normalized = null, settings } = req.body ?? {};
+    let { guidance = "", normalized = null } = req.body ?? {};
+    const { settings } = req.body ?? {};
+    const binding = runtime(req);
+    let loadout;
+    try { loadout = resolveLoadout(req.body?.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
+    let preparationId: string | undefined;
+    if (req.body?.preparationId !== undefined) {
+      const prepared = preparations.get(req.body.preparationId);
+      if (!prepared || Date.now() - prepared.created > 600_000 || prepared.runtime.llm !== binding.llm || prepared.runtime.token !== binding.token
+        || JSON.stringify(prepared.runtime.parameters) !== JSON.stringify(binding.parameters)
+        || prepared.input.seed !== req.body.seed || prepared.input.sceneId !== req.body.sceneId
+        || prepared.input.runId !== req.body.runId || prepared.input.settings.timeLimitSeconds !== settings?.timeLimitSeconds
+        || prepared.input.settings.extraQueuePeople !== settings?.extraQueuePeople
+        || resolveLoadout(prepared.input.loadout).backpack !== loadout.backpack
+        || (prepared.input.autonomous ? "" : prepared.input.guidance) !== guidance) {
+        return void res.status(409).json({ error: "方案已过期或条件改变，请重新生成初始方案" });
+      }
+      normalized = prepared.result.normalized;
+      preparationId = req.body.preparationId;
+    }
     const err = guidanceError(guidance);
     if (err) return void res.status(400).json({ error: err });
     assertSafeText(guidance);
@@ -160,10 +211,8 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     if (settings && settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
       return void res.status(400).json({ error: `每条初始开放队列固定额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
     }
-    let loadout;
-    try { loadout = resolveLoadout(req.body?.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
-    const binding = runtime(req);
     const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings, loadout);
+    if (preparationId !== undefined) preparations.delete(preparationId);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
     void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });
