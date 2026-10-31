@@ -22,14 +22,14 @@ export function MapCanvas({ engineRef, optionsRef }: Props) {
     let raf = 0;
     const frame = () => {
       const engine=engineRef.current;
-      if(engine){const d=engine.world.definition,b=worldViewBounds(d);const w=d.generatorVersion==="metro-v1"?b.w*16:MAP_PX.w,h=d.generatorVersion==="metro-v1"?(b.h*2+4)*16:MAP_PX.h;if(canvas.width!==w*dpr||canvas.height!==h*dpr){canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);}drawStation(ctx,engine,optionsRef.current);}
+      if(engine){const d=engine.world.definition,b=worldViewBounds(d);const w=d.generatorVersion !== "legacy-v0"?b.w*16:MAP_PX.w,h=d.generatorVersion !== "legacy-v0"?(b.h*2+4)*16:MAP_PX.h;if(canvas.width!==w*dpr||canvas.height!==h*dpr){canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);}drawStation(ctx,engine,optionsRef.current);}
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [engineRef, optionsRef]);
 
-  const generated = engineRef.current?.world.definition.generatorVersion === "metro-v1";
+  const generated = engineRef.current?.world.definition.generatorVersion !== "legacy-v0";
   const regions = generated ? [{ label: "B1 · 站厅（非付费区 → 安检 → 闸机 → 付费区）", start: 0, end: 1, color: "#e5ddca" }, { label: "B2 · 岛式站台（楼梯 / 扶梯下行）", start: 1, end: 2, color: "#c6d8d5" }] : MAP_REGIONS;
   return (
     <div className="station-map">

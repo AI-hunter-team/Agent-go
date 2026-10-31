@@ -1,3 +1,4 @@
+import { previewWorldVersion } from "./worldVersion";
 import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import type { WorldDefinition } from "../shared/world";
@@ -28,7 +29,7 @@ export function WorldCreation({draft,onConfirm,onCancel,quality,reducedMotion}:W
   const timer=setTimeout(()=>{
    const seed=resolveWorldSeed(source.value);
    if(!seed.ok){setError(seed.error);setBusy(false);return;}
-   try{const next=generateWorld(seed.seed);if(active){setWorld(next);setError("");setBusy(false);setTurn(0);}}
+   try{const next=generateWorld(seed.seed,{generatorVersion:previewWorldVersion()});if(active){setWorld(next);setError("");setBusy(false);setTurn(0);}}
    catch{if(active){setError("地图准备失败，请换一个种子后重试。");setBusy(false);}}
   },180);return()=>{active=false;clearTimeout(timer);};
  },[source]);

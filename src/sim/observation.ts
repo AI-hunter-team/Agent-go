@@ -82,7 +82,7 @@ export function describeActivity(world: World, p: Person): string {
     case "acting":
       return `正在执行 ${a.op}`;
     case "to_escalator": return "正在走向扶梯队尾";
-    case "escalator_queue": return `正在候梯（第 ${world.transit.queue.indexOf(p.id) + 1} 位）`;
+    case "escalator_queue": return `正在候梯（第 ${world.transit.forPerson(p).queue.indexOf(p.id) + 1} 位）`;
     case "escalator": return `正在乘扶梯（剩余 ${round1(a.remaining)} 秒）`;
     case "distracted": return `正在关注 ${a.attraction}（剩余 ${round1(a.remaining)} 秒，可继续赶路）`;
     case "done":
@@ -126,11 +126,11 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
     })),
     trainDoors: trainDoors(world.definition).filter(d => p.onPlatform && playerCanSee(p.pos, d.pos, world.lightAt, world.layout))
       .map(d => ({ id: d.id, label: d.label, position: { ...d.pos }, distance: round1(dist(p.pos, d.pos)) })),
-    routes: [
+    routes: (world.definition.connectors?world.definition.connectors.map(c=>({id:c.kind,connectorId:c.id,label:`${c.groupId}组${c.kind==="stairs"?"楼梯":"扶梯"}`,node:c.node,position:c.approach,travelSeconds:c.travelSeconds,queueLength:c.kind==="stairs"?0:(world.transit.forConnector(c.id)?.queue??[]).filter(id=>{const person=world.persons.get(id);return person&&playerCanSee(p.pos,person.pos,world.lightAt,world.layout);}).length,boardingInterval:c.kind==="stairs"?0:BOARDING_INTERVAL})):[
       { id: "stairs" as const, label: "楼梯", node: "STAIRS_TOP", position: world.layout.STAIRS_TOP, travelSeconds: STAIRS_SECONDS, queueLength: 0, boardingInterval: 0 },
       { id: "escalator" as const, label: "扶梯", node: "ESCALATOR_TOP", position: world.layout.ESCALATOR_APPROACH, travelSeconds: ESCALATOR_SECONDS,
         queueLength: world.transit.queue.filter(id => { const person = world.persons.get(id); return person && playerCanSee(p.pos, person.pos, world.lightAt, world.layout); }).length, boardingInterval: BOARDING_INTERVAL },
-    ].filter(r => p.passedGate && playerCanSee(p.pos, r.position, world.lightAt, world.layout)).map(r => ({ ...r, position: { ...r.position }, distance: round1(dist(p.pos, r.position)) })),
+    ]).filter(r => p.passedGate && playerCanSee(p.pos, r.position, world.lightAt, world.layout)).map(r => ({ ...r, position: { ...r.position }, distance: round1(dist(p.pos, r.position)) })),
     guards: guards.guards
       .filter((g) => playerCanSee(p.pos, g.pos, world.lightAt, world.layout))
       .map((g) => ({

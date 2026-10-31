@@ -61,7 +61,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     let yaw = entry ? Math.atan2(entry.inward.x,entry.inward.y) : face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : old?.yaw ?? (next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : Math.PI / 2);
     // Face down the aisle for the celebration; world position and score stay authoritative.
     if (person.isPlayer && person.onTrain) {
-      const axis = engine.world.definition.generatorVersion === "metro-v1" ? engine.world.layout.platformAxis : undefined;
+      const axis = engine.world.definition.generatorVersion !== "legacy-v0" ? engine.world.layout.platformAxis : undefined;
       if (axis) {
         const along = axis.direction === "x" ? person.pos.x : person.pos.y;
         const length = axis.direction === "x" ? engine.world.layout.WIDTH : engine.world.layout.HEIGHT;
@@ -102,7 +102,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
   return Object.freeze({
     alerts: Object.freeze([...engine.alerts.records.values()].filter(r => r.subjectId === "player" && r.level !== "none").map(r => Object.freeze({observerId:r.observerId,subjectId:r.subjectId,level:r.level,ring:r.ring}))),
     items: Object.freeze([...engine.world.items.items.values()].filter(i => !i.used && (i.location.type === "ground" || i.location.type === "spot" || (i.location.type === "held" && i.location.slot === "hand"))).flatMap(i => {
-      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,floorId:p.floorId,elevation:engine.world.definition.generatorVersion==="metro-v1"?(p.elevation??(p.floorId==="platform"?-6:0)):platformElevation(p.x),holderId:engine.world.items.holderId(i)})] : [];
+      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,floorId:p.floorId,elevation:engine.world.definition.generatorVersion !== "legacy-v0"?(p.elevation??(p.floorId==="platform"?-6:0)):platformElevation(p.x),holderId:engine.world.items.holderId(i)})] : [];
     })),
     speech: Object.freeze([...speech.values()].slice(-8)),
     t: engine.t,

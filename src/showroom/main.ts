@@ -85,7 +85,7 @@ function inspector(){
   }else{
     const v=ROOM_VIEWS.find(v=>v.id===view)!;el("info-kicker").textContent="COMPOSED SPACE";el("info-title").textContent=v.label;
     el("info-description").textContent=view==="overview"?"轻透上层地面，同时查看站厅、楼层连接与岛式站台。所有部件保持实际相对位置。":view==="platform"?"移去上层遮挡，查看站台两侧列车、轨道、盲道和候车设施。":v.subtitle+"。拖动镜头，近看构件和表面细节。";
-    specs([["样板车站","云桥站 · 双层岛式"],["站厅平面","72 × 36 m"],["楼层关系","站厅 0 m / 站台 −6 m"],["下行选择","石材楼梯 / 自动扶梯"]]);
+    specs([["样板车站",room?.definition.name??"云桥站 · 双层岛式"],["站厅平面",room?`${room.definition.layout.WIDTH} × ${room.definition.layout.HEIGHT} m`:"72 × 36 m"],["楼层关系","站厅 0 m / 站台 −6 m"],["下行选择","石材楼梯 / 自动扶梯"]]);
   }
   document.querySelectorAll<HTMLButtonElement>("[data-variant]").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.variant)===variant)));
 }
@@ -95,7 +95,7 @@ function heading(){
   el("collection-title").textContent=mode==="room"?"一座车站的细节":mode==="asset"?"部件，各有用途":"触得到的表面";
   el("collection-description").textContent=mode==="room"?"从入站到候车，看看这些部件如何组成一个完整空间。":mode==="asset"?"单独查看模型的比例、结构和细节，试试不同组合与状态。":"同一套色彩，通过颗粒、纹路与光泽呈现不同质感。";
   el("stage-kicker").textContent=mode==="room"?"STATION STUDY · 01":mode==="asset"?"OBJECT STUDY / 1:1":"MATERIAL STUDY / PBR";
-  el("stage-title").textContent=mode==="room"?`云桥站 · ${ROOM_VIEWS.find(v=>v.id===view)!.label}`:mode==="asset"?selected.label:SURFACES.find(s=>s.id===surface)!.label;
+  el("stage-title").textContent=mode==="room"?`${room?.definition.name??"云桥站"} · ${ROOM_VIEWS.find(v=>v.id===view)!.label}`:mode==="asset"?selected.label:SURFACES.find(s=>s.id===surface)!.label;
   el("stage-badge").textContent=mode==="room"?"组合样板间":mode==="asset"?"单件资产":"材质试样";
   note(mode==="room"?"同一套资产，放回真实的空间关系。":mode==="asset"?"原始比例 · 可自由旋转查看":"平面看尺度，曲面看光泽。" );
   document.title=`${el("stage-title").textContent} · Agent Go 资产样板间`;
@@ -110,7 +110,7 @@ function display(reset=true){
   clearHighlight();model?.dispose();if(model)content.remove(model.root);model=undefined;
   if(room)room.root.visible=mode==="room";
   if(palette&&kit){
-    if(mode==="room"&&room){room.setView(view,el<HTMLInputElement>("roof").checked,el<HTMLInputElement>("labels").checked);studio.scale.set(140,1,100);studio.position.set(36,-7.66,18);if(reset){if(view==="overview"){room.root.updateMatrixWorld(true);move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));}else move(room.views[view]);}}
+    if(mode==="room"&&room){if(controls)controls.maxPolarAngle=Math.PI*(room.definition.generatorVersion==="metro-v2"?.51:.49);room.setView(view,el<HTMLInputElement>("roof").checked,el<HTMLInputElement>("labels").checked);studio.scale.set(140,1,100);studio.position.set(36,-7.66,18);if(reset){if(view==="overview"){room.root.updateMatrixWorld(true);move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));}else move(room.views[view],room.definition.generatorVersion==="metro-v2");}}
     else{
       model=mode==="asset"?exhibitModel(selected,palette,kit,variant):materialStudy(palette,surface,channel);content.add(model.root);
       const box=new Box3().setFromObject(model.root),size=box.getSize(new Vector3());studio.scale.set(Math.max(9,size.x+7),1,Math.max(8,size.z+6));studio.position.set(0,-.17,0);
@@ -162,7 +162,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-variant]").forEach(b=>b.oncl
 document.querySelectorAll<HTMLButtonElement>("[data-channel]").forEach(b=>b.onclick=()=>{channel=b.dataset.channel as MaterialChannel;display(false);});
 el("facility-state").onchange=applyFacility;el("opening").oninput=applyFacility;
 el("inspect").onclick=()=>{if(picked){selected=picked;mode="asset";picked=undefined;display();}};
-el("reset").onclick=()=>{if(mode==="room"&&room){if(view==="overview")move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));else move(room.views[view]);}else if(model)fit(model.root);};
+el("reset").onclick=()=>{if(mode==="room"&&room){if(view==="overview")move(framedPose(new Box3().setFromObject(room.root),camera.aspect,camera.fov,new Vector3(.6,.85,1.25)));else move(room.views[view],room.definition.generatorVersion==="metro-v2");}else if(model)fit(model.root);};
 el("rotate").onclick=()=>{if(!controls)return;controls.autoRotate=!controls.autoRotate;el("rotate").setAttribute("aria-pressed",String(controls.autoRotate));invalidate();};el<HTMLButtonElement>("rotate").disabled=reduced.matches;
 reduced.addEventListener("change",()=>{el<HTMLButtonElement>("rotate").disabled=reduced.matches;if(reduced.matches&&controls){controls.autoRotate=false;el("rotate").setAttribute("aria-pressed","false");if(goal)move(goal,true);}invalidate();});
 el("capture").onclick=()=>{if(!renderer)return;renderer.render(scene,camera);renderer.domElement.toBlob(blob=>{if(!blob){note("画面未能保存，请重试。");return;}const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`agent-go-showroom-${mode}-${mode==="room"?view:mode==="asset"?selected.id:surface}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);note("画面已保存。");});};

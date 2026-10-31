@@ -227,7 +227,7 @@ export class Engine {
     const a=this.player.activity;
     const transit=a.kind==="stairs"||a.kind==="escalator";
     const progress=a.kind==="entering"?a.progress:transit?1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)):undefined;
-    const point = { ...(this.world.definition.generatorVersion==="metro-v1"?{floorId:this.player.pos.floorId,elevation:this.player.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector:a.kind as "stairs"|"escalator",progress}:{})}:{}), t: this.t, ...this.player.pos };
+    const point = { ...(this.world.definition.generatorVersion !== "legacy-v0"?{floorId:this.player.pos.floorId,elevation:this.player.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector:a.kind as "stairs"|"escalator",...(a.connectorId?{connectorId:a.connectorId}:{}),progress}:{})}:{}), t: this.t, ...this.player.pos };
     if (this.trail.at(-1)?.t === this.t) this.trail[this.trail.length - 1] = point;
     else this.trail.push(point);
   }
@@ -273,8 +273,8 @@ export class Engine {
     const remaining = Math.max(0, round1(this.world.blackoutUntil - this.world.t));
     const position = stationSwitch(this.world.definition).position;
     const distance = Math.hypot(this.player.pos.x - position.x, this.player.pos.y - position.y);
-    const sameFloor = this.world.definition.generatorVersion !== "metro-v1" || (this.player.pos.floorId ?? "concourse") === "concourse";
-    return { ...buildObservation(this.world, this.guards), ...(this.world.definition.generatorVersion === "metro-v1" ? { publicMap: publicMap(this.world.definition) } : {}), blackout: { active: remaining > 0, remaining, switchDistance: round1(distance), canOperate: sameFloor && distance <= BLACKOUT_SWITCH_REACH } };
+    const sameFloor = this.world.definition.generatorVersion === "legacy-v0" || (this.player.pos.floorId ?? "concourse") === "concourse";
+    return { ...buildObservation(this.world, this.guards), ...(this.world.definition.generatorVersion !== "legacy-v0" ? { publicMap: publicMap(this.world.definition) } : {}), blackout: { active: remaining > 0, remaining, switchDistance: round1(distance), canOperate: sameFloor && distance <= BLACKOUT_SWITCH_REACH } };
   }
 
   /** Validate and start an action. `mechanic` is required for attempt_creative. */
@@ -319,7 +319,7 @@ export class Engine {
         return result;
       }
       case "traverse": {
-        const err=w.traverse(p, action.route, action.walking); return {ok:!err,text:err??"开始下楼梯"};
+        const err=w.traverse(p, action.route, action.walking, action.connectorId); return {ok:!err,text:err??"开始下楼梯"};
       }
       case "observe": {
         const n = w.persons.get(action.targetId);
@@ -367,7 +367,7 @@ export class Engine {
       case "operate_switch": {
         const position = stationSwitch(w.definition).position;
         const distance = Math.hypot(p.pos.x - position.x, p.pos.y - position.y);
-        if (w.definition.generatorVersion === "metro-v1" && (p.pos.floorId ?? "concourse") !== "concourse") return { ok: false, text: "电闸位于站厅，无法隔层操作" };
+        if (w.definition.generatorVersion !== "legacy-v0" && (p.pos.floorId ?? "concourse") !== "concourse") return { ok: false, text: "电闸位于站厅，无法隔层操作" };
         if (distance > BLACKOUT_SWITCH_REACH) return { ok: false, text: `距离墙边电闸还太远（需要在 ${BLACKOUT_SWITCH_REACH} 米内）` };
         const remaining = Math.max(0, round1(w.blackoutUntil - w.t));
         if (remaining > 0) return { ok: false, text: `熄灯已经生效，还剩 ${remaining} 秒` };

@@ -58,7 +58,7 @@ export class VictoryCamera {
   update(pose: ActorPose, seconds: number, aspect: number, reducedMotion: boolean, assetRotation = 0, onTrain = false, viewportHeight = 720, definition?: WorldDefinition) {
     if (onTrain) {
       const t = reducedMotion ? 0 : Math.max(0, seconds - 1.5);
-      const axis = definition?.generatorVersion === "metro-v1" ? definition.layout.platformAxis : undefined;
+      const axis = definition && definition.generatorVersion !== "legacy-v0" ? definition.layout.platformAxis : undefined;
       const horizontal = axis?.direction === "x";
       const along = horizontal ? pose.x : pose.z;
       const length = horizontal ? definition!.layout.WIDTH : definition?.layout.HEIGHT ?? 0;

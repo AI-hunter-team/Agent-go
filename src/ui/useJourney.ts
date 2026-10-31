@@ -1,3 +1,4 @@
+import { previewWorldVersion } from "./worldVersion";
 import type { WorldDefinition } from "../shared/world";
 import { createdWorld, matchesCreatedWorld, type CreatedWorld, type WorldSeedSource } from "./worldCreation";
 import { useWorldLibrary, type SavedWorld } from "./worldLibrary";
@@ -189,7 +190,7 @@ export function useJourney(interval: number) {
     }catch(error){setError(`创建世界失败：${(error as Error).message}`);}
   };
   const selectWorld = (record:SavedWorld) => {
-    const definition=generateWorld(record.seed);
+    const definition=generateWorld(record.seed,{generatorVersion:record.world.generatorVersion==="metro-v2"?"metro-v2":"metro-v1"});
     if(!matchesCreatedWorld(record,definition)){setIncompatibleWorld(record);setError("这个世界的生成版本已变化。可以保留原记录，用当前版本创建副本。");return;}
     invalidate();currentRecord.current=record;setIncompatibleWorld(null);
     const p=record.preferences;setSettings(resolveGameSettings(p.settings));setBackpack(p.backpack);setCharacterId(p.characterId);setKind(p.kind);setGuidance(p.guidance);setSeed(record.seed);
@@ -264,7 +265,7 @@ export function useJourney(interval: number) {
     const epoch = request.current;
     const input: JourneyInput = {
       sceneId: "metro",
-      ...(session.engine.world.definition.generatorVersion==="metro-v1"?{world:descriptor(session.engine.world.definition)}:{}),
+      ...(session.engine.world.definition.generatorVersion !== "legacy-v0"?{world:descriptor(session.engine.world.definition)}:{}),
       seed: options?.seed ?? seed,
       settings: { ...settings },
       loadout: { backpack },
@@ -413,7 +414,7 @@ export function useJourney(interval: number) {
     preserveRun();
     const nextSeed = options.sameScenario ? seed : randomSeed(seed);
     if (nextSeed !== seed) {
-      const definition = generateWorld(nextSeed);
+      const definition = generateWorld(nextSeed,{generatorVersion:previewWorldVersion()});
       const choice = { ...createdWorld(definition, { mode: "random", value: String(nextSeed) }), id: crypto.randomUUID() };
       const record: SavedWorld = { ...choice, id: choice.id, schemaVersion: 1, createdAt: Date.now(), updatedAt: Date.now(), preferences: { settings: { ...settings }, backpack, characterId, kind, guidance } };
       session.preview(nextSeed, settings, { backpack }, definition);

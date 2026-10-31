@@ -41,6 +41,10 @@ export class FollowCamera {
         this.position.y=Math.max(floor+1.65,Math.min(floor+2.35,this.position.y));
       }
     }
+    if(definition?.generatorVersion==="metro-v2"){
+      const ceiling=pose.y<-.1?pose.y+2.5:3.6;
+      this.position.y=Math.min(this.position.y,ceiling-.18);
+    }
     const safe = cameraFraction(this.target, this.position, definition);
     if (initial || snap || reducedMotion || safe < this.fraction) {
       this.fraction = safe;

@@ -492,7 +492,7 @@ export class GameRunner {
       ...(this.journey ? { journey: structuredClone(this.journey) } : {}),
       ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot() } : {}),
       debug: this.snapshotDebug(),
-      ...(e.world.definition.generatorVersion==="metro-v1"?{world:serializableWorld(e.world.definition)}:{}),
+      ...(e.world.definition.generatorVersion !== "legacy-v0"?{world:serializableWorld(e.world.definition)}:{}),
       seed: e.seed,
       settings: { ...e.settings },
       loadout: { ...e.loadout },

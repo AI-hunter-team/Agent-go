@@ -162,7 +162,7 @@ export const Character = memo(function Character({ id, kind, session, assetUrl, 
   useFrame(() => {
     if (!root.current) return;
     const actor = sampleActor(session.presentation, id, session.alpha, pose.current);
-    root.current.visible = !!actor && (session.engine.world.definition.generatorVersion!=="metro-v1" || id==="player" || displayFloor(actor.floorId)===displayFloor(session.engine.player.pos.floorId));
+    root.current.visible = !!actor && (session.engine.world.definition.generatorVersion === "legacy-v0" || id==="player" || displayFloor(actor.floorId)===displayFloor(session.engine.player.pos.floorId));
     if (!actor) return;
     const control=controlRoomState(session);if(id==="player"&&control.active)Object.assign(pose.current,control.pose);
     root.current.position.set(pose.current.x, pose.current.y, pose.current.z);

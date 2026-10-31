@@ -10,7 +10,7 @@ export type IntentContext = import("../shared/interaction").BossContext;
 export function buildIntentContext(world: World, guards: GuardSystem): IntentContext {
   const p = world.player!;
   return {
-    ...(world.definition.generatorVersion==="metro-v1"?{publicMap:publicMap(world.definition)}:{}),
+    ...(world.definition.generatorVersion !== "legacy-v0"?{publicMap:publicMap(world.definition)}:{}),
     self: {
       position: {
         ...p.pos

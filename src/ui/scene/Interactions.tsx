@@ -16,7 +16,7 @@ export function AlertBadge({id,session,messageMode="full",thought}:{id:string;se
   const pose=useRef({x:0,y:0,z:0,yaw:0});
   useFrame(()=>{
     const actor=sampleActor(session.presentation,id,session.alpha,pose.current);
-    if(group.current)group.current.visible=!!actor&&(session.engine.world.definition.generatorVersion!=="metro-v1"||displayFloor(actor.floorId)===displayFloor(session.engine.player.pos.floorId));
+    if(group.current)group.current.visible=!!actor&&(session.engine.world.definition.generatorVersion === "legacy-v0"||displayFloor(actor.floorId)===displayFloor(session.engine.player.pos.floorId));
     if(group.current && actor) group.current.position.set(pose.current.x,pose.current.y+(id === "player" ? 1.95 : 2.25),pose.current.z);
     const record=session.presentation.current.alerts.find(a=>a.observerId===id);
     if(badge.current) {
@@ -60,7 +60,7 @@ function ItemMarker({id,session}:{id:string;session:GameSession}) {
   useFrame(()=>{
     const i=session.presentation.current.items.find(i=>i.id===id);
     if(!mesh.current) return;
-    mesh.current.visible=!!i&&(session.engine.world.definition.generatorVersion!=="metro-v1"||displayFloor(i.floorId)===displayFloor(session.engine.player.pos.floorId));
+    mesh.current.visible=!!i&&(session.engine.world.definition.generatorVersion === "legacy-v0"||displayFloor(i.floorId)===displayFloor(session.engine.player.pos.floorId));
     if(i) mesh.current.position.set(i.x+(i.holderId?.length? .3:0),(i.elevation ?? platformElevation(i.x)) + (i.holderId ? 1:.16),i.z);
   });
   const item=session.presentation.current.items.find(i=>i.id===id);

@@ -1,3 +1,4 @@
+import { selectConnector } from "./connectors";
 import { EntranceSystem } from "./entrance";
 import { legacyWorld } from "./worldDefinition";
 import type { WorldDefinition } from "../shared/world";
@@ -26,12 +27,12 @@ export type Activity =
   | { kind: "queued"; facility: string }
   | { kind: "service"; facility: string }
   | { kind: "waiting"; remaining: number }
-  | { kind: "stairs"; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
+  | { kind: "stairs"; connectorId?: string; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
   | { kind: "reacting"; reaction: string; subjectId: string }
   | { kind: "acting"; op: string; progress: number }
   | { kind: "to_escalator"; path: Vec[] }
   | { kind: "escalator_queue"; joinedAt: number }
-  | { kind: "escalator"; remaining: number; duration?: number }
+  | { kind: "escalator"; connectorId?: string; remaining: number; duration?: number }
   | { kind: "distracted"; attraction: string; remaining: number; elapsed: number; resume?: { path: Vec[]; label: string } }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
@@ -56,6 +57,7 @@ export interface Person {
   facing: number;
   incapacitated: number;
   transitRoute?: "stairs" | "escalator";
+  transitConnectorId?: string;
   attentionCooldown: Record<string, number>;
   entryOrigin?: string;
   ambient?: { label:string; point:Vec; remaining:number; started:boolean };
@@ -89,7 +91,7 @@ export class World {
     this.log("power_out", `车站熄灯 ${duration} 秒，视距降低`, true);
   }
   private zoneCenter(zone: Zone): Vec {
-    if(this.definition.generatorVersion==="metro-v1") {
+    if(this.definition.generatorVersion !== "legacy-v0") {
       if(zone==="platform")return {...this.layout.STAIRS_BOTTOM};
       if(zone==="stairs")return {...this.layout.STAIRS_TOP,floorId:"transit:stairs",elevation:-3};
       const region=this.definition.regions.find(r=>r.kind===zone)!;
@@ -163,7 +165,7 @@ export class World {
       offset += Math.max(QUEUE_SPACING, personRadius(before) + personRadius(next) + 0.02);
     }
     const direction = f.def.queueDirection ?? { x: -1, y: 0 };
-    if (this.definition.generatorVersion === "metro-v1" && f.def.kind === "security") {
+    if (this.definition.generatorVersion !== "legacy-v0" && f.def.kind === "security") {
       // The ticket bank sits behind the scanners. Turn long security queues
       // before they reach its service and exit spaces, in either orientation.
       const side = { x: direction.y, y: -direction.x };
@@ -190,7 +192,7 @@ export class World {
       && dist(p.pos, target) <= personRadius(p.kind) + stride
       && !this.spatial.clearOfPeople(target, target, personRadius(p.kind), bodies);
     const memberships = [...this.facilities.values()].map(f => [...f.queue, ...(f.serving ? [f.serving.personId] : [])]);
-    memberships.push(this.transit.queue);
+    memberships.push(...this.transit.queues());
     const queues = memberships.flatMap((ids) => {
       const people = ids.filter(id => id !== p.id).map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
       if (people.length < (avoidSingleQueue ? 1 : 2)) return [];
@@ -201,9 +203,9 @@ export class World {
     });
     let waypoint:Vec=target;
     if(detour&&!occupiedArrival){
-      const cached=this.definition.generatorVersion==="metro-v1"?this.detourCache.get(p.id):undefined;
+      const cached=this.definition.generatorVersion !== "legacy-v0"?this.detourCache.get(p.id):undefined;
       if(cached&&cached.until>this.t&&dist(cached.target,target)<.75&&dist(p.pos,cached.waypoint)>stride)waypoint=cached.waypoint;
-      else {waypoint=this.spatial.detourAroundQueues(p.pos,target,queues,personRadius(p.kind));if(this.definition.generatorVersion==="metro-v1")this.detourCache.set(p.id,{target:{...target},waypoint,until:this.t+.5});}
+      else {waypoint=this.spatial.detourAroundQueues(p.pos,target,queues,personRadius(p.kind));if(this.definition.generatorVersion !== "legacy-v0")this.detourCache.set(p.id,{target:{...target},waypoint,until:this.t+.5});}
     }
     const before = { ...p.pos };
     p.pos = this.spatial.steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour && !occupiedArrival);
@@ -363,21 +365,25 @@ export class World {
   }
 
   /** The stable-duration alternative to the queued escalator. */
-  descendStairs(p: Person): string | null {
+  descendStairs(p: Person, connectorId?:string): string | null {
+    const connector=this.definition.connectors?selectConnector(this,p,"stairs",connectorId):undefined;
+    if(this.definition.connectors&&!connector)return "无法到达所选楼梯入口";
+    const top=connector?.from??this.layout.STAIRS_TOP;
     if (p.activity.kind === "service" || p.activity.kind === "creative" || p.activity.kind === "acting" || p.activity.kind === "stairs" || p.activity.kind === "escalator") return "当前行动尚未完成";
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能下楼梯进入站台";
-    if (dist(p.pos, this.layout.STAIRS_TOP) > STAIRS_REACH) return "请先前往下楼梯入口";
+    if (dist(p.pos, top) > STAIRS_REACH) return "请先前往下楼梯入口";
     this.finishAttention(p, "选择楼梯");
     this.removeFromQueue(p);
-    if(this.definition.generatorVersion==="metro-v1")p.pos={...p.pos,floorId:"transit:stairs",elevation:0};
-    p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos } };
+    if(this.definition.generatorVersion !== "legacy-v0")p.pos={...p.pos,floorId:connector?`transit:${connector.id}`:"transit:stairs",elevation:0};
+    p.transitConnectorId=connector?.id;
+    p.activity = { kind: "stairs", remaining: STAIRS_SECONDS, start: { ...p.pos }, ...(connector?{connectorId:connector.id,end:connector.to}: {}) };
     return null;
   }
 
-  traverse(p: Person, route: "stairs" | "escalator", walking = false): string | null {
-    if (route === "stairs") return this.descendStairs(p);
+  traverse(p: Person, route: "stairs" | "escalator", walking = false, connectorId?:string): string | null {
+    if (route === "stairs") return this.descendStairs(p,connectorId);
     if (["service", "creative", "acting", "stairs", "escalator"].includes(p.activity.kind)) return "当前行动尚未完成";
-    const error=this.transit.join(p);
+    const error=this.transit.join(p,connectorId);
     if (error) return error;
     p.escalatorWalking=walking;
     return null;
@@ -474,7 +480,7 @@ export class World {
         break;
       }
       case "walking": {
-        const connectorArrival=this.definition.generatorVersion==="metro-v1"&&p.passedGate&&a.path.length===1&&[this.layout.STAIRS_TOP,this.layout.ESCALATOR_APPROACH].some(top=>dist(a.path[0],top)<.01&&dist(p.pos,top)<=.2);
+        const connectorArrival=this.definition.generatorVersion !== "legacy-v0"&&p.passedGate&&a.path.length===1&&(this.definition.connectors?.map(c=>c.approach)??[this.layout.STAIRS_TOP,this.layout.ESCALATOR_APPROACH]).some(top=>dist(a.path[0],top)<.01&&dist(p.pos,top)<=.2);
         if (connectorArrival || this.followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
           const door = p.isPlayer && p.onPlatform && trainDoors(this.definition).find(d => dist(p.pos, d.pos) < 0.05);
@@ -533,12 +539,12 @@ export class World {
           // An approaching passenger can be nudged off centre, or a later
           // arrival can stand ahead of the queue head. Let the head detour
           // around that person without disturbing normally aligned queues.
-          const inverted = this.definition.generatorVersion === "metro-v1" && i === 0 && f.queue.slice(1).some(id => {
+          const inverted = this.definition.generatorVersion !== "legacy-v0" && i === 0 && f.queue.slice(1).some(id => {
             const other = this.persons.get(id);
             return other && dist(other.pos, target) + .05 < dist(p.pos, target)
               && !this.spatial.clearOfPeople(p.pos, target, personRadius(p.kind), [{ id: other.id, pos: other.pos, radius: personRadius(other.kind) }]);
           });
-          const blocked = this.definition.generatorVersion === "metro-v1" && !this.spatial.clearOfScenery(p.pos, target, personRadius(p.kind));
+          const blocked = this.definition.generatorVersion !== "legacy-v0" && !this.spatial.clearOfScenery(p.pos, target, personRadius(p.kind));
           this.movePerson(p, target, stride, blocked || inverted, inverted);
         }
         if (i >= 0 && dist(p.pos, this.queueStandPoint(f, i)) < 0.1) p.facing = angleTo(p.pos, f.def.pos);
@@ -562,7 +568,7 @@ export class World {
           y: a.start.y + (end.y - a.start.y) * progress,
         };
         if (!this.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
-        p.pos = {...next, ...(this.definition.generatorVersion === "metro-v1" ? {floorId:"transit:stairs",elevation:(a.start.elevation??0)+(-6-(a.start.elevation??0))*progress} : {floorId:p.pos.floorId})};
+        p.pos = {...next, ...(this.definition.generatorVersion !== "legacy-v0" ? {floorId:a.connectorId?`transit:${a.connectorId}`:"transit:stairs",elevation:(a.start.elevation??0)+(-6-(a.start.elevation??0))*progress} : {floorId:p.pos.floorId})};
         a.remaining = remaining;
         if (a.remaining <= 1e-9) {
           p.pos = { ...end };

@@ -39,7 +39,7 @@ export function agentTools(map?:PublicStationMap) {
     seconds: { type: "integer", description: "1 到 20 之间的整数" },
   }),
   tool("operate_switch", "走到公开地图中的墙边电闸附近后操作电闸。只有 Agent 主动调用才会触发车站熄灯；熄灯持续一段有限时间。", {}),
-  tool("traverse", "过闸后从楼梯或扶梯到下层站台，先靠近入口。", {route:{type:"string",enum:["stairs","escalator"]},walking:{type:"boolean",description:"扶梯上是否步行；楼梯忽略"}}),
+  tool("traverse", "过闸后从楼梯或扶梯到下层站台，先靠近入口。", {...(map?.generatorVersion==="metro-v2"?{connectorId:{type:"string",enum:map.routes.map(r=>r.connectorId).filter(Boolean),description:"公开地图中的具体楼扶梯连接器ID"}}:{}),route:{type:"string",enum:["stairs","escalator"]},walking:{type:"boolean",description:"扶梯上是否步行；楼梯忽略"}}),
   tool("observe", "观察可见人物的外观和表现，不提供隐藏性格。", {targetId:{type:"string"}}),
   tool("take", "靠近并拿取可见物品。", {itemId:{type:"string"}}),
   tool("give", "把持有物交给可见人物。", {itemId:{type:"string"},npcId:{type:"string"}}),
@@ -58,7 +58,7 @@ export function parseToolUse(name: string, input: unknown, map?:PublicStationMap
   const i = input as Record<string, unknown>;
   const allowed: Record<string, string[]> = {
     inspect_attraction:["attraction","mode","reason"],
-    act:["instruction","reason"], talk:["npcId","message","goal","offerItemId","reason"], traverse:["route","walking","reason"], observe:["targetId","reason"], take:["itemId","reason"], give:["itemId","npcId","reason"], drop:["itemId","mode","reason"],
+    act:["instruction","reason"], talk:["npcId","message","goal","offerItemId","reason"], traverse:["route","walking","connectorId","reason"], observe:["targetId","reason"], take:["itemId","reason"], give:["itemId","npcId","reason"], drop:["itemId","mode","reason"],
     move_to: ["target", "reason"], join_queue: ["facility", "reason"], leave_queue: ["reason"],
     wait: ["seconds", "reason"], operate_switch: ["reason"],
   };
@@ -74,7 +74,7 @@ export function parseToolUse(name: string, input: unknown, map?:PublicStationMap
   const text = (v: unknown): v is string => typeof v === "string" && !!v.trim() && [...v].length <= 200;
   switch (name) {
     case "act": if (text(i.instruction)) return {action:{type:"act",instruction:i.instruction,reason:why}}; break;
-    case "traverse": if (i.route === "stairs" || i.route === "escalator") return {action:{type:"traverse",route:i.route,...(typeof i.walking === "boolean" ? {walking:i.walking}:{}),reason:why}}; break;
+    case "traverse": if (i.route === "stairs" || i.route === "escalator") return {action:{type:"traverse",route:i.route,...(typeof i.connectorId==="string"?{connectorId:i.connectorId}:{}),...(typeof i.walking === "boolean" ? {walking:i.walking}:{}),reason:why}}; break;
     case "observe": if (text(i.targetId)) return {action:{type:"observe",targetId:i.targetId,reason:why}}; break;
     case "take": if (text(i.itemId)) return {action:{type:"take",itemId:i.itemId,reason:why}}; break;
     case "give": if (text(i.itemId) && text(i.npcId)) return {action:{type:"give",itemId:i.itemId,npcId:i.npcId,reason:why}}; break;

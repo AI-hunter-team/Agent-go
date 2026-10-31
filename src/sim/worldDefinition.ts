@@ -1,3 +1,4 @@
+import { createWorldV2 } from "./worldV2";
 import { buildEntrances, entranceLength } from "./entranceGeometry";
 import { createMovement } from "./movement";
 import { stationSwitch } from "./stationSwitch";
@@ -139,6 +140,14 @@ export function validateWorld(def:WorldDefinition):string[] {
     for(const f of group){const from=f.kind==="gate"?security.exit!:entry;if(!nav.findPath(from,f.head,.48))errors.push(`unreachable ${f.id}`);if(f.kind==="gate"&&(!nav.findPath(f.exit!,l.STAIRS_TOP,.48)||!nav.findPath(f.exit!,l.ESCALATOR_APPROACH,.48)))errors.push(`connector unreachable ${f.id}`);}
   }
   for(const opening of l.openings??[])for(const point of [{x:opening.x,y:opening.y},{x:opening.x+opening.w,y:opening.y+opening.h}])if(!contains(def.floors[0].bounds,point)||l.zoneOf(point)!=="landing")errors.push("opening outside paid floor");
+  if(def.connectors){
+    for(const c of def.connectors){
+      for(const f of l.FACILITIES.filter(f=>f.kind==="gate"))if(!nav.findPath(f.exit!,c.approach,.48))errors.push(`connector unreachable ${c.id} from ${f.id}`);
+      if(!spatial.clearOfScenery(c.to,c.to,.48)||c.to.floorId!=="platform"||c.from.floorId!=="concourse")errors.push(`invalid connector ${c.id}`);
+      for(const door of generatedTrainDoors(def))if(nav.findPath(c.to,door.pos,.48))break;
+      if(!generatedTrainDoors(def).some(door=>nav.findPath(c.to,door.pos,.48)))errors.push(`connector cannot reach train ${c.id}`);
+    }
+  }
   let walking=0;
   for(const [from,to] of legs){const path=nav.findPath(from,to,.48);if(!path){errors.push("legal route disconnected");continue;}walking+=nav.pathLength(from,path);}
   for(const f of l.FACILITIES){
@@ -162,8 +171,9 @@ export function validateWorld(def:WorldDefinition):string[] {
   if(!Object.isFrozen(def.generation))def.generation.emptyRouteSeconds=cost;if(cost>90)errors.push("empty route exceeds 90s");
   return errors;
 }
-export function generateWorld(seed:number, options:{appearanceSeed?:number}={}):WorldDefinition {
+export function generateWorld(seed:number, options:{appearanceSeed?:number; generatorVersion?:"metro-v1"|"metro-v2"}={}):WorldDefinition {
   if(!Number.isInteger(seed)||seed<1||seed>4294967295)throw new RangeError("世界种子须为1–4294967295的整数");
+  if(options.generatorVersion==="metro-v2")return createWorldV2(seed);
   const reasons:string[]=[];
   for(let i=0;i<20;i++){const d=candidate(seed,i,options.appearanceSeed);const errors=validateWorld(d);if(!errors.length){d.generation.reasons=reasons;return deepFreeze(d);}reasons.push(...errors);}
   const d=candidate(1,0,options.appearanceSeed);d.seed=seed;d.generation={...d.generation,attempts:20,fallback:true,reasons};if(validateWorld(d).length)throw new Error("世界样板无效");return deepFreeze(d);
@@ -180,6 +190,6 @@ export function hydrateWorld(d:WorldDefinition):WorldDefinition {
 }
 
 export function descriptor(d:WorldDefinition):WorldDescriptor{return {generatorVersion:d.generatorVersion,layoutHash:d.layoutHash};}
-export function publicMap(d:WorldDefinition):PublicStationMap{return {...descriptor(d),name:d.name,...(d.entrances?{entrances:d.entrances}:{}),floors:d.floors,regions:d.regions,itemSpots:d.layout.ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})),attractions:d.layout.ATTRACTIONS.map(({id,label,pos})=>({id,label,pos})),nodes:d.generatorVersion === "metro-v1" ? [...d.layout.NAV_NODES, { id: "BLACKOUT_SWITCH", label: "墙边电闸接近点", pos: stationSwitch(d).approach }, ...generatedTrainDoors(d).map(({ id, label, pos }) => ({ id, label, pos }))] : d.layout.NAV_NODES,facilities:d.layout.FACILITIES.map(({id,kind,label,pos})=>({id,kind,label,pos})),routes:[{id:"stairs",node:"STAIRS_TOP",position:d.layout.STAIRS_TOP,travelSeconds:6},{id:"escalator",node:"ESCALATOR_TOP",position:d.layout.ESCALATOR_APPROACH,travelSeconds:10}]};}
+export function publicMap(d:WorldDefinition):PublicStationMap{return {...descriptor(d),name:d.name,...(d.entrances?{entrances:d.entrances}:{}),floors:d.floors,regions:d.regions,itemSpots:d.layout.ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})),attractions:d.layout.ATTRACTIONS.map(({id,label,pos})=>({id,label,pos})),nodes:d.generatorVersion !== "legacy-v0" ? [...d.layout.NAV_NODES, { id: "BLACKOUT_SWITCH", label: "墙边电闸接近点", pos: stationSwitch(d).approach }, ...generatedTrainDoors(d).map(({ id, label, pos }) => ({ id, label, pos }))] : d.layout.NAV_NODES,facilities:d.layout.FACILITIES.map(({id,kind,label,pos})=>({id,kind,label,pos})),routes:d.connectors?d.connectors.map(c=>({id:c.kind,connectorId:c.id,node:c.node,position:c.approach,travelSeconds:c.travelSeconds})):[{id:"stairs",node:"STAIRS_TOP",position:d.layout.STAIRS_TOP,travelSeconds:6},{id:"escalator",node:"ESCALATOR_TOP",position:d.layout.ESCALATOR_APPROACH,travelSeconds:10}]};}
 
 export const serializableWorld=(d:WorldDefinition):WorldDefinition=>JSON.parse(JSON.stringify(d)) as WorldDefinition;

@@ -57,7 +57,7 @@ export type { ViewOptions as RenderOptions } from "./presentation";
 import type { ViewOptions as RenderOptions } from "./presentation";
 
 export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts: RenderOptions) {
-  if(engine.world.definition.generatorVersion==="metro-v1"){drawGeneratedStation(ctx,engine,opts);return;}
+  if(engine.world.definition.generatorVersion !== "legacy-v0"){drawGeneratedStation(ctx,engine,opts);return;}
   const { world, guards, player } = engine;
   const replay = opts.replay;
   const playerPos = replay ? replay.position : player.pos;

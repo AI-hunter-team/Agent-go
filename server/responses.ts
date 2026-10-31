@@ -209,7 +209,7 @@ export class ResponsesLlmService implements LlmService {
       guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
       timeLimitSeconds: input.settings.timeLimitSeconds, goal: "登上地铁并进入车厢", extraQueuePeople: input.settings.extraQueuePeople,
       backpack: input.loadout?.backpack ?? true,
-      ...(input.world?{publicMap:publicMap(generateWorld(input.seed))}:{}),
+      ...(input.world?{publicMap:publicMap(generateWorld(input.seed,{generatorVersion:input.world?.generatorVersion==="metro-v2"?"metro-v2":"metro-v1"}))}:{}),
     }), schema, "journey_plan");
     if (!validPlan(data)) throw new Error("初始方案格式无效，请重试");
     assertSafeText(JSON.stringify(data));
