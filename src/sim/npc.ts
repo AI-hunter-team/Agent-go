@@ -3,6 +3,7 @@ import { dist } from "./geometry";
 import { ENTRANCE, SECURITY_X, queueSlot } from "./layout";
 import { RULES, multiplierOf, type NpcSpawn, type Scenario, type ScriptedEvent } from "./scenario";
 import type { Person, World } from "./world";
+import { clearOfPeople, clearOfScenery, personRadius } from "./movement";
 
 /**
  * Environment-controlled passengers and scripted events. NPCs follow simple program
@@ -39,6 +40,7 @@ export class NpcDirector {
       });
       p.screened = kind === "gate";
       f.queue.push(p.id);
+      p.pos = w.queueStandPoint(f, f.queue.length - 1);
       p.activity = { kind: "queued", facility: f.def.id };
     }
     this.spawns = rest;
@@ -47,8 +49,12 @@ export class NpcDirector {
   step() {
     const w = this.world;
     while (this.spawns.length && this.spawns[0].t <= w.t) {
-      const s = this.spawns.shift()!;
-      const pos = { x: ENTRANCE.x, y: ENTRANCE.y + w.rng.range(-1.5, 1.5) };
+      const s = this.spawns[0];
+      // A crowded entrance delays a spawn instead of creating two models in one place.
+      const offsets = [0, 1.1, -1.1, 2.2, -2.2, 3.3, -3.3];
+      const pos = offsets.map((offset) => ({ x: ENTRANCE.x, y: ENTRANCE.y + offset })).find((point) => clearOfScenery(point, point, personRadius(s.kind)) && clearOfPeople(point, point, personRadius(s.kind), w.collisionBodies("")));
+      if (!pos) break;
+      this.spawns.shift();
       w.addPerson(s.kind, pos, { hasTicket: s.hasCard, irritable: s.irritable });
     }
     while (this.events.length && this.events[0].t <= w.t) this.apply(this.events.shift()!);
@@ -79,6 +85,7 @@ export class NpcDirector {
 
   private decide(p: Person) {
     const w = this.world;
+    if (p.passedGate && !p.onPlatform) return; // World owns the landing/stairs connection.
     if (p.onPlatform) {
       if (p.pos.x >= 54) w.persons.delete(p.id);
       else w.walkTo(p, { x: 55, y: p.pos.y }, "站台深处");

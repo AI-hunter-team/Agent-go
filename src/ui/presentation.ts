@@ -14,6 +14,7 @@ export interface ActorFrame {
   readonly yaw: number;
   readonly motion: Motion;
   readonly jump: number;
+  readonly face?: { readonly x: number; readonly z: number };
 }
 export interface FacilityFrame {
   readonly id: string;
@@ -46,11 +47,14 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const dz = person.pos.y - (old?.z ?? person.pos.y);
     const moving = Math.hypot(dx, dz) > 0.00001;
     const next = a.kind === "walking" || a.kind === "to_queue" ? a.path[0] : undefined;
-    const yaw = moving ? Math.atan2(dx, dz) : next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : old?.yaw ?? Math.PI / 2;
-    const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving || a.kind === "walking" || a.kind === "to_queue" ? "walk" : "idle";
+    const facility = a.kind === "queued" || a.kind === "service" ? engine.world.facility(a.facility)?.def : undefined;
+    const face = facility ? Object.freeze({ x: facility.pos.x, z: facility.pos.y }) : undefined;
+    const yaw = face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : old?.yaw ?? Math.PI / 2;
+    const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
       elevation: platformElevation(person.pos.x),
+      face,
       jump: a.kind === "creative" && a.mechanic === "jump_gate" ? Math.max(0, Math.min(1, 1 - a.remaining / RULES.jumpGateSeconds)) : 0,
     }));
   }
@@ -105,6 +109,10 @@ export function sampleActor(buffer: PresentationBuffer, id: string, alpha: numbe
   out.x = previous.x + (current.x - previous.x) * a;
   out.z = previous.z + (current.z - previous.z) * a;
   out.yaw = previous.yaw + Math.atan2(Math.sin(current.yaw - previous.yaw), Math.cos(current.yaw - previous.yaw)) * a;
+  if (current.face) {
+    const facing = Math.atan2(current.face.x - out.x, current.face.z - out.z);
+    out.yaw = previous.yaw + Math.atan2(Math.sin(facing - previous.yaw), Math.cos(facing - previous.yaw)) * a;
+  }
   const jump = current.motion === "jump" ? previous.jump + (current.jump - previous.jump) * a : 0;
   out.y = (previous.elevation ?? 0) + ((current.elevation ?? 0) - (previous.elevation ?? 0)) * a + Math.sin(jump * Math.PI) * 0.85;
   return current;

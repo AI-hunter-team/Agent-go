@@ -30,7 +30,7 @@ describe("trajectory recording", () => {
   });
 
   test("completed runs retain the final platform position and world time", async () => {
-    const runner = new GameRunner(new Engine(5), new HeuristicAgent(), offlineClassifier);
+    const runner = new GameRunner(new Engine(9), new HeuristicAgent(), offlineClassifier);
     await runner.runToEnd();
     const report = runner.report();
     expect(report.status).toBe("success");

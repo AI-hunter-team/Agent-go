@@ -6,6 +6,8 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [NPC-PR-001](NPC-PR-001.md) | 人物修复与最新 main 兼容、PR/CI/合并及已合并分支清理，进行中 |
+| [NPC-VISUAL-001](NPC-VISUAL-001.md) | 连续移动避让、队列/办理占位、设施朝向、364 项检查及离线浏览器复验 |
 | [DEEPSEEK-THINKING-001](DEEPSEEK-THINKING-001.md) | 官方 DeepSeek 思考模式工具选择、多轮回传及 JSON 模式适配；模拟接口验证，不代表真实模型验收 |
 | [STARTUP-API-001](STARTUP-API-001.md) | 本地服务恢复、上游权限 400 与 DeepSeek 工具调用参数 400 诊断、386 项集成回归及真实 Safari 开局；包含临时伪响应入口导致截图 500 的纠正记录 |
 | [STATION-PR-001](STATION-PR-001.md) | 难度/故障修复与最新 main 的冲突、提示一致性和 343 项集成检查；PR 发布前验证快照 |

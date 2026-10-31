@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { Engine } from "../src/sim/engine";
 import { angleDiff, angleTo, dist, lineOfSight } from "../src/sim/geometry";
 import { SIGHT_OCCLUDERS } from "../src/sim/layout";
@@ -6,6 +6,10 @@ import { DT, RULES } from "../src/sim/scenario";
 
 function atGate(y = 15) {
   const engine = new Engine(1);
+  // Isolate the unobstructed patrol clock; crowd collision/yielding is tested separately.
+  for (const id of engine.world.persons.keys()) if (id !== "player") engine.world.persons.delete(id);
+  for (const f of engine.world.facilities.values()) { f.queue = []; f.serving = null; }
+  vi.spyOn(engine.npcs, "step").mockImplementation(() => {});
   // Start the player beside the gate; guards keep their real default routes and clock.
   engine.player.pos = { x: 43, y };
   engine.player.screened = true;
@@ -22,7 +26,7 @@ const jump = (engine: Engine) => engine.applyAction({
   type: "attempt_creative", intent: "翻越闸机", reason: "观察巡逻后翻越闸机",
 }, "jump_gate");
 
-describe("natural gate patrol windows", () => {
+describe("unobstructed gate patrol windows", () => {
   test("a guard seeing the start still catches a jump just before the patrol turns away", () => {
     const engine = atGate();
     for (let tick = 0; tick < 132; tick++) engine.step();
