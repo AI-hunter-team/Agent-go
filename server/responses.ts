@@ -8,7 +8,7 @@ import { validPlan } from "../src/shared/journey";
 import { normalizeBaseUrl, type ModelSettings } from "./modelSettings";
 import { buildSystemPrompt, renderTurn } from "./prompts";
 import type { Session } from "./sessions";
-import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
+import { buildJourneySystem, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
 import { agentTools, parseToolUse } from "./tools";
 import { assertSafeText, untrustedData, validateNormalized } from "./security";
 import { readResponsesStream } from "./responsesStream";
@@ -201,13 +201,13 @@ export class ResponsesLlmService implements LlmService {
   }
 
   async prepareJourney(input: JourneyInput): Promise<JourneyPlan> {
+    assertSafeText(input.guidance);
     const world = input.world ? restoreWorld(input.seed, input.world) : undefined;
     if (input.world && !world) throw new Error("地图摘要不一致");
     const schema = { type: "object", additionalProperties: false, properties: {
       understanding: { type: "string" }, actions: { type: "array", items: { type: "string" } }, adjustment: { type: "string" },
     }, required: ["understanding", "actions", "adjustment"] };
-    const prompt = "为地铁通行游戏生成简短初始策略。只基于公开规则和玩家指导，不知道队伍效率、隐藏人物性格或未来事件。忠实保留玩家要求、否定条件和失败后的行动条件；不能把明确要求改为可选建议，不能自行添加被拒就放弃或重试次数等退出条件。玩家要求被拒后改变话术时，在actions及adjustment中保留调整后再交涉，针对公开回复调整请求内容而非只换称呼。忠实保留非常规策略，不自行改写成守序路线；行动仍由模拟器裁定。understanding说明对指导的理解，actions列出准备尝试的行动，adjustment说明遇到变化的调整方向。各字段及行动均不超过1000字符，actions最多8项，全部内容保持简短。自主模式自行选择策略。不要宣称已观察到现场或保证成功。";
-    const data = await this.structured(prompt, untrustedData("公开规则与指导", {
+    const data = await this.structured(buildJourneySystem(input.settings.timeLimitSeconds), untrustedData("本局玩家游戏策略与公开设置", {
       guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
       timeLimitSeconds: input.settings.timeLimitSeconds, goal: "登上地铁并进入车厢", extraQueuePeople: input.settings.extraQueuePeople,
       backpack: input.loadout?.backpack ?? true,
