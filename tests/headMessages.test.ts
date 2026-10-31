@@ -37,7 +37,7 @@ test("actual NPC replies win over same-time simulation settlement messages", () 
     utterance: { t: 12, text: "你先走吧。" } }))).toMatchObject({ text: "你先走吧。" });
 });
 
-test("two recent conversations retain each NPC's actual reply and the player's newest request", () => {
+test("returned replies replace the player's request bubble while retaining each NPC's latest reply", () => {
   const session = new GameSession(1);
   session.engine.world.t = 12;
   const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
@@ -53,7 +53,26 @@ test("two recent conversations retain each NPC's actual reply and the player's n
   session.presentation.settle(session.engine);
   expect(getSessionHeadMessage(session, "p1", "full")).toMatchObject({ text: "可以，你先走吧。" });
   expect(getSessionHeadMessage(session, "p2", "full")).toMatchObject({ text: "向前走。" });
-  expect(getSessionHeadMessage(session, "player", "full")).toMatchObject({ text: "这里怎么走？" });
+  expect(getSessionHeadMessage(session, "player", "full")).toBeNull();
+});
+
+test("a new question hides the same NPC's previous reply until the replacement arrives", () => {
+  const session = new GameSession(1);
+  session.engine.world.t = 12;
+  const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
+  session.runner = runner;
+  const request = dialogueFixture();
+  runner.interactionDialogues.push({ t: 11, request, response: { reply: "我正在等朋友。", decision: "refuse", give: null, want: null, reason: "等人", source: "offline" } });
+  const nextRequest = { ...request, message: "那可以让我先走吗？" };
+  session.engine.dialogue.pendingDialogue = { request: nextRequest, step: { op: "talk", npcId: request.npc.id, goal: "yield", message: nextRequest.message }, eventId: "test-question" };
+  expect(getSessionHeadMessage(session, "player", "full")).toMatchObject({ text: nextRequest.message });
+  expect(getSessionHeadMessage(session, request.npc.id, "full")).toBeNull();
+
+  runner.interactionDialogues.push({ t: 12, request: nextRequest, response: { reply: "可以，你先走吧。", decision: "accept", give: null, want: null, reason: "同意", source: "offline" } });
+  session.engine.dialogue.pendingDialogue = null;
+  expect(getSessionHeadMessage(session, "player", "full", "thinking")).toBeNull();
+  expect(getSessionHeadMessage(session, request.npc.id, "full")).toMatchObject({ text: "可以，你先走吧。" });
+  expect(runner.interactionDialogues).toHaveLength(2);
 });
 
 test("only returned thinking is shown and an action reason can explain a decision", () => {
