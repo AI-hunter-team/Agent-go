@@ -296,9 +296,9 @@ test("generated layouts are validated and bound to prepared sessions",async()=>{
  const created=await call("/api/session",body);expect(created.status).toBe(200);expect(sessions.get(created.body.sessionId)?.publicMap?.layoutHash).toBe(world.layoutHash);
 });
 
-test("historical v1 worlds remain consistent from planning to session creation",async()=>{
+test("both V2 producers and historical V1 worlds remain consistent with V3 prepared sessions",async()=>{
  const {call,sessions}=await start();
- const worlds=[{generatorVersion:"metro-v1" as const,layoutHash:"50e78bc1"},descriptor(generateWorld(1,{version:"metro-v1"}))];
+ const worlds=[{generatorVersion:"metro-v1" as const,layoutHash:"50e78bc1"},descriptor(generateWorld(1,{version:"metro-v1"})),{generatorVersion:"metro-v2" as const,layoutHash:"acc3b052"},descriptor(generateWorld(1,{version:"metro-v2"})),descriptor(generateWorld(1,{version:"metro-v3"}))];
  for(const world of worlds){
   const body={...input,seed:1,world};
   const prepared=await call("/api/journey/prepare",body);expect(prepared.status).toBe(200);

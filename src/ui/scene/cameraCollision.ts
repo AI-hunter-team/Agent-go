@@ -50,15 +50,16 @@ export function cameraFraction(target: Point3, desired: Point3, definition?:impo
   const delta = { x: desired.x - target.x, y: desired.y - target.y, z: desired.z - target.z };
   let nearest = 1;
   const l=definition?.layout;
-  let boxes=definition&&definition.generatorVersion!=="legacy-v0" ? generatedBoxes.get(definition):undefined;
-  if(!boxes){boxes=definition&&definition.generatorVersion!=="legacy-v0"&&l ? [
-    ...l.PILLARS.map(r=>bounds(r.x,0,r.y,r.w,6,r.h)),
+  let boxes=definition && definition.generatorVersion !== "legacy-v0" ? generatedBoxes.get(definition):undefined;
+  if(!boxes){boxes=definition && definition.generatorVersion !== "legacy-v0"&&l ? [
+    ...l.PILLARS.map(r=>bounds(r.x,r.floorId==="platform"?-6:0,r.y,r.w,definition.architecture?3.6:6,r.h)),
+    ...(definition.architecture?.volumes.filter(v=>v.kind==="room").map(v=>bounds(v.bounds.x,0,v.bounds.y,v.bounds.w,v.height,v.bounds.h))??[]),
     ...[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS].map(r=>bounds(r.x,0,r.y,r.w,1.1,r.h)),
     ...l.FACILITIES.flatMap(f=>facilitySolids(f.kind,f.pos,f.queueDirection).map(r=>bounds(r.x,0,r.y,r.w,f.kind==="tvm"?1.8:f.kind==="security"?2.5:1.1,r.h))),
     ...(definition.props??[]).flatMap(p=>p.body?[bounds(p.body.x,p.pos.floorId==='platform'?-6:0,p.body.y,p.body.w,propDefinition(p.assetId).size[1],p.body.h)]:[]),
     ...definition.details.flatMap(d=>d.body?[bounds(d.body.x,d.pos.floorId==="platform"?-6:0,d.body.y,d.body.w,2.5,d.body.h)]:[]),
     ...generatedEnvelope(definition),
-    bounds(0,6,0,l.WIDTH,.2,l.HEIGHT),
+    bounds(0,definition.architecture?3.6:6,0,l.WIDTH,.2,l.HEIGHT),
   ]:CAMERA_BOXES;
   if(definition&&definition.generatorVersion!=="legacy-v0")generatedBoxes.set(definition,boxes);}
   for (const box of boxes) {

@@ -35,13 +35,14 @@ export function stationAtlas(world:WorldDefinition):StationAtlas {
   const addShape=(id:string,shape:MapShape)=>{const f=get(id);if(f)f.shapes=[...f.shapes,shape];};
   const addMarker=(marker:MapMarker)=>{const f=get(marker.floorId);if(f)f.markers=[...f.markers,marker];};
   const connections:MapConnection[]=[];
-  for(const f of floors)addShape(f.id,{id:`envelope:${f.id}`,kind:"floor",bounds:f.bounds});
+  for(const f of floors){const areas=world.architecture?.areas.filter(a=>a.floorId===f.id);if(areas)for(const a of areas)addShape(f.id,{id:a.id,kind:"floor",bounds:a.bounds});else addShape(f.id,{id:`envelope:${f.id}`,kind:"floor",bounds:f.bounds});}
   for(const [i,r] of world.regions.entries())addShape(r.floorId,{id:`region:${i}`,bounds:r.bounds,kind:r.kind==="landing"?"paid":"floor"});
   const upper=get("concourse")??floors[0];
   if(upper){
     for(const [i,bounds] of [...l.SECURITY_BARRIERS,...l.GATE_BARRIERS].entries())addShape(upper.id,{id:`boundary:${i}`,kind:"wall",bounds});
-    for(const [i,bounds] of l.PILLARS.entries())addShape(upper.id,{id:`pillar:${i}`,kind:"pillar",bounds});
+    for(const [i,bounds] of l.PILLARS.entries())addShape(bounds.floorId??upper.id,{id:`pillar:${i}`,kind:"pillar",bounds});
   }
+  for(const v of world.architecture?.volumes.filter(v=>v.kind==="room")??[])addShape(v.floorId,{id:v.id,kind:"wall",bounds:v.bounds});
   for(const d of world.details)if(d.body)addShape(d.pos.floorId??upper.id,{id:d.id,kind:"detail",bounds:d.body});
   for(const p of world.props??[])if(p.body)addShape(p.pos.floorId??upper.id,{id:p.id,kind:"detail",bounds:p.body});
   for(const f of l.FACILITIES)addMarker({...point(f.pos,upper.id),id:f.id,label:f.label,kind:f.kind});
@@ -57,7 +58,8 @@ export function stationAtlas(world:WorldDefinition):StationAtlas {
       platform.bounds=fitBounds([platform.bounds,...platform.shapes.map(s=>s.bounds)],0);
     }
   }
-  for(const kind of ["stairs","escalator"] as const){
+  for(const c of world.connectors??[]){connections.push({id:c.id,label:`${c.groupId}组${c.kind}`,kind:c.kind,from:point(c.from,"concourse"),to:point(c.to,"platform")});for(const p of [c.from,c.to])addMarker({...point(p,"concourse"),id:`${c.id}:${p.floorId}`,label:c.kind,kind:c.kind});}
+  for(const kind of world.connectors?[]:["stairs","escalator"] as const){
     const from=point(kind==="stairs"?l.STAIRS_TOP:l.ESCALATOR_TOP,upper.id),to=point(kind==="stairs"?l.STAIRS_BOTTOM:l.ESCALATOR_BOTTOM,legacy?upper.id:"platform");
     connections.push({id:kind,label:kind==="stairs"?"楼梯":"扶梯",kind,from,to});
     for(const p of [from,to])addMarker({...p,id:`${kind}:${p.floorId}:${p.x}`,label:kind==="stairs"?"楼梯":"扶梯",kind});
@@ -82,7 +84,7 @@ export function captureMapFrame(engine:Engine):MapFrame {
   const w=engine.world,p=engine.player,a=p.activity,atlas=stationAtlas(w.definition),legacy=w.definition.generatorVersion==="legacy-v0";
   let floorId=p.pos.floorId??"concourse",transition:MapFrame["transition"],route:RouteSegment[]=[],target:MapFrame["target"]=null;
   if(a.kind==="stairs"||a.kind==="escalator"){
-    const kind=a.kind==="stairs"?(a.route??"stairs"):"escalator",connection=atlas.connections.find(c=>c.id===kind)!;
+    const kind=a.kind==="stairs"?(a.route??"stairs"):"escalator",connection=atlas.connections.find(c=>c.id===(a.connectorId??kind))!;
     floorId=connection.from.floorId;const progress=Math.max(0,Math.min(1,1-a.remaining/(a.duration??(kind==="stairs"?6:10))));
     transition={label:`${atlas.floors.find(f=>f.id===floorId)?.label} → ${atlas.floors.find(f=>f.id===connection.to.floorId)?.label}`,toFloor:connection.to.floorId,progress};
     route=[{floorId,points:[point(p.pos,floorId),connection.to].map(v=>({...v,floorId}))}];
@@ -94,8 +96,8 @@ export function captureMapFrame(engine:Engine):MapFrame {
       route=[{floorId,points:[p.pos,...(ahead?[e.foot]:[]),e.bottom].map(v=>({...point(v,floorId),floorId}))}];target={...bottom,label:"站厅入口"};}
   }else if(a.kind==="to_escalator"){
     // Transit moves toward its live queue slot; Activity.path is an initial, unconsumed path.
-    const index=w.transit.queue.indexOf(p.id);
-    if(index>=0){const end=point(w.transit.slot(index),floorId);route=splitRoute([point(p.pos,floorId),end]);target={...end,label:"扶梯队尾"};}
+    const index=w.transit.forPerson(p).queue.indexOf(p.id);
+    if(index>=0){const end=point(w.transit.forPerson(p).slot(index),floorId);route=splitRoute([point(p.pos,floorId),end]);target={...end,label:"扶梯队尾"};}
   }else if(a.kind==="walking"||a.kind==="to_queue"){
     const points=[point(p.pos,floorId),...a.path.map(v=>point(v,floorId))];route=splitRoute(points);
     const end=points.at(-1);if(end&&points.length>1)target={...end,label:a.kind==="walking"?a.label:w.facility(a.facility)?.def.label??a.facility};

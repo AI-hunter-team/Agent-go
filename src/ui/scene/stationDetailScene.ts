@@ -25,15 +25,22 @@ export function stationDetailScene(d:WorldDefinition,p:GeneratedPalette,kit?:Sta
      panel.scale.set(w,w,1);panel.position.copy(new Vector3(0,y,a.size[2]/2+.015).applyMatrix4(model.matrixWorld));panel.rotation.y=yaw;(floor==='concourse'?upper:lower).add(panel);cleanup.push(graphic.dispose);if(label)panel.userData.label=label;
    }
  };
- for(const a of d.props??[])add(a.assetId,a.variant,[a.pos.x,(a.pos.floorId==='platform'?-6:0)+a.elevation,a.pos.y],a.yaw,a.pos.floorId==='platform'?'platform':'concourse');
- if(d.generatorVersion==='metro-v2'){
+ for(const a of d.props??[]){
+  const floor=a.pos.floorId==='platform'?'platform':'concourse';
+  add(a.assetId,a.variant,[a.pos.x,(floor==='platform'?-6:0)+a.elevation,a.pos.y],a.yaw,floor);
+  if(d.architecture&&propDefinition(a.assetId).mount==='ceiling'){
+   const storey=d.floors.find(f=>f.id===floor)!,top=storey.elevation+a.elevation+propDefinition(a.assetId).size[1];
+   if(storey.ceiling-top>.025)builders[floor].bar(p.steel,[a.pos.x,top,a.pos.y],[a.pos.x,storey.ceiling-.02,a.pos.y],.012);
+  }
+ }
+ if(d.generatorVersion==='metro-v2'||d.generatorVersion==='metro-v3'){
    const l=d.layout,centre=l.platformAxis!.center,doors=generatedTrainDoors(d);
    for(const direction of [-1,1]){
      const sorted=doors.filter(door=>door.side===direction).map(door=>door.pos.x).filter(x=>x>.8&&x<l.WIDTH-.8).sort((a,b)=>a-b),b=builders.platform,z=centre+direction*6.83;
      let previous=0;
      for(const [i,x]of sorted.entries()){
        if(x-.8>previous)b.box(p.glass,[x-.8-previous,2.7,.02],[(previous+x-.8)/2,-4.65,z]);
-       add('screen-door',i%2,[x,-6,z],direction===1?Math.PI:0,'platform',String(i+1).padStart(2,'0'));add('queue-mark',0,[x,-5.985,z-direction*.85],direction===1?Math.PI:0,'platform');previous=x+.8;
+       add('screen-door',i%2,[x,-6,z],direction===1?Math.PI:0,'platform',d.generatorVersion==='metro-v3'?doors.find(door=>door.side===direction&&door.pos.x===x)!.id.split('_').slice(-2).join('-'):String(i+1).padStart(2,'0'));add('queue-mark',0,[x,-5.985,z-direction*.85],direction===1?Math.PI:0,'platform');previous=x+.8;
      }
      if(previous<l.WIDTH)b.box(p.glass,[l.WIDTH-previous,2.7,.02],[(previous+l.WIDTH)/2,-4.65,z]);
      b.box(p.steel,[l.WIDTH,.2,.15],[l.WIDTH/2,-3.1,z]);

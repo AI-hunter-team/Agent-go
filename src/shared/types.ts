@@ -172,6 +172,7 @@ export interface AttractionObservation {
 }
 
 export interface RouteObservation {
+  connectorId?: string;
   id: "stairs" | "escalator";
   label: string;
   node: string;
@@ -315,6 +316,7 @@ export interface TimeBreakdown {
 export interface TrailPoint extends Vec {
   elevation?:number;
   connector?:"stairs"|"escalator"|"entrance";
+  connectorId?:string;
   entranceId?:string;
   progress?:number;
   /** World time; absent only in recordings made before trajectory replay. */

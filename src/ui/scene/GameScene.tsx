@@ -119,6 +119,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady, s
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; pointer: number } | null>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
+  const studyId=useMemo(()=>new URLSearchParams(window.location.search).get("study"),[]);
   const follow = useMemo(() => new FollowCamera(), []);
   const vectors = useMemo(() => ({ target: new Vector3(), desired: new Vector3(), eye: new Vector3(), anchor: new Vector3() }), []);
   const initial = useRef(true);
@@ -243,6 +244,8 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady, s
     }
     activeVictory.current = null;
     const { target, desired, eye, anchor } = vectors;
+    const study=session.engine.world.definition.architecture?session.engine.world.definition.architecture?.views.find(v=>v.id===studyId):undefined;
+    if(study){state.camera.position.set(...study.eye);state.camera.lookAt(worldTarget.set(...study.target).applyMatrix4(dock.matrix));return;}
     if (settings.mode === "overview") {
       state.camera.position.set(centerX - 28, 62, viewBounds.y + HEIGHT + 28); state.camera.lookAt(worldTarget.set(centerX,-.5,centerY).applyMatrix4(dock.matrix)); return;
     }

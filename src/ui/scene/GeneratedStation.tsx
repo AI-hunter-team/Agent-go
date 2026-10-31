@@ -1,3 +1,4 @@
+import { StationV2 } from "./StationV2";
 import { stationSwitch } from "../../sim/stationSwitch";
 import { StationDetails } from "./StationDetails";
 import { EntrancePassages } from "./EntrancePassages";
@@ -63,7 +64,7 @@ function GeneratedOutages({session}:{session:GameSession}) {
   useFrame(()=>areas.forEach((area,i)=>{if(refs.current[i])refs.current[i]!.visible=(session.engine.world.outages.get(area.kind)??0)>session.engine.t;}));
   return <group>{areas.map((area,i)=><mesh key={i} ref={mesh=>{refs.current[i]=mesh;}} geometry={box} position={[area.bounds.x+area.bounds.w/2,area.floorId==="platform"?-5.96:.04,area.bounds.y+area.bounds.h/2]} scale={[area.bounds.w,.02,area.bounds.h]}><meshBasicMaterial color="#121a22" transparent opacity={.65} depthWrite={false}/></mesh>)}</group>;
 }
-export function GeneratedStation({session,kit,overview}:{session:GameSession;kit?:StationKit;overview:boolean}) {
+function LegacyGeneratedStation({session,kit,overview}:{session:GameSession;kit?:StationKit;overview:boolean}) {
   const d=session.engine.world.definition,l=d.layout,concourse=useRef<Group>(null),modelRoot=useRef<Group>(null),platformLight=useRef<PointLight>(null);
   const palette = useMemo(() => createGeneratedPalette(kit),[kit]);
   useEffect(() => () => palette.dispose(),[palette]);
@@ -120,3 +121,5 @@ export function GeneratedStation({session,kit,overview}:{session:GameSession;kit
     <Flight top={l.ESCALATOR_TOP} bottom={l.ESCALATOR_BOTTOM} escalator p={palette}/>
   </group></PaletteContext.Provider>;
 }
+
+export function GeneratedStation(props:{session:GameSession;kit?:StationKit;overview:boolean}){return props.session.engine.world.definition.architecture?<StationV2 {...props}/>:<LegacyGeneratedStation {...props}/>;}

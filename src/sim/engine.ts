@@ -227,7 +227,7 @@ export class Engine {
     const a=this.player.activity;
     const transit=a.kind==="stairs"||a.kind==="escalator";
     const progress=a.kind==="entering"?a.progress:transit?1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)):undefined;
-    const point = { ...(this.world.definition.generatorVersion!=="legacy-v0"?{floorId:this.player.pos.floorId,elevation:this.player.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector:a.kind as "stairs"|"escalator",progress}:{})}:{}), t: this.t, ...this.player.pos };
+    const point = { ...(this.world.definition.generatorVersion !== "legacy-v0"?{floorId:this.player.pos.floorId,elevation:this.player.pos.floorId==="platform"?-6:transit?-6*progress!:0,...(a.kind==="entering"?{connector:"entrance" as const,entranceId:a.entranceId,progress}:transit?{connector:a.kind as "stairs"|"escalator",...(a.connectorId?{connectorId:a.connectorId}:{}),progress}:{})}:{}), t: this.t, ...this.player.pos };
     if (this.trail.at(-1)?.t === this.t) this.trail[this.trail.length - 1] = point;
     else this.trail.push(point);
   }
@@ -319,7 +319,7 @@ export class Engine {
         return result;
       }
       case "traverse": {
-        const err=w.traverse(p, action.route, action.walking); return {ok:!err,text:err??"开始下楼梯"};
+        const err=w.traverse(p, action.route, action.walking, action.connectorId); return {ok:!err,text:err??"开始下楼梯"};
       }
       case "observe": {
         const n = w.persons.get(action.targetId);

@@ -389,10 +389,13 @@ function drawGeneratedStation(ctx:CanvasRenderingContext2D,engine:Engine,opts:Re
  const d=engine.world.definition,l=d.layout, gap=4,b=worldViewBounds(d);
  ctx.save();ctx.clearRect(0,0,b.w*SCALE,(b.h*2+gap)*SCALE);
  for(const [index,floor] of d.floors.entries()){
-  ctx.save();ctx.translate(-b.x*SCALE,(index*(b.h+gap)-b.y)*SCALE);ctx.fillStyle=index?COLORS.platform:COLORS.hall;ctx.fillRect(0,0,l.WIDTH*SCALE,l.HEIGHT*SCALE);
+  ctx.save();ctx.translate(-b.x*SCALE,(index*(b.h+gap)-b.y)*SCALE);ctx.fillStyle=index?COLORS.platform:COLORS.hall;
+  if(d.architecture)for(const a of d.architecture.areas.filter(a=>a.floorId===floor.id))ctx.fillRect(px(a.bounds.x),px(a.bounds.y),px(a.bounds.w),px(a.bounds.h));
+  else ctx.fillRect(0,0,l.WIDTH*SCALE,l.HEIGHT*SCALE);
   ctx.fillStyle=COLORS.ink;ctx.font="16px Microsoft YaHei";ctx.fillText(`${d.name} · ${index?"B2 岛式站台":"B1 站厅"}`,10,22);
   const rectangles=index?(l.MOVE_BLOCKERS.filter(r=>r.floorId==="platform")):[...l.SECURITY_BARRIERS,...l.GATE_BARRIERS,...l.PILLARS,...(l.openings??[])];
-  ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
+  if(d.architecture)rectangles.push(...d.architecture.volumes.filter(v=>v.kind==="room"&&v.floorId===floor.id).map(v=>v.bounds));
+  ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles.filter(r=>(r.floorId??"concourse")===floor.id||index&&r.floorId==="platform"))ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
   for(const f of l.FACILITIES.filter(f=>(f.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=f.kind==="tvm"?COLORS.ochre:f.kind==="security"?COLORS.securityEdge:COLORS.green;ctx.fillRect(px(f.pos.x)-5,px(f.pos.y)-8,10,16);ctx.fillStyle=COLORS.ink;ctx.font="11px sans-serif";ctx.fillText(f.id,px(f.pos.x)+7,px(f.pos.y));}
   for(const p of d.props??[]){if(p.pos.floorId!==floor.id||!p.body)continue;ctx.fillStyle=p.assetId.startsWith('plant')?'#537e58':'#88978a';ctx.fillRect(px(p.body.x),px(p.body.y),px(p.body.w),px(p.body.h));}
   for(const detail of d.details.filter(v=>v.pos.floorId===floor.id)){ctx.fillStyle=COLORS.ochre;const r=detail.body;if(r)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));}

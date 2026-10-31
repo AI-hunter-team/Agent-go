@@ -24,7 +24,7 @@ export function resolveWorldSeed(raw:string):SeedResolution{
 export function createdWorld(definition:WorldDefinition,source:WorldSeedSource,name=definition.name):CreatedWorld{
   const resolved=resolveWorldSeed(source.value);
   if(!resolved.ok)throw new Error(resolved.error);
-  if(!["metro-v1","metro-v2"].includes(definition.generatorVersion)||resolved.seed!==definition.seed||(source.mode==="random"&&resolved.kind!=="number"))throw new Error("地图预览已变化，请等待新的预览完成。");
+  if(!["metro-v1","metro-v2","metro-v3"].includes(definition.generatorVersion)||resolved.seed!==definition.seed||(source.mode==="random"&&resolved.kind!=="number"))throw new Error("地图预览已变化，请等待新的预览完成。");
   return {seed:definition.seed,name:name.trim().slice(0,48)||definition.name,source:{...source},world:{generatorVersion:definition.generatorVersion,layoutHash:definition.layoutHash}};
 }
 export function matchesCreatedWorld(choice:CreatedWorld|null,definition:WorldDefinition):boolean{

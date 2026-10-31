@@ -45,10 +45,10 @@ export class HeuristicAgent implements Agent {
       if(self.activity.includes("办理") || self.activity.startsWith("正在下楼") || self.activity.startsWith("正在乘扶梯")) return {type:"wait",seconds:20,reason:"等待当前办理或下行完成"};
       if(self.passedGate) {
         const available=turn.observation.routes ?? [];
-        const options=publicMap.routes.map(r=>({...r, distance:Math.hypot(r.position.x-self.position.x,r.position.y-self.position.y), queueLength:available.find(a=>a.id===r.id)?.queueLength??0}));
+        const options=publicMap.routes.map(r=>({...r, distance:Math.hypot(r.position.x-self.position.x,r.position.y-self.position.y), queueLength:available.find(a=>a.id===r.id&&a.connectorId===r.connectorId)?.queueLength??0}));
         const best=options.sort((a,b)=>a.distance/1.4+a.travelSeconds+a.queueLength-b.distance/1.4-b.travelSeconds-b.queueLength)[0];
         if(self.activity.startsWith("正在候梯") || self.activity.startsWith("正在走向扶梯队尾"))return {type:"wait",seconds:20,reason:"继续候梯"};
-        return best.distance<=STAIRS_REACH?{type:"traverse",route:best.id,reason:"选择预计较快的下行路线"}:{type:"move_to",target:best.node,reason:"根据公开地图直接前往下行入口"};
+        return best.distance<=STAIRS_REACH?{type:"traverse",route:best.id,connectorId:best.connectorId,reason:"选择预计较快的下行路线"}:{type:"move_to",target:best.node,reason:"根据公开地图直接前往下行入口"};
       }
       const kind:FacilityKind=!self.hasTicket?"tvm":!self.screened?"security":"gate";
       if(kind==="tvm"&&!self.queue&&!self.activity.startsWith("正在走向")&&!this.searched.has("generated:ticket-comparison")){
@@ -80,7 +80,7 @@ export class HeuristicAgent implements Agent {
         const best = routes.reduce((a, b) => cost(a) <= cost(b) ? a : b);
         if (best.id === "escalator" && self.activity.startsWith("正在候梯")) return { type: "wait", seconds: 2, reason: "候梯并观察是否需要改道" };
         if (Math.hypot(self.position.x - best.position.x, self.position.y - best.position.y) <= STAIRS_REACH)
-          return { type: "traverse", route: best.id, reason: `选择预计较快的${best.label}` };
+          return { type: "traverse", route: best.id, connectorId:best.connectorId, reason: `选择预计较快的${best.label}` };
         return { type: "move_to", target: best.node, reason: `比较可见步行、排队和下行时间，选择${best.label}` };
       }
       if (Math.hypot(self.position.x - STAIRS_TOP.x, self.position.y - STAIRS_TOP.y) <= STAIRS_REACH) {

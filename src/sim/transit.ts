@@ -1,3 +1,5 @@
+import { selectConnector } from "./connectors";
+import type { StationConnector } from "../shared/world";
 import type { Person, World } from "./world";
 import { BOARDING_INTERVAL, ESCALATOR_CAPACITY, ESCALATOR_REACH, ESCALATOR_SECONDS, ESCALATOR_WALK_SECONDS, QUEUE_SPACING, STAIRS_REACH } from "./layout";
 import { dist } from "./geometry";
@@ -14,26 +16,41 @@ export class TransitSystem {
   private rng: Rng;
   private crowdInterval = 2;
 
-  constructor(private world: World, seed: number) { this.rng = new Rng(seed ^ 0x68a3d21f); }
+  private channels?:TransitSystem[];
+  constructor(private world: World, seed: number, private connector?:StationConnector) {
+    this.rng = new Rng(seed ^ 0x68a3d21f);
+    if(world.definition.connectors&&!connector){
+      this.channels=world.definition.connectors.filter(c=>c.kind==="escalator").map((c,i)=>new TransitSystem(world,seed+i*7919,c));
+      this.queue=this.channels[0].queue;
+    }
+  }
+  private get top(){return this.connector?.from??this.world.layout.ESCALATOR_TOP;}
+  private get bottom(){return this.connector?.to??this.world.layout.ESCALATOR_BOTTOM;}
+  queues():string[][] {return this.channels?this.channels.flatMap(c=>c.queues()):[this.queue];}
+  forPerson(p:Person):TransitSystem {return this.channels?.find(c=>c.connector?.id===p.transitConnectorId)??this.channels?.[0]??this;}
+  forConnector(id:string):TransitSystem|undefined {return this.channels?.find(c=>c.connector?.id===id)??(!this.channels?this:undefined);}
 
-  slot(index: number) {
+
+  slot(index: number): import("../shared/types").Vec {
+    if(this.channels)return this.channels[0].slot(index);
     const spacing = Math.max(1, QUEUE_SPACING);
-    if(this.world.definition.generatorVersion!=="legacy-v0") {
-      const {ESCALATOR_TOP:top,ESCALATOR_BOTTOM:bottom}=this.world.layout,length=Math.hypot(bottom.x-top.x,bottom.y-top.y);
+    if(this.world.definition.generatorVersion !== "legacy-v0") {
+      const top=this.top,bottom=this.bottom,length=Math.hypot(bottom.x-top.x,bottom.y-top.y);
       const dx=(bottom.x-top.x)/length,dy=(bottom.y-top.y)/length,straight=Math.min(index,4)*spacing,turn=Math.max(0,index-4)*spacing;
       return {...top,x:top.x-dx*straight-dy*turn,y:top.y-dy*straight+dx*turn};
     }
-    let x = this.world.layout.ESCALATOR_TOP.x;
+    let x = this.top.x;
     // A later entrant stays behind the predecessor's actual position while the
     // line compresses, even when that predecessor has not reached its new slot.
     for (let i = 1; i <= index; i++) {
       const previous = this.world.persons.get(this.queue[i - 1]);
       x = Math.min(x - spacing, (previous?.pos.x ?? x) - spacing);
     }
-    return { ...this.world.layout.ESCALATOR_TOP, x, y: this.world.layout.ESCALATOR_TOP.y };
+    return { ...this.top, x, y: this.top.y };
   }
 
   startCrowd() {
+    if(this.channels){this.channels.forEach(c=>c.startCrowd());return;}
     const initial = 2 + Math.floor(this.rng.range(0, 10));
     this.crowdInterval = this.rng.pick([.6, 1.1, 2.6]);
     for (let i = 0; i < initial; i++) {
@@ -49,14 +66,26 @@ export class TransitSystem {
     const p = this.world.addPerson(kind, pos, { hasTicket: true });
     p.screened = p.passedGate = true;
     p.transitRoute = "escalator";
+    p.transitConnectorId=this.connector?.id;
     return p;
   }
 
-  join(p: Person): string | null {
+  join(p: Person, connectorId?:string): string | null {
+    if(this.channels){
+      const c=selectConnector(this.world,p,"escalator",connectorId);
+      if(!c)return "无法到达所选扶梯入口";
+      const channel=this.forConnector(c.id)!;
+      if(p.transitConnectorId!==c.id){
+        if(dist(p.pos,c.from)>ESCALATOR_REACH)return "请先前往扶梯入口";
+        if(channel.queue.length>=ESCALATOR_CAPACITY)return "候梯区已满，请等候或选择楼梯";
+        this.remove(p);if(p.activity.kind==="escalator_queue"||p.activity.kind==="to_escalator")p.activity={kind:"idle"};
+      }
+      p.transitConnectorId=c.id;return channel.join(p,c.id);
+    }
     if (!p.passedGate || p.onPlatform) return "需要先通过闸机，才能乘扶梯进入站台";
     if (["service", "creative", "stairs", "escalator", "distracted"].includes(p.activity.kind)) return "当前行动尚未完成";
     if (p.activity.kind === "escalator_queue" || p.activity.kind === "to_escalator") return null;
-    if (dist(p.pos, this.world.layout.ESCALATOR_TOP) > ESCALATOR_REACH) return "请先前往扶梯入口";
+    if (dist(p.pos, this.top) > ESCALATOR_REACH) return "请先前往扶梯入口";
     if (this.queue.length >= ESCALATOR_CAPACITY) return "候梯区已满，请等候或选择楼梯";
     const path = this.world.navigation.findPath(p.pos, this.slot(this.queue.length));
     if (!path) return "无法到达扶梯队尾";
@@ -71,6 +100,7 @@ export class TransitSystem {
   }
 
   remove(p: Person) {
+    if(this.channels){this.channels.forEach(c=>c.remove(p));return;}
     const i = this.queue.indexOf(p.id);
     if (i >= 0) {
       this.queue.splice(i, 1);
@@ -80,10 +110,16 @@ export class TransitSystem {
   }
 
   private approachingCount(exceptId?: string) {
-    return [...this.world.persons.values()].filter(p => p.id !== exceptId && (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue" || (p.transitRoute === "escalator" && p.activity.kind === "walking"))).length;
+    return [...this.world.persons.values()].filter(p => p.id !== exceptId && (!this.connector||p.transitConnectorId===this.connector.id) && (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue" || (p.transitRoute === "escalator" && p.activity.kind === "walking"))).length;
   }
 
   private useStairs(p: Person) {
+    if(this.connector){
+      const stairs=this.world.definition.connectors!.find(c=>c.groupId===this.connector!.groupId&&c.kind==="stairs")!;
+      this.remove(p);p.transitRoute="stairs";p.transitConnectorId=stairs.id;
+      if(dist(p.pos,stairs.from)>STAIRS_REACH)this.world.walkTo(p,stairs.from,"楼梯入口");else this.world.descendStairs(p,stairs.id);
+      return;
+    }
     p.transitRoute = "stairs";
     if (dist(p.pos, this.world.layout.STAIRS_TOP) > STAIRS_REACH) this.world.walkTo(p, this.world.layout.STAIRS_TOP, "楼梯入口");
     else this.world.descendStairs(p);
@@ -94,9 +130,19 @@ export class TransitSystem {
   }
 
   routeNpc(p: Person) {
+    if(this.channels){
+      p.transitRoute??=this.rng.chance(p.kind==="hurried"?.25:.7)?"escalator":"stairs";
+      const c=selectConnector(this.world,p,p.transitRoute,p.transitConnectorId?.endsWith(p.transitRoute)?p.transitConnectorId:undefined);
+      if(!c)return;
+      p.transitConnectorId=c.id;
+      if(c.kind==="escalator"){this.forConnector(c.id)!.routeNpc(p);return;}
+      if(dist(p.pos,c.from)>STAIRS_REACH)this.world.walkTo(p,c.from,"楼梯入口");else this.world.descendStairs(p,c.id);
+      return;
+    }
+    if(this.connector&&this.escalatorIsCrowded(p.id)){this.useStairs(p);return;}
     if (!p.transitRoute) p.transitRoute = this.rng.chance(p.kind === "hurried" ? .25 : .7) ? "escalator" : "stairs";
     if (p.transitRoute === "escalator" && this.escalatorIsCrowded(p.id)) p.transitRoute = "stairs";
-    const top = p.transitRoute === "escalator" ? (this.world.definition.generatorVersion !== "legacy-v0" ? this.world.layout.ESCALATOR_APPROACH : { x: this.world.layout.ESCALATOR_TOP.x, y: this.world.layout.ESCALATOR_TOP.y + 1.2 }) : this.world.layout.STAIRS_TOP;
+    const top = p.transitRoute === "escalator" ? (this.world.definition.generatorVersion !== "legacy-v0" ? (this.connector?.approach??this.world.layout.ESCALATOR_APPROACH) : { x: this.top.x, y: this.top.y + 1.2 }) : this.world.layout.STAIRS_TOP;
     if (dist(p.pos, top) > (p.transitRoute === "escalator" ? .2 : STAIRS_REACH)) {
       this.world.walkTo(p, top, p.transitRoute === "escalator" ? "扶梯入口" : "楼梯入口");
     } else if (p.transitRoute === "escalator") {
@@ -111,11 +157,12 @@ export class TransitSystem {
   }
 
   step() {
+    if(this.channels){this.channels.forEach(c=>c.step());return;}
     const w = this.world;
     // The queue may fill after a passenger has already started walking toward
     // the entrance. Cancel that stale route before it joins the bottleneck.
     for (const p of w.persons.values()) {
-      if (p.isPlayer || p.transitRoute !== "escalator" || p.activity.kind !== "walking" || p.activity.label !== "扶梯入口") continue;
+      if (p.isPlayer || this.connector&&p.transitConnectorId!==this.connector.id || p.transitRoute !== "escalator" || p.activity.kind !== "walking" || p.activity.label !== "扶梯入口") continue;
       if (this.escalatorIsCrowded(p.id)) this.useStairs(p);
     }
     if (!w.definition.entrances?.length && w.t >= this.nextCrowdAt) {
@@ -136,16 +183,17 @@ export class TransitSystem {
       if (!["escalator_queue", "to_escalator"].includes(w.persons.get(this.queue[i])?.activity.kind ?? "")) this.queue.splice(i, 1);
     if (w.t + 1e-9 < this.nextAdmissionAt || !this.queue.length) return;
     const p = w.persons.get(this.queue[0])!;
-    if (p.activity.kind !== "escalator_queue" || dist(p.pos, this.world.layout.ESCALATOR_TOP) > .2) return;
+    if (p.activity.kind !== "escalator_queue" || dist(p.pos, this.top) > .2) return;
     const waited = p.activity.kind === "escalator_queue" ? w.t - p.activity.joinedAt : 0;
     this.queue.shift();
     this.nextAdmissionAt = w.t + BOARDING_INTERVAL;
     const duration = p.escalatorWalking ? ESCALATOR_WALK_SECONDS : ESCALATOR_SECONDS;
-    p.activity = { kind: "escalator", remaining: duration, duration };
+    p.activity = { kind: "escalator", remaining: duration, duration, ...(this.connector?{connectorId:this.connector.id}:{}) };
     if (p.isPlayer) w.notifyPlayer("service_done", `进入扶梯，实际候梯 ${Math.round(waited * 10) / 10} 秒；乘坐需 ${duration} 秒`);
   }
 
   stepPerson(p: Person, stride: number): boolean {
+    if(this.channels)return this.forPerson(p).stepPerson(p,stride);
     const a = p.activity;
     if (a.kind === "to_escalator") {
       const index = this.queue.indexOf(p.id);
@@ -167,12 +215,12 @@ export class TransitSystem {
       const remaining = Math.max(0, a.remaining - DT);
       const duration = a.duration ?? ESCALATOR_SECONDS;
       const progress = (duration - remaining) / duration;
-      const next = { x: this.world.layout.ESCALATOR_TOP.x + (this.world.layout.ESCALATOR_BOTTOM.x - this.world.layout.ESCALATOR_TOP.x) * progress, y: this.world.layout.ESCALATOR_TOP.y + (this.world.layout.ESCALATOR_BOTTOM.y-this.world.layout.ESCALATOR_TOP.y)*progress };
-      if (this.world.definition.generatorVersion==="legacy-v0" && !this.world.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.world.collisionBodies(p.id))) return true;
+      const next = { x: this.top.x + (this.bottom.x - this.top.x) * progress, y: this.top.y + (this.bottom.y-this.top.y)*progress };
+      if (this.world.definition.generatorVersion === "legacy-v0" && !this.world.spatial.clearOfPeople(p.pos, next, personRadius(p.kind), this.world.collisionBodies(p.id))) return true;
       a.remaining = remaining;
-      p.pos = {...next, ...(this.world.definition.generatorVersion!=="legacy-v0"?{floorId:"transit:escalator",elevation:-6*progress}:{})};
+      p.pos = {...next, ...(this.world.definition.generatorVersion !== "legacy-v0"?{floorId:this.connector?`transit:${this.connector.id}`:"transit:escalator",elevation:-6*progress}:{})};
       if (a.remaining <= 1e-9) {
-        p.pos = { ...this.world.layout.ESCALATOR_BOTTOM };
+        p.pos = { ...this.bottom };
         p.onPlatform = true;
         p.activity = { kind: "idle" };
         if (p.isPlayer) this.world.notifyPlayer("arrived", "已乘扶梯到达下层站台");
