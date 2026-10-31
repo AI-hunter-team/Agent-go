@@ -62,6 +62,25 @@ class SceneBoundary extends Component<
   }
 }
 
+/** 场景卡片使用轻量车站插画，避免为缩略图再创建三维画布。 */
+function StationThumbnail() {
+  return (
+    <svg viewBox="0 0 96 64" aria-hidden="true" focusable="false">
+      <rect width="96" height="64" fill="#e9e6db" />
+      <path d="M0 6h96v23H0z" fill="#f8f7f1" />
+      <path d="M0 37 48 25l48 12v27H0z" fill="#d7d8d2" />
+      <path d="M0 49 48 26l48 23M18 64 48 26 78 64" fill="none" stroke="#f6f4ec" strokeWidth="1.2" />
+      <path d="M9 8h9v34H9zM78 8h9v34h-9z" fill="#f3f0e6" stroke="#d4cfbf" />
+      <path d="M17 8v34M78 8v34" stroke="#edbd2d" strokeWidth="1.4" />
+      <path d="M23 14h50v11H23z" fill="#252c2d" />
+      <path d="M26 17h6v5h-6zM36 18h26M36 21h18" stroke="#f2c927" strokeWidth="1.5" />
+      <path d="M25 36h8v12h-8zM38 34h8v12h-8zM51 34h8v12h-8zM64 36h8v12h-8z" fill="#737e7b" stroke="#f4f2e9" />
+      <path d="M28 38v6m13-8v6m13-6v6m13-4v6" stroke="#efd255" strokeWidth="1.5" />
+      <path d="M0 56 44 38h8L10 64H0z" fill="#e0b84b" opacity=".75" />
+    </svg>
+  );
+}
+
 export function App() {
   const {
     settings: display,
@@ -246,28 +265,30 @@ export function App() {
             </SceneBoundary>
           )}
         </div>
-        {!watching && !ended && (
+        {!watching && !ended && flow.stage !== "lobby" && (
           <div className={styles.topLeft}>
             <span className={styles.brand}>
               agent-go<span>●</span>
             </span>
-            {flow.stage !== "lobby" && (
-              <button
-                disabled={flow.stage === "launch"}
-                onClick={() =>
-                  j.navigate(flow.stage === "character" ? "lobby" : "character")
-                }
-              >
-                ← {flow.stage === "character" ? "返回大厅" : "更换角色"}
-              </button>
-            )}
+            <button
+              disabled={flow.stage === "launch"}
+              onClick={() =>
+                j.navigate(flow.stage === "character" ? "lobby" : "character")
+              }
+            >
+              ← {flow.stage === "character" ? "返回大厅" : "更换角色"}
+            </button>
           </div>
         )}
         {!watching && flow.stage !== "launch" && (
           <Dialog.Root open={j.drawer} onOpenChange={j.setDrawer}>
             <Dialog.Trigger asChild>
               <button className={styles.settingsTrigger} aria-label="打开设置">
-                ⚙
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M9.8 2.8h4.4l.6 2.1c.5.2.9.4 1.4.6l2-1 3.1 3.1-1 2c.2.5.4.9.6 1.4l2.1.6v4.4l-2.1.6c-.2.5-.4.9-.6 1.4l1 2-3.1 3.1-2-1c-.5.2-.9.4-1.4.6l-.6 2.1H9.8l-.6-2.1c-.5-.2-.9-.4-1.4-.6l-2 1-3.1-3.1 1-2c-.2-.5-.4-.9-.6-1.4L1 15.2v-4.4l2.1-.6c.2-.5.4-.9.6-1.4l-1-2 3.1-3.1 2 1c.5-.2.9-.4 1.4-.6z" transform="translate(1 1) scale(.92)" fill="currentColor" />
+                  <circle cx="12" cy="12" r="3.1" fill="white" />
+                </svg>
+                {flow.stage === "lobby" && <span className={styles.settingsCaption} aria-hidden="true">设置<small>模型可稍后连接</small></span>}
               </button>
             </Dialog.Trigger>
             <Dialog.Portal>
@@ -411,52 +432,68 @@ export function App() {
         )}
         {flow.stage === "lobby" && (
           <section className={styles.lobby} aria-label="选择场景">
-            <h1>{sceneIndex === 0 ? "地铁末班车" : "新的旅程，正在路上"}</h1>
-            <p>
-              {sceneIndex === 0
-                ? "在人群与变化中，找到你的通行方式。"
-                : "更多世界正在开发中，敬请期待。"}
-            </p>
-            <button
-              className="primary"
-              disabled={sceneIndex !== 0}
-              onClick={j.enterScene}
-            >
-              {sceneIndex === 0 ? "进入场景 →" : "敬请期待"}
-            </button>
-            <div className={styles.carousel}>
+            <div className={styles.lobbyCopy}>
+              <span className={styles.lobbyKicker}>AGENT GO <i /> WORLD {sceneIndex === 0 ? "01" : "02"}</span>
+              <h1>{sceneIndex === 0 ? "地铁末班车" : "新的旅程"}</h1>
+              <span className={styles.lobbyAccent} aria-hidden="true" />
+              <p>
+                {sceneIndex === 0
+                  ? "末班车即将离站。用你的指导，让角色找到自己的路。"
+                  : "更多世界正在开发中，敬请期待。"}
+              </p>
+              {sceneIndex === 0 && (
+                <span className={styles.goalPill}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></svg>
+                  {settings.timeLimitSeconds} 秒内抵达下层站台
+                </span>
+              )}
+              <button className={`primary ${styles.enterScene}`} disabled={sceneIndex !== 0} onClick={j.enterScene}>
+                {sceneIndex === 0 ? "进入场景" : "敬请期待"}
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <div className={styles.carousel} aria-label="场景列表">
               <button
+                className={styles.carouselArrow}
                 aria-label="上一个场景"
                 onClick={() => {
                   j.invalidate();
                   setSceneIndex((v) => 1 - v);
                 }}
               >
-                ‹
+                <span aria-hidden="true">‹</span>
               </button>
-              {[0, 1].map((index) => (
+              <div className={styles.sceneCards}>
+                {[0, 1].map((index) => (
                 <button
                   key={index}
+                  className={styles.sceneCard}
                   aria-pressed={sceneIndex === index}
                   onClick={() => {
                     j.invalidate();
                     setSceneIndex(index);
                   }}
                 >
-                  <span className={styles.sceneThumb}>
-                    {index === 0 ? "01" : "⌁"}
+                  <span className={styles.sceneThumb} aria-hidden="true">
+                    <StationThumbnail />
+                    {index === 1 && <span className={styles.sceneLock}><svg viewBox="0 0 24 24" focusable="false"><path d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12v10H6z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="15" r="1.2" fill="currentColor" /></svg></span>}
                   </span>
-                  {index === 0 ? "地铁末班车" : "开发中场景"}
+                  <span className={styles.sceneCardLabel}>
+                    <strong>{index === 0 ? "地铁末班车" : "开发中场景"}</strong>
+                    <small>{index === 0 ? "METRO STATION" : "COMING SOON"}</small>
+                  </span>
                 </button>
-              ))}
+                ))}
+              </div>
               <button
+                className={styles.carouselArrow}
                 aria-label="下一个场景"
                 onClick={() => {
                   j.invalidate();
                   setSceneIndex((v) => 1 - v);
                 }}
               >
-                ›
+                <span aria-hidden="true">›</span>
               </button>
             </div>
           </section>

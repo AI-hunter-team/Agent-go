@@ -60,3 +60,10 @@
 在 `codex/watch-ui-improvements` 提交前重新执行 `npm run typecheck`、`npm run build`、`npm test -- --maxWorkers=2 --testTimeout=15000`：全部退出 0，86 文件 / 685 项通过；`git diff --check`、暂存差异检查、新文件尾空白、文档相对链接、凭据模式和个人绝对路径核对通过。
 
 远端 main 已前进至 `86a5bc6`，后续将整合最新主线后再验证并创建 PR；前述基线软件和浏览器证据保留其版本边界。人工审查未进行；不执行远端合并或公网部署。
+
+## 最新主线集成复验
+
+- 功能提交 `44086dd`，分支 `codex/watch-ui-improvements`；整合目标 `origin/main` 的 `86a5bc6`。两处冲突分别在窄屏 CSS 和场景内容组合：保留新首页的布局/样式、新增 MetroPlatform，以及本任务的记录折叠/角色气泡参数与独立终局按钮。
+- 合并工作区重新运行 `npm run typecheck`、`npm run build`、`npm test -- --maxWorkers=2 --testTimeout=15000`：全部退出 0，87 文件 / 688 项通过，测试耗时 35.03 秒；暂存与工作区差异检查通过。相对目标 main 的差异仍仅十二个本任务文件。
+- 使用 8081 上的新前端在独立浏览器标签复验：新首页进入场景、选角、离线开局、暂停折叠后 Agent 头顶显示带身份的正文、终局仅底部两个独立入口均通过。没有配置或调用真实模型；用户原标签页与 API 进程保留，测试标签已关闭。
+- 本报告为创建 PR 前快照；远端 PR、CI 和最终是否合入以 GitHub 实时状态为准。本轮只授权提交/推送/创建 PR，不执行远端合并。

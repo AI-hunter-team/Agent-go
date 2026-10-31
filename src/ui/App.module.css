@@ -10,16 +10,38 @@
 .brand span { color: #ffca00; font-size: 12px; margin-left: 5px; }
 .topLeft button { background: #fffffff5; box-shadow: 0 4px 18px #14203314; }
 .settingsTrigger { position: absolute; left: 32px; top: 90px; width: 48px; height: 48px; border-radius: 50%; font-size: 24px; padding: 0; box-shadow: 0 4px 20px #17243a1f; }
-.lobby { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); width: min(680px, calc(100% - 32px)); text-align: center; padding: 30px 30px 10px; background: linear-gradient(0deg, #ffffffed 65%, #ffffff00); border-radius: 60% 60% 0 0; }
-.lobby h1 { font-size: clamp(28px, 3.2vw, 46px); margin: 0; letter-spacing: -.045em; }
-.lobby p { color: #566376; }
-.lobby > button { min-width: 230px; font-size: 18px; padding: 12px 28px; }
-.carousel { display: flex; justify-content: center; gap: 12px; margin-top: 18px; align-items: center; }
-.carousel > button { padding: 8px 12px; background: #fffffff2; min-width: 44px; }
-.carousel > button[aria-pressed] { width: 168px; font-weight: 700; }
-.carousel > button[aria-pressed=true] { outline: 3px solid #ffcb00; outline-offset: 2px; }
-.sceneThumb { display: block; border-radius: 10px; font-size: 24px; line-height: 40px; color: #45656b; background: linear-gradient(135deg, #f1e8ca, #b6cbd1); margin-bottom: 4px; }
-.carousel > button[aria-pressed=false] .sceneThumb { filter: grayscale(1); }
+.settingsTrigger svg { display: block; width: 22px; height: 22px; margin: auto; }
+.settingsCaption { position: absolute; top: calc(100% + 5px); left: 0; display: grid; gap: 0; color: #26313d; font-size: 12px; font-weight: 800; line-height: 1.4; text-align: left; white-space: nowrap; }
+.settingsCaption small { color: #6b7681; font-size: 9px; font-weight: 600; }
+.app[data-stage=lobby] { min-height: 0; }
+.app[data-stage=lobby] .settingsTrigger { z-index: 2; top: 28px; left: clamp(24px, 3.2vw, 48px); background: #fff; border-color: #ffffff; }
+.lobby { position: absolute; inset: 0; pointer-events: none; }
+.lobby::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 55% 52% at 10% 95%, #f8f7f2ef 0%, #f8f7f2bf 45%, #f8f7f200 100%), linear-gradient(0deg, #f8f7f2b8 0%, #f8f7f244 24%, #f8f7f200 53%); }
+.lobbyCopy { position: absolute; left: clamp(28px, 3.8vw, 64px); bottom: clamp(34px, 6vh, 60px); width: min(500px, 44vw); pointer-events: auto; }
+.lobbyKicker { display: flex; align-items: center; gap: 10px; color: #43505a; font-size: 12px; font-weight: 800; letter-spacing: .13em; }
+.lobbyKicker i { width: 22px; height: 2px; background: #e8bd2f; }
+.lobby h1 { margin: 10px 0 14px; color: #17202c; font-size: clamp(42px, 5.4vw, 74px); font-weight: 900; letter-spacing: -.055em; line-height: 1.12; }
+.lobbyAccent { display: block; width: 45px; height: 6px; border-radius: 9px; background: #f0c62e; }
+.lobby p { margin: 16px 0 15px; color: #384454; font-size: clamp(14px, 1.25vw, 17px); font-weight: 600; line-height: 1.7; }
+.goalPill { display: flex; width: fit-content; align-items: center; gap: 8px; min-height: 36px; padding: 6px 13px; border: 1px solid #ffffffd9; border-radius: 12px; background: #fffdf5e8; box-shadow: 0 4px 16px #302a1810; color: #293440; font-size: 13px; font-weight: 700; }
+.goalPill svg { width: 19px; height: 19px; fill: none; stroke: #dfae00; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.enterScene { display: flex; align-items: center; justify-content: space-between; width: 210px; min-height: 56px; margin-top: 18px; padding: 12px 22px; border-radius: 16px; font-size: 18px; box-shadow: 0 7px 22px #b08a0026 !important; }
+.enterScene span { font-size: 25px; font-weight: 400; line-height: 1; }
+.carousel { position: absolute; left: 57%; bottom: clamp(34px, 6vh, 60px); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; pointer-events: auto; }
+.carouselArrow { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 4px 18px #17243a24; font-size: 29px; line-height: 1; }
+.sceneCards { display: flex; gap: 5px; padding: 6px; border: 1px solid #ffffffd9; border-radius: 18px; background: #fffffff0; box-shadow: 0 8px 28px #17243a22; }
+.sceneCard { display: flex; align-items: center; gap: 10px; width: 188px; min-height: 66px; padding: 5px; border: 2px solid transparent; border-radius: 13px; background: transparent; text-align: left; }
+.sceneCard[aria-pressed=true] { border-color: #efc52c; background: #fff; }
+.sceneCard:hover:not(:disabled) { background: #f5f3eb; border-color: #e1d4a5; }
+.sceneCard[aria-pressed=true]:hover { border-color: #efc52c; }
+.sceneThumb { position: relative; display: block; flex: 0 0 70px; width: 70px; height: 50px; overflow: hidden; border-radius: 8px; background: #e2e3dd; }
+.sceneThumb svg { display: block; width: 100%; height: 100%; }
+.sceneCard:nth-child(2) .sceneThumb svg { filter: grayscale(1) brightness(.82); }
+.sceneLock { position: absolute; inset: 0; display: grid; place-items: center; color: white; background: #28333b38; font-size: 23px; font-weight: 700; }
+.sceneLock svg { width: 19px; height: 19px; }
+.sceneCardLabel { min-width: 0; display: grid; gap: 2px; }
+.sceneCardLabel strong { color: #26313d; font-size: 13px; white-space: nowrap; }
+.sceneCardLabel small { color: #78828a; font-size: 9px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .preparation { position: absolute; right: 5%; top: 50%; transform: translateY(-50%); width: min(480px, 41vw); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 32px; animation: enter .22s ease-out; }
 .preparation h1 { font-size: clamp(26px, 2.7vw, 39px); line-height: 1.3; letter-spacing: -.045em; margin: 12px 0; }
 .preparation h2 { font-size: 26px; margin-top: 26px; }
@@ -93,6 +115,10 @@
   .review { inset: 16px 16px 112px; }
   .reviewGrid { grid-template-columns: 1fr; }
 }
+@media (min-width: 601px) and (max-width: 900px) {
+  .lobbyCopy { bottom: 145px; width: min(520px, 75vw); }
+  .carousel { left: 50%; bottom: 32px; }
+}
 @media (max-width: 600px) {
   .app { min-height: 620px; }
   .topLeft { left: 16px; top: 16px; gap: 12px; }
@@ -105,9 +131,21 @@
   .preparation :global(.field) { margin: 14px 0; }
   .characters { margin: 14px 0; }
   .portrait { width: 40px; height: 40px; font-size: 23px; border-radius: 12px; }
-  .lobby { padding-inline: 10px; bottom: 16px; }
-  .carousel { gap: 8px; }
-  .carousel > button[aria-pressed] { width: 110px; font-size: 11px; }
+  .app[data-stage=lobby] .settingsTrigger { top: 18px; left: 18px; width: 44px; height: 44px; }
+  .lobby::before { background: linear-gradient(0deg, #f8f7f2f5 0%, #f8f7f2dc 33%, #f8f7f250 62%, #f8f7f200 82%); }
+  .lobbyCopy { left: 20px; right: 20px; bottom: 136px; width: auto; }
+  .lobbyKicker { font-size: 10px; }
+  .lobby h1 { margin: 8px 0 10px; font-size: clamp(36px, 10vw, 48px); }
+  .lobby p { margin: 11px 0; font-size: 13px; }
+  .goalPill { min-height: 32px; padding: 4px 11px; font-size: 12px; }
+  .enterScene { width: 190px; min-height: 50px; margin-top: 12px; font-size: 16px; }
+  .carousel { left: 12px; right: 12px; bottom: 20px; transform: none; gap: 7px; }
+  .carouselArrow { flex-basis: 40px; width: 40px; height: 40px; min-height: 40px; }
+  .sceneCards { flex: 1; min-width: 0; gap: 3px; padding: 4px; border-radius: 15px; }
+  .sceneCard { flex: 1; width: auto; min-width: 0; min-height: 58px; gap: 6px; padding: 3px; }
+  .sceneThumb { flex-basis: 45px; width: 45px; height: 42px; }
+  .sceneCardLabel strong { font-size: 11px; }
+  .sceneCardLabel small { font-size: 8px; }
   .action { top: 16px; left: 12px; right: auto; bottom: auto; width: calc(100% - 180px); padding: 12px; max-height: 40dvh; }
   .actionCollapsed { width: auto; max-width: calc(100% - 180px); padding: 6px; }
   .recordToggle { gap: 6px; padding: 8px; font-size: 12px; }
@@ -125,4 +163,8 @@
   .victoryControls { top: 16px; bottom: auto; left: 12px; }
   .reviewHeading h1 { font-size: 26px; }
   .launch { width: calc(100% - 32px); padding: 20px; }
+}
+@media (max-width: 360px) {
+  .carouselArrow { display: none; }
+  .sceneThumb { flex-basis: 50px; width: 50px; }
 }

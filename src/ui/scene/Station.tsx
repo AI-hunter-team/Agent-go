@@ -109,14 +109,22 @@ function ImportedStation({ kit, session, overview, standard, reducedMotion }: { 
 
 export const Station = memo(function Station({ session, overview, standard, reducedMotion = false, onAssetError }: { session: GameSession; overview: boolean; standard: boolean; reducedMotion?: boolean; onAssetError: (message: string) => void }) {
   const [kit, setKit] = useState<StationKit | null>(null);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
     let active = true;
-    loadStationKit().then((loaded) => { if (active) setKit(loaded); }).catch((error: unknown) => {
-      if (active) onAssetError(`站厅素材加载失败，已使用几何场景，可重试三维素材：${error instanceof Error ? error.message : "资源请求失败"}`);
+    loadStationKit().then((loaded) => {
+      if (!active) return;
+      setKit(loaded);
+      setLoadState("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      setLoadState("error");
+      onAssetError(`站厅素材加载失败，已使用几何场景，可重试三维素材：${error instanceof Error ? error.message : "资源请求失败"}`);
     });
     return () => { active = false; };
   }, [onAssetError]);
-  return <><OutageOverlay session={session} />{kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : <StationFallback session={session} reducedMotion={reducedMotion} />}</>;
+  // 正式素材加载期间保持空场景，避免旧几何先闪现；只有加载失败才进入几何回退。
+  return <><OutageOverlay session={session} />{loadState === "ready" && kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : loadState === "error" ? <StationFallback session={session} reducedMotion={reducedMotion} /> : <group name="station-kit-loading" />}</>;
 });
 
 function OutageOverlay({ session }: { session: GameSession }) {
