@@ -29,7 +29,7 @@
 
 ## 本地交接
 
-- 分支 `codex/victory-celebration`，HEAD 仍为上述 main 基线；任务改动全部未提交。
+- 分支 `codex/victory-celebration`；功能提交 `7493088`，随后整合 main `20f0fe6`，保留 CI-SESSION-001 的测试预算与全部协作记录。
 - 正式本地生产预览使用5198端口，现无模型凭据；浏览器烟测和键盘问候通过。原有其他端口未停止。
 - 产物 `dist/`、`build/server.js`；本任务临时脚本及截图位于 Git 忽略的 `.codex/victory-001/`。
 - 仅新增5个必要回归；修正 StrictMode 动画重绑定、同资源重挂载问候进度，以及简化乘客/调试层重复 key。
