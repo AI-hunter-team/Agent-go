@@ -105,7 +105,7 @@ export function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect
   return queueDetour(from, target, blockers, radius);
 }
 
-const detourGraphs = new Map<number, { points: Vec[]; clear: boolean[][] }>();
+const detourGraphs = new Map<number, { points: Vec[]; edges: { index: number; cost: number }[][] }>();
 
 /** Cache the fixed station geometry by body radius; moving queues are checked separately each tick. */
 function detourSceneryGraph(radius: number) {
@@ -116,7 +116,10 @@ function detourSceneryGraph(radius: number) {
     { x: r.x - margin, y: r.y - margin }, { x: r.x + r.w + margin, y: r.y - margin },
     { x: r.x - margin, y: r.y + r.h + margin }, { x: r.x + r.w + margin, y: r.y + r.h + margin },
   ]).filter((point) => clearOfScenery(point, point, radius));
-  const graph = { points, clear: points.map((a) => points.map((b) => clearOfScenery(a, b, radius))) };
+  // Static edges and their lengths do not change with the moving queues. A
+  // sparse list also avoids revisiting every unreachable station compartment.
+  const graph = { points, edges: points.map((a, i) => points.flatMap((b, j) =>
+    i !== j && clearOfScenery(a, b, radius) ? [{ index: j, cost: dist(a, b) }] : [])) };
   detourGraphs.set(radius, graph);
   return graph;
 }
@@ -145,13 +148,18 @@ function queueDetour(from: Vec, target: Vec, blockers: readonly Rect[], radius?:
       return points[u];
     }
     done.add(u);
-    for (let v = 1; v < points.length; v++) {
-      const cost = costs[u] + dist(points[u], points[v]);
-      if (done.has(v) || cost >= costs[v]) continue;
-      const clear = graph && u >= staticStart && v >= staticStart
-        ? graph.clear[u - staticStart][v - staticStart] && blockers.every((r) => !segmentIntersectsRect(points[u], points[v], r))
+    const relax = (v: number, distance?: number) => {
+      if (done.has(v)) return;
+      const cost = costs[u] + (distance ?? dist(points[u], points[v]));
+      if (cost >= costs[v]) return;
+      const clear = distance !== undefined
+        ? blockers.every((r) => !segmentIntersectsRect(points[u], points[v], r))
         : visible(points[u], points[v]);
       if (clear) { costs[v] = cost; previous[v] = u; }
-    }
+    };
+    const fixedEdges = graph && u >= staticStart ? graph.edges[u - staticStart] : undefined;
+    for (let v = 1; v < (fixedEdges ? staticStart : points.length); v++) relax(v);
+    // Preserve ascending vertex order, including equal-cost tie behaviour.
+    if (fixedEdges) for (const edge of fixedEdges) relax(staticStart + edge.index, edge.cost);
   }
 }
