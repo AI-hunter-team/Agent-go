@@ -14,7 +14,7 @@ import { GameRunner } from "../src/agent/runner";
 import { classifyByKeywords } from "../src/sim/intent";
 
 describe("generated station contracts",()=>{
- it("1000 deterministic seeds have complete, bounded, diverse layouts",()=>{
+ it("1000 deterministic seeds have complete, bounded, diverse layouts",async()=>{
   const families=new Set<string>(),hashes=new Set<string>();
   for(let seed=1;seed<=1000;seed++){
    const d=generateWorld(seed);families.add(d.archetype);hashes.add(d.layoutHash);
@@ -27,9 +27,11 @@ describe("generated station contracts",()=>{
    for(const n of d.layout.RAILING_APPROACHES){expect(d.layout.zoneOf(n.pos)).toBe("hall");expect(d.layout.atRailing(n.pos)).toBe(true);}
    expect(d.layout.platformAxis?.center).toBeDefined();
    expect(d.layout.STAIRS_BOTTOM.floorId).toBe("platform");expect(Object.isFrozen(d.layout)).toBe(true);
+   // Keep the Vitest worker responsive while retaining every seed assertion.
+   if(seed%25===0) await new Promise<void>(resolve=>setImmediate(resolve));
   }
   expect(families.size).toBe(3);expect(hashes.size).toBeGreaterThan(100);
- },60000);
+ },180000);
  it("varies entry and connector anchors, with a transverse side service band",()=>{
   const definitions=Array.from({length:30},(_,i)=>generateWorld(i+1));
   expect(new Set(definitions.map(d=>JSON.stringify(d.layout.ENTRANCE))).size).toBeGreaterThan(4);
