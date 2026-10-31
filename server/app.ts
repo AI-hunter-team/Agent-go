@@ -40,6 +40,8 @@ export interface LlmService {
 
 export interface AppDeps {
   llm: LlmService | null;
+  reviewLlm?: Pick<LlmService, "model" | "review" | "draftGuidance"> | null;
+  reviewModelParameters?: Record<string, unknown>;
   sessions: SessionStore;
   debugLogger?: DebugLogger;
   modelParameters?: Record<string, unknown>;
@@ -53,7 +55,7 @@ const wrap = (h: Handler) => (req: Request, res: Response, next: NextFunction) =
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const boundedText = (value: unknown, max: number): value is string => typeof value === "string" && !!value.trim() && countChars(value) <= max;
 
-export function createApp({ llm, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
+export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, reviewModelParameters = modelParameters, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
@@ -68,6 +70,35 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     if (!config.llm) throw new ModelConfigError("请先选择模型并验证启用", 409);
     const cfg = config.settings!;
     return { llm: config.llm, parameters: { ...cfg, provider: "responses", model: config.llm.model, effort: cfg.reasoningEffort, timeoutMs: 20_000, transportRetries: 0 }, token };
+  };
+  type Reviewer = { llm: AppDeps["reviewLlm"]; parameters: Record<string, unknown> };
+  const reviewBindings = new Map<string, { runtime: Reviewer; lastUsed: number }>();
+  const sweepReviews = () => {
+    for (const [token, binding] of reviewBindings) {
+      if (Date.now() - binding.lastUsed >= 30 * 60_000) reviewBindings.delete(token);
+    }
+  };
+  /** 复盘引用开局模型的独立短期句柄，局后清理/更换页面模型不改变这份绑定。 */
+  const bindReview = (binding: Runtime): string | undefined => {
+    if (!binding.token) return undefined;
+    sweepReviews();
+    if (reviewBindings.size >= 256) reviewBindings.delete(reviewBindings.keys().next().value!);
+    const token = randomUUID();
+    reviewBindings.set(token, { runtime: { llm: binding.llm, parameters: binding.parameters }, lastUsed: Date.now() });
+    return token;
+  };
+  const reviewer = (req: Request): Reviewer => {
+    sweepReviews();
+    const token = req.get("x-review-config");
+    if (token) {
+      const binding = reviewBindings.get(token);
+      if (!binding) throw new ModelConfigError("本局复盘已过期，请重新开始一局", 410);
+      binding.lastUsed = Date.now();
+      return binding.runtime;
+    }
+    // 兼容直接通过业务 API 提供用户配置的调用方；无用户配置才用服务端默认。
+    if (req.get("x-model-config")) return runtime(req);
+    return { llm: reviewLlm, parameters: reviewModelParameters };
   };
   /** 已开始的对局使用原实例，且校验其所属配置 token。 */
   const forSession = (req: Request, session: Session): Runtime => {
@@ -104,16 +135,24 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     res.json({ llm: llm !== null, model: llm?.model ?? null });
   }));
 
-  // Independent analysis calls: the run's session has already been disposed.
+  app.get("/api/review/status", wrap((req, res) => {
+    const { llm } = reviewer(req);
+    res.json({ available: Boolean(llm?.review && llm?.draftGuidance) });
+  }));
+  // 离线对局也可以保留已填写的用户配置供局后分析，不调用供应商模型。
+  app.post("/api/review/binding", wrap((req, res) => {
+    res.json({ reviewToken: bindReview(runtime(req)) ?? null });
+  }));
+
   app.post("/api/review", wrap(async (req, res) => {
     const input: unknown = req.body?.input;
     try { validateReviewInput(input); } catch { return void res.status(400).json({ error: "复盘资料格式无效或超出限制" }); }
     assertSafeText(JSON.stringify(input));
-    const current = runtime(req);
-    if (!current.llm?.review) return void res.status(503).json({ error: "请先连接模型，再生成失败复盘" });
+    const { llm: reviewLlm, parameters: reviewModelParameters } = reviewer(req);
+    if (!reviewLlm?.review) return void res.status(503).json({ error: "复盘服务暂不可用，请稍后重试" });
     let returned: ReviewResult | null = null;
     try {
-      const { value } = await traceOperation({ operation: "review", runId: null, sessionId: null }, { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.review!(input));
+      const { value } = await traceOperation({ operation: "review", runId: null, sessionId: null }, { input, modelParameters: reviewModelParameters }, debugLogger, () => reviewLlm.review!(input));
       returned = value;
       validateReview(value.analysis, input);
       assertSafeText(JSON.stringify(value.analysis));
@@ -126,11 +165,11 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     try { if (guidanceError(guidance)) throw new Error(); validateStrategies(strategies); }
     catch { return void res.status(400).json({ error: "请提供原指导并选择 1–3 条有效建议" }); }
     assertSafeText(JSON.stringify({ guidance, strategies }));
-    const current = runtime(req);
-    if (!current.llm?.draftGuidance) return void res.status(503).json({ error: "请先连接模型，再合并指导草稿" });
+    const { llm: reviewLlm, parameters: reviewModelParameters } = reviewer(req);
+    if (!reviewLlm?.draftGuidance) return void res.status(503).json({ error: "复盘服务暂不可用，请稍后重试" });
     let returned: DraftResult | null = null;
     try {
-      const { value } = await traceOperation({ operation: "review_draft", runId: null, sessionId: null }, { guidance, strategies, modelParameters: current.parameters }, debugLogger, () => current.llm!.draftGuidance!(guidance, strategies));
+      const { value } = await traceOperation({ operation: "review_draft", runId: null, sessionId: null }, { guidance, strategies, modelParameters: reviewModelParameters }, debugLogger, () => reviewLlm.draftGuidance!(guidance, strategies));
       returned = value;
       validateDraft(value); assertSafeText(value.guidance);
       res.json(value);
@@ -216,7 +255,7 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
     void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });
-    res.json({ sessionId: s.id });
+    res.json({ sessionId: s.id, reviewToken: bindReview(binding) });
   }));
 
   app.post(

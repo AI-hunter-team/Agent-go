@@ -172,11 +172,11 @@ export function App() {
   };
   const closeReview = () => {
     setReviewState({ generation: session.generation, expanded: false });
-    reviewTrigger.current?.focus();
   };
   useEffect(() => {
     if (expandedReview) reviewHeading.current?.focus();
-  }, [expandedReview]);
+    else if (reviewOpened) reviewTrigger.current?.focus();
+  }, [expandedReview, reviewOpened]);
   // 胜利展示始终从透视镜头开始；用户之后可自行切换镜头。
   useEffect(() => {
     if (won) j.setCamera((current) => current.mode === "follow" ? current : { ...current, mode: "follow" });
@@ -303,7 +303,7 @@ export function App() {
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="muted">
-                  {ended ? "为当前复盘连接或更换模型。" : "配置后续旅程；浏览与选角无需连接模型。"}
+                  配置后续旅程；浏览与选角无需连接模型。
                 </Dialog.Description>
                 <div className="drawer-body">
                   <details open>
@@ -814,7 +814,7 @@ export function App() {
         )}
         {report && (
           <>
-          <div className={styles.endActions} aria-label="本局结束操作">
+          <div className={styles.endActions} aria-label="本局结束操作" hidden={expandedReview}>
             <button ref={reviewTrigger} aria-expanded={expandedReview} aria-controls="journey-review" onClick={() => {
               if (expandedReview) closeReview();
               else setReviewState({ generation: session.generation, expanded: true });
@@ -824,47 +824,23 @@ export function App() {
           <section id="journey-review" aria-labelledby="journey-review-title" hidden={!expandedReview} className={`${styles.review} ${styles.panel}`}>
             {reviewOpened && <>
             <div className={styles.reviewHeading}>
-              <h1 id="journey-review-title" ref={reviewHeading} tabIndex={-1}>行程复盘</h1>
-              <button onClick={closeReview}>收起复盘</button>
+              <div>
+                <h1 id="journey-review-title" ref={reviewHeading} tabIndex={-1}>行程复盘</h1>
+                <p className="muted">{report.journey?.sceneName ?? "地铁末班车"} · {report.journey?.characterName ?? "本次行程"}</p>
+              </div>
+              <button onClick={closeReview}>返回场景</button>
             </div>
             <div className={styles.reviewGrid}>
               <div>
                 <ReportSummary
                   key={session.generation}
                   report={report}
-                  onRetry={j.retry}
-                  onEdit={() => j.edit()}
                   onAdopt={j.edit}
-                  onConfigureModel={() => j.setDrawer(true)}
-                  modelAvailable={health.llm}
+                  active={expandedReview}
+                  replay={<><p className="muted">回看角色轨迹；NPC 和设施显示终局状态。</p><TrajectoryReplayView report={report} engine={session.engine} /></>}
+                  records={<><DecisionLog decisions={report.decisions} /><EventTimeline report={report} /></>}
                 />
               </div>
-              <div>
-                <h2>二维轨迹回放</h2>
-                <p className="muted">回看角色轨迹；NPC 和设施显示终局状态。</p>
-                <TrajectoryReplayView report={report} engine={session.engine} />
-                <details>
-                  <summary>关键决策与事件</summary>
-                  <DecisionLog decisions={report.decisions} />
-                  <EventTimeline report={report} />
-                </details>
-              </div>
-            </div>
-            <div className={styles.reportInfo}>
-              <span>场景：{report.journey?.sceneName ?? "未记录"}</span>
-              <span>角色：{report.journey?.characterName ?? "未记录"}</span>
-              <span>
-                实际模型：
-                {report.journey
-                  ? (report.journey.model ?? "离线体验")
-                  : "未记录"}
-              </span>
-              <span>情景种子：{report.seed}</span>
-              <span>指导：{report.guidance || "自主决定 / 离线策略"}</span>
-            </div>
-            <div className="row">
-              <button onClick={j.replaceModel}>更换模型再试</button>
-              <button onClick={j.returnLobby}>返回大厅</button>
             </div>
             </>}
           </section>

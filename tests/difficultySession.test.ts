@@ -40,6 +40,6 @@ test("export and debug record the actual difficulty, with the same values visibl
   expect(report.debug?.parameters.timeLimitSeconds).toBe(90);
   expect(JSON.parse(JSON.stringify(report.debug)).parameters.extraQueuePeople).toBe(3);
   expect(report.debug?.parameters.simulationRules.timeLimit).toBe(90);
-  const html = renderToStaticMarkup(createElement(ReportSummary, { report, onRetry: () => {}, onEdit: () => {} }));
+  const html = renderToStaticMarkup(createElement(ReportSummary, { report }));
   expect(html).toContain("时限 90 秒"); expect(html).toContain("每条开放队列 +3 人");
 });

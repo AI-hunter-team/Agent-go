@@ -1,6 +1,6 @@
 import { EVENT_LABEL, LEVEL_LABEL } from "./interactionLabels";
 import { ITEM_DEFS } from "../sim/content/items";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { GameReport, TimeBreakdown } from "../shared/types";
 import { MECHANIC_NAME } from "./format";
 import { DecisionTrace } from "./DecisionTrace";
@@ -23,11 +23,13 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "idle", label: "空闲", color: "#d9d3c4" },
 ];
 
-/** 汇总真实终局成绩、耗时与调用记录，并提供重试和报告导出。 */
-export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false, onAdopt, onConfigureModel }: { report: GameReport; onRetry: () => void; onEdit: () => void; modelAvailable?: boolean; onAdopt?: (guidance: string) => void; onConfigureModel?: () => void }) {
-  const [review] = useState(() => report.status === "failed" ? new ReviewSession(report, Api) : null);
+/** 汇总真实终局成绩、耗时与调用记录，策略采纳入口位于下一局建议模块。 */
+export function ReportSummary({ report, onAdopt, replay, records, active = true }: { report: GameReport; onAdopt?: (guidance: string) => void; replay?: ReactNode; records?: ReactNode; active?: boolean }) {
+  const [review] = useState(() => report.status === "failed" ? new ReviewSession(report, Api.forReview(report)) : null);
   const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
+  const segments = SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0);
+  const mainSegment = [...segments].sort((a, b) => (report.timeBreakdown[b.key] ?? 0) - (report.timeBreakdown[a.key] ?? 0))[0];
   // 原样导出当前报告，不改变存档字段或计分数据。
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ ...report, ...review?.exportData() }, null, 2)], { type: "application/json" });
@@ -40,6 +42,8 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
 
   return (
     <section className="card report">
+      <div className="report-content">
+      <div className="report-result">
       <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
         {report.status === "success" ? (
           <>
@@ -48,21 +52,24 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
           </>
         ) : (
           <>
-            <span>本局失败 · 无成绩</span>
+            <span>本次未抵达站台 · 无成绩</span>
             <strong className="reason-text">{report.failReason}</strong>
           </>
         )}
       </div>
-      <p className="muted">
-        种子 {report.seed} · {report.agentKind === "llm" ? "大模型 Agent" : "离线规则 Agent"} · 世界时间 {report.elapsed.toFixed(1)} 秒
-        （思考暂停不计入）
-      </p>
+      <dl className="report-metrics" aria-label="行程概况">
+        <div><dt>行程用时</dt><dd>{report.elapsed.toFixed(1)}<small> 秒</small></dd></div>
+        <div><dt>行动决策</dt><dd>{report.totals.decisions}<small> 次</small></dd></div>
+        <div><dt>违规记录</dt><dd>{report.violations.length}<small> 次</small></dd></div>
+      </dl>
+      </div>
 
-      <h3>时间花在哪里</h3>
+      <section className="report-section report-time" aria-labelledby="report-time-title">
+      <div className="report-section-heading"><h2 id="report-time-title">时间花在哪里</h2><span className="muted">时限 {settings.timeLimitSeconds} 秒</span></div>
+      {mainSegment ? <p className="report-takeaway">主要耗时在<strong>{mainSegment.label}</strong>，共 {(report.timeBreakdown[mainSegment.key] ?? 0).toFixed(1)} 秒。</p> : <p className="muted">本局尚未产生耗时记录。</p>}
       {(report.timeBreakdown.distraction ?? 0) > 0 && <p className="small">关注用时可能包含减速行走；它不是全部净损失，可结合事件时间线复盘。</p>}
-      <p className="small">{`时限 ${settings.timeLimitSeconds} 秒 · 每条开放队列 +${settings.extraQueuePeople} 人`}</p>
       <div className="bar" aria-hidden="true">
-        {SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0).map((s) => (
+        {segments.map((s) => (
           <i
             key={s.key}
             title={`${s.label} ${report.timeBreakdown[s.key]} 秒`}
@@ -71,13 +78,28 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
         ))}
       </div>
       <div className="bar-legend">
-        {SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0).map((s) => (
+        {segments.map((s) => (
           <span key={s.key}>
             <i style={{ background: s.color }} />
             {s.label} {(report.timeBreakdown[s.key] ?? 0).toFixed(1)}s
           </span>
         ))}
       </div>
+
+      <p className="report-footnote">按世界时间统计，思考时暂停计时。</p>
+      </section>
+
+      {review && onAdopt && <FailureReview session={review} report={report} onAdopt={onAdopt} active={active} />}
+      {report.guidance && <details className="report-guidance"><summary>本局指导</summary><p className="quote">「{report.guidance}」</p></details>}
+
+      <div className="report-disclosures">
+      {replay && <details className="report-disclosure"><summary><span>轨迹回放<small>回看路线与当时的决策</small></span></summary><div className="report-disclosure-body">{replay}</div></details>}
+      <details className="report-disclosure"><summary><span>完整行程记录<small>事件、决策、模型用量与本局设置</small></span></summary><div className="report-disclosure-body">
+      <button className="ghost report-export" onClick={exportJson}>导出报告 JSON</button>
+      <h3>本局设置</h3>
+      <p className="small">场景：{report.journey?.sceneName ?? "未记录"} · 角色：{report.journey?.characterName ?? "未记录"}</p>
+      <p className="small">种子 {report.seed} · {report.agentKind === "llm" ? "大模型 Agent" : "离线规则 Agent"} · 模型：{report.journey ? (report.journey.model ?? "离线体验") : "未记录"}</p>
+      <p className="small">时限 {settings.timeLimitSeconds} 秒 · 每条开放队列 +{settings.extraQueuePeople} 人</p>
 
       <h3>违规记录</h3>
       {report.violations.length === 0 ? (
@@ -109,13 +131,6 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
       {report.personas && <details><summary>乘客人设（复盘可见）</summary>{Object.entries(report.personas).map(([id,p]) => <p key={id}>{id} · {p.look.outfit} · 胆量 {p.traits.courage.toFixed(2)} / 公平 {p.traits.fairness.toFixed(2)} / 赶时间 {p.situation.hurry.toFixed(2)}</p>)}</details>}
       <DebugPanel report={report} />
 
-      {report.guidance && (
-        <>
-          <h3>本局指导</h3>
-          <p className="quote">「{report.guidance}」</p>
-        </>
-      )}
-
       {report.attempts && report.attempts.length > 0 && (
         <details className="run-trace">
           <summary>{`全部调用记录（${report.attempts.length} 次）`}</summary>
@@ -126,16 +141,11 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
 
       {!!report.dialogues?.length && <details className="run-trace"><summary>全部 NPC 沟通（{report.dialogues.length} 次）</summary>{report.dialogues.map((record, i) => <NpcDialogue key={i} record={record} />)}</details>}
 
-      <div className="row">
-        {review && onAdopt && <FailureReview session={review} report={report} modelAvailable={modelAvailable} onAdopt={onAdopt} onConfigureModel={onConfigureModel} />}
-        <button className="primary" onClick={onEdit}>
-          修改指导再来一局
-        </button>
-        <button onClick={onRetry}>同指导同种子重试</button>
-        <button className="ghost" onClick={exportJson}>
-          导出报告 JSON
-        </button>
+      {records}
+      </div></details>
       </div>
+      </div>
+
     </section>
   );
 }

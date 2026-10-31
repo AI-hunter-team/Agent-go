@@ -241,6 +241,7 @@ export function useJourney(interval: number) {
     const p = preparation.current,
       prepared = flow.prepared;
     const effectiveGuidance = kind === "llm" ? p!.input.guidance : "";
+    const reviewRunId = p?.input.runId ?? crypto.randomUUID();
     const journey: JourneyMetadata = {
       sceneId: "metro",
       sceneName: "地铁末班车",
@@ -252,6 +253,7 @@ export function useJourney(interval: number) {
       preparationMs: p?.durationMs ?? 0,
     };
     try {
+      if (kind === "offline") void Api.bindReview(reviewRunId).catch(() => undefined);
       const agent =
         kind === "llm"
           ? await RemoteAgent.create(
@@ -271,7 +273,7 @@ export function useJourney(interval: number) {
         agent,
         epoch,
         opts: {
-          runId: p?.input.runId,
+          runId: reviewRunId,
           guidance: effectiveGuidance,
           normalizedGuidance: prepared?.normalized ?? null,
           journey,
@@ -294,10 +296,13 @@ export function useJourney(interval: number) {
     if (flow.stage === "launch") tryStart();
   }, [flow.stage, tryStart]);
   const edit = (text?: string) => {
-    if (text !== undefined) setGuidance(text);
+    if (text !== undefined) {
+      setGuidance(text);
+      setKind("llm");
+    }
     invalidate();
     session.preview(seed, settings, { backpack });
-    navigate(kind === "offline" ? "plan" : "guidance");
+    navigate(text !== undefined || kind === "llm" ? "guidance" : "plan");
   };
   const retry = () => {
     const autonomous = report?.journey?.autonomous ?? false;
