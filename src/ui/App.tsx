@@ -6,7 +6,7 @@ import { ModelConfigPanel } from "./ModelConfigPanel";
 import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS } from "../sim/scenario";
-import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { resolveGameSettings } from "../shared/gameSettings";
 import { guidanceError } from "../shared/guidance";
 import { GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
 import { DecisionTrace } from "./DecisionTrace";
@@ -58,7 +58,7 @@ export function App() {
   const [showModelConfig, setShowModelConfig] = useState(false);
   const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
   const [seed, setSeed] = useState(session.engine.seed);
-  const settings = DEFAULT_GAME_SETTINGS;
+  const [settings, setSettings] = useState(session.engine.settings);
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
   const [intent, setIntent] = useState<Stage>("setup");
@@ -118,7 +118,7 @@ export function App() {
     } catch (failure) { if (request === requests.current) setError(`整理指导失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
-  /** 创建所选 Agent 并开始新局，保留既有模型配置与规则。 */
+  /** 创建所选 Agent 并开始新局，让模型会话与预览使用同一截止时间。 */
   const start = async () => {
     if (busy) return;
     const request = ++requests.current;
@@ -140,11 +140,18 @@ export function App() {
     } catch (failure) { if (request === requests.current) setError(`开局失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
-  /** 返回开局设置，生成新种子并重置预览；同种子重试保留独立入口。 */
+  /** 更新截止时间并重建同种子预览，确保离线模拟与远程会话规则一致。 */
+  const changeTimeLimit = (timeLimitSeconds: number) => {
+    if (busy) return;
+    const next = resolveGameSettings({ ...settings, timeLimitSeconds });
+    setSettings(next);
+    session.preview(seed, next);
+  };
+  /** 返回开局设置，保留截止时间并生成新种子；同种子重试保留独立入口。 */
   const edit = () => {
     requests.current++; preparationRef.current = null; setShowModelConfig(false); setIntent("setup"); setError(null);
     const nextSeed = randomSeed(seed);
-    setSeed(nextSeed); session.preview(nextSeed);
+    setSeed(nextSeed); session.preview(nextSeed, settings);
   };
   /** 校验玩家确认采用的复盘指导，再返回编辑；外观和性能偏好保持独立。 */
   const adoptGuidance = (text: string) => {
@@ -203,7 +210,7 @@ export function App() {
             preparationRef.current = null;
             setError(null);
           }} />}
-          {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
+          {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} settings={settings} onTimeLimit={changeTimeLimit} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
           {intent === "confirm" && <section className="card" aria-busy={busy !== null}><h2>确认这次出发</h2><p className="muted">{agentKind === "llm" ? "角色将依据以下指导自主行动。" : "离线规则 Agent 按默认守序方案行动。"}</p><p className="small">时限 {settings.timeLimitSeconds} 秒 · 每条开放队列额外 {settings.extraQueuePeople} 人</p><GuidanceCard guidance={agentKind === "llm" ? guidance : ""} normalized={normalized} /><div className="row"><button className="primary" disabled={busy !== null} onClick={start}>{busy ?? "出发"} <Icon name="arrow" /></button><button className="ghost" disabled={busy !== null} onClick={() => setIntent("setup")}>返回修改</button></div></section>}
           {intent === "playing" && runner && <>
             <section className={styles.runHeading}>{playing && <><p className={styles.runLabel}>世界时间 · {agentKind === "llm" ? "大模型" : "离线规则"}</p><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {session.engine.settings.timeLimitSeconds}s</span></div></>}<JourneyProgress player={player} status={session.engine.status} /></section>
