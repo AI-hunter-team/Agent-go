@@ -1,3 +1,4 @@
+import { platformClearanceBlocks } from "../shared/connectorGeometry";
 import type { WorldDefinition } from "../shared/world";
 import type { Rect } from "./geometry";
 import { ESCALATOR_REACH,ESCALATOR_CAPACITY,QUEUE_SPACING } from "./layout";
@@ -13,7 +14,7 @@ export function validateStationProportions(d:WorldDefinition):string[]{
  const all=(d.connectors??[]).filter(c=>c.arrivalArea);
  const groups=[...new Set(all.map(c=>c.groupId))].map(id=>all.find(c=>c.groupId===id)!);
  if(!groups.length)return [];
- const spatial=createMovement(d.layout),errors:string[]=[],floor=d.floors.find(f=>f.id==="platform")!;
+ const spatial=createMovement(d.layout,platformClearanceBlocks(d.connectors).map(v=>v.bounds)),errors:string[]=[],floor=d.floors.find(f=>f.id==="platform")!;
  for(const c of all){const a=c.arrivalArea!;
   if(c.kind==="escalator"){
    const bend=c.queueTurnAfter??4,len=Math.hypot(c.to.x-c.from.x,c.to.y-c.from.y),dx=(c.to.x-c.from.x)/len,dy=(c.to.y-c.from.y)/len,spacing=Math.max(1,QUEUE_SPACING);
@@ -39,7 +40,7 @@ export function validateStationProportions(d:WorldDefinition):string[]{
 
 /** Minimum complete legal itinerary per entrance, with unchanged conservative service allowances. */
 export function stationEntryBudgets(d:WorldDefinition):Record<string,number>{
- const l=d.layout,nav=createNavigation(l,createMovement(l)),doors=generatedTrainDoors(d);
+ const l=d.layout,nav=createNavigation(l,createMovement(l,platformClearanceBlocks(d.connectors).map(v=>v.bounds))),doors=generatedTrainDoors(d);
  const walk=(a:Vec,b:Vec)=>{const path=nav.findPath(a,b,.48);return path?nav.pathLength(a,path)/1.4:Infinity;};
  const board=(from:Vec)=>Math.min(...doors.map(door=>{let total=walk(from,door.pos),previous=door.pos;for(const point of door.boardingPath){total+=Math.hypot(point.x-previous.x,point.y-previous.y)/1.4;previous=point;}return total;}));
  const boarding=new Map(d.connectors!.map(c=>[c.id,board(c.to)]));

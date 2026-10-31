@@ -1,3 +1,4 @@
+import { CONNECTOR_SLAB_DEPTH } from "../../shared/connectorGeometry";
 import { CatmullRomCurve3, ExtrudeGeometry, Mesh, MeshStandardMaterial, Shape, TubeGeometry, Vector3 } from "three";
 import type { WorldDefinition, EntranceDefinition } from "../../shared/world";
 import { createMetroCar, metroMaterials, METRO } from "../../assets/metro-train";
@@ -14,7 +15,7 @@ export function stairFlight(p: GeneratedPalette, run: number, drop: number, widt
     profile.lineTo((i + 1) * going, -(i + 1) * rise - .035);
     if (i < count - 1) profile.lineTo((i + 1) * going, -(i + 2) * rise - .035);
   }
-  profile.lineTo(run, -drop - .26); profile.lineTo(0, -.26); profile.closePath();
+  profile.lineTo(run, -drop - CONNECTOR_SLAB_DEPTH); profile.lineTo(0, -CONNECTOR_SLAB_DEPTH); profile.closePath();
   const slab = new ExtrudeGeometry(profile, { depth: width, bevelEnabled: false }); slab.translate(0, 0, -width / 2); b.add(escalator ? p.dark : p.concrete, slab);
   for (let i = 0; i < count; i++) {
     const x = (i + .5) * going, y = -(i + 1) * rise;

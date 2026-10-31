@@ -1,3 +1,4 @@
+import { platformClearanceBlocks } from "../shared/connectorGeometry";
 import { createWorldV3Proportions } from "./worldV3Proportions";
 import { populateStationProps } from "./stationPropPlacement";
 import { createWorldV3Prototype } from "./worldV3Prototype";
@@ -137,7 +138,7 @@ export function validateWorld(def:WorldDefinition):string[] {
   for(const v of [...l.NAV_NODES.map(n=>n.pos),...l.FACILITIES.flatMap(f=>[f.pos,f.head,...(f.exit?[f.exit]:[])])])if(!Number.isFinite(v.x)||!Number.isFinite(v.y)||!contains(def.floors[0].bounds,v))errors.push("outside bounds");
   for(const f of l.FACILITIES)if(l.zoneOf(f.head)!==(f.kind==="tvm"||f.kind==="security"?"hall":"concourse"))errors.push(`wrong side ${f.id}`);
   const tvm=l.FACILITIES.filter(f=>f.kind==="tvm"&&l.zoneOf(f.head)==="hall").sort((a,b)=>Math.hypot(a.head.x-l.ENTRANCE.x,a.head.y-l.ENTRANCE.y)-Math.hypot(b.head.x-l.ENTRANCE.x,b.head.y-l.ENTRANCE.y))[0]!, s=l.FACILITIES.find(f=>f.kind==="security")!,g=l.FACILITIES.find(f=>f.kind==="gate")!;
-  const spatial=createMovement(l),nav=createNavigation(l,spatial);
+  const spatial=createMovement(l,platformClearanceBlocks(def.connectors).map(v=>v.bounds)),nav=createNavigation(l,spatial);
   const legs=[[l.ENTRANCE,tvm.head],[tvm.head,s.head],[s.exit!,g.head],[g.exit!,l.STAIRS_TOP]];
   for(const ingress of ["A","B"]) {
     const group=l.FACILITIES.filter(f=>f.ingress===ingress);if(!group.length)continue;

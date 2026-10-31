@@ -1,3 +1,4 @@
+import { connectorSlabBoxes } from "../../shared/connectorGeometry";
 import { subtractRect } from "../../shared/stationFootprint";
 import { propDefinition } from "../../shared/stationProps";
 import type { WorldDefinition } from "../../shared/world";
@@ -61,6 +62,7 @@ export function cameraFraction(target: Point3, desired: Point3, definition?:impo
     ...l.FACILITIES.flatMap(f=>facilitySolids(f.kind,f.pos,f.queueDirection).map(r=>bounds(r.x,0,r.y,r.w,f.kind==="tvm"?1.8:f.kind==="security"?2.5:1.1,r.h))),
     ...(definition.props??[]).flatMap(p=>p.body?[bounds(p.body.x,p.pos.floorId==='platform'?-6:0,p.body.y,p.body.w,propDefinition(p.assetId).size[1],p.body.h)]:[]),
     ...definition.details.flatMap(d=>d.body?[bounds(d.body.x,d.pos.floorId==="platform"?-6:0,d.body.y,d.body.w,2.5,d.body.h)]:[]),
+    ...connectorSlabBoxes(definition.connectors),
     ...generatedEnvelope(definition),
     bounds(0,definition.architecture?3.6:6,0,l.WIDTH,.2,l.HEIGHT),
   ]:CAMERA_BOXES;

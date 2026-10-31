@@ -1,3 +1,4 @@
+import { platformClearanceBlocks } from "../shared/connectorGeometry";
 import type { WorldDefinition } from "../shared/world";
 import type { Vec } from "../shared/types";
 import type { Rect } from "../sim/geometry";
@@ -61,6 +62,7 @@ export function stationAtlas(world:WorldDefinition):StationAtlas {
       platform.bounds=fitBounds([platform.bounds,...platform.shapes.map(s=>s.bounds)],0);
     }
   }
+  for(const {id,bounds} of platformClearanceBlocks(world.connectors))addShape(bounds.floorId??"platform",{id,kind:"detail",bounds});
   for(const c of world.connectors??[]){connections.push({id:c.id,label:`${c.groupId}组${c.kind}`,kind:c.kind,from:point(c.from,"concourse"),to:point(c.to,"platform")});for(const p of [c.from,c.to])addMarker({...point(p,"concourse"),id:`${c.id}:${p.floorId}`,label:c.kind,kind:c.kind});}
   for(const kind of world.connectors?[]:["stairs","escalator"] as const){
     const from=point(kind==="stairs"?l.STAIRS_TOP:l.ESCALATOR_TOP,upper.id),to=point(kind==="stairs"?l.STAIRS_BOTTOM:l.ESCALATOR_BOTTOM,legacy?upper.id:"platform");

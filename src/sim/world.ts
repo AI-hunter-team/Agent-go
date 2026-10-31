@@ -1,3 +1,4 @@
+import { platformClearanceBlocks } from "../shared/connectorGeometry";
 import { selectConnector } from "./connectors";
 import { EntranceSystem } from "./entrance";
 import { legacyWorld } from "./worldDefinition";
@@ -215,7 +216,7 @@ export class World {
   }
 
   constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds, readonly loadout: Readonly<Loadout> = DEFAULT_LOADOUT, readonly definition:WorldDefinition=legacyWorld(seed)) {
-    this.layout=definition.layout; this.spatial=createMovement(this.layout); this.navigation=createNavigation(this.layout,this.spatial);
+    this.layout=definition.layout; this.spatial=createMovement(this.layout,platformClearanceBlocks(definition.connectors).map(v=>v.bounds)); this.navigation=createNavigation(this.layout,this.spatial);
     this.loadout = resolveLoadout(loadout);
     this.rng = new Rng(seed);
     this.personaRng = this.rng.fork("persona");

@@ -9,10 +9,10 @@ export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
 export const GUARD_COLLISION_RADIUS = 0.84;
 export const personRadius = (kind: PassengerKind | "guard") => kind === "guard" ? GUARD_COLLISION_RADIUS : kind === "luggage" ? 0.48 : 0.32;
 
-export function createMovement(layout: StationLayout = legacyLayout) {
+export function createMovement(layout: StationLayout = legacyLayout, extraSolids: readonly Rect[] = []) {
 const {FACILITIES,PILLARS,ATTRACTIONS,MOVE_BLOCKERS,SECURITY_BARRIERS,GATE_BARRIERS,WIDTH,HEIGHT}=layout;
 const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos, f.queueDirection));
-const solids = [...(layout.solids??[]), ...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
+const solids = [...extraSolids, ...(layout.solids??[]), ...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
 /** Shared by persistent route planning and the per-tick collision sweep. */
 const SCENERY_OBSTACLES: readonly Rect[] = [...(layout.openings ? [...MOVE_BLOCKERS,...(layout.openingBlocks??layout.openings)] : MOVE_BLOCKERS.slice(0, 3)), ...solids];
 
