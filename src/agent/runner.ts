@@ -1,3 +1,7 @@
+import type { ActionPlan, BossRecord, NpcDialogueRequest, NpcResponse } from "../shared/types";
+import { buildIntentContext, parsePlan } from "../sim/intent";
+import { offlineNpcResponse } from "../sim/dialogue";
+import { HeuristicAgent } from "./heuristicAgent";
 import type {
   ActionResult,
   AgentAction,
@@ -15,9 +19,11 @@ import type { Engine } from "../sim/engine";
 import { classifyByKeywords } from "../sim/intent";
 import { summarizeObservation } from "../sim/observation";
 import { DECISION_LIMITS, RULES, DT } from "../sim/scenario";
-import type { Agent, Classifier, NpcNegotiator } from "./agent";
+import type { Agent, Classifier, NpcNegotiator, Interpreter, NpcResponder } from "./agent";
 import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
 import { prepareCutIn } from "../sim/negotiation";
+
+export const BUDGETS = { decisions: 80, boss: 20, npc: 30 } as const;
 
 export type RunnerPhase = "ready" | "running" | "thinking" | "ended";
 
@@ -29,6 +35,8 @@ export interface RunnerOptions {
   onChange?: () => void;
   now?: () => number;
   negotiate?: NpcNegotiator;
+  interpret?: Interpreter;
+  respond?: NpcResponder;
   runId?: string;
   preparation?: { durationMs: number; server: OperationDebug | null };
 }
@@ -42,6 +50,10 @@ export class GameRunner {
   readonly decisions: DecisionRecord[] = [];
   readonly attempts: DecisionAttempt[] = [];
   readonly dialogues: NpcDialogueRecord[] = [];
+  readonly bossPlans: BossRecord[] = [];
+  readonly interactionDialogues: {t: number; request: NpcDialogueRequest; response: NpcResponse}[] = [];
+  readonly calls = { decisions: 0, boss: 0, npc: 0 };
+  private readonly offline = new HeuristicAgent();
   private npcRealMs = 0;
   get thinkingRealMs() { return this.snapshotDebug().summary.aiWaitMs; }
   budgetExhausted = false;
@@ -62,7 +74,7 @@ export class GameRunner {
     private readonly classify: Classifier,
     private readonly opts: RunnerOptions = {},
   ) {
-    this.maxDecisions = opts.maxDecisions ?? DECISION_LIMITS.maxDecisions;
+    this.maxDecisions = Math.min(opts.maxDecisions ?? BUDGETS.decisions, BUDGETS.decisions);
     this.now = opts.now ?? (() => performance.now());
     this.debug = {
       version: 1, runId: opts.runId ?? crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: null,
@@ -88,10 +100,8 @@ export class GameRunner {
     if (this.phase !== "running") return;
     for (let i = 0; ; i++) {
       if (this.engine.status !== "running") return this.finish();
-      if (this.engine.hasTriggers()) {
-        if (this.budgetExhausted) this.engine.takeTriggers();
-        else return this.beginDecision();
-      }
+      if (this.engine.executor.pendingDialogue) return this.beginDialogue();
+      if (this.engine.hasTriggers()) return this.beginDecision();
       if (i >= steps) return;
       this.engine.step();
     }
@@ -115,6 +125,38 @@ export class GameRunner {
       else if (this.phase === "thinking") this.phase = "running";
       this.opts.onChange?.();
     });
+  }
+
+  private beginDialogue() {
+    this.phase = "thinking";
+    this.opts.onChange?.();
+    this.pending = this.answerDialogue().finally(() => {
+      this.pending = null;
+      if (this.engine.status !== "running") this.finish();
+      else if (this.phase === "thinking") this.phase = "running";
+      this.opts.onChange?.();
+    });
+  }
+  private async answerDialogue() {
+    const pending = this.engine.executor.pendingDialogue;
+    if (!pending) return;
+    const request = structuredClone(pending.request);
+    const record = this.beginAttempt("npc_respond", {triggers:[],lastResult:this.lastResult,observation:this.engine.observe()});
+    let response: NpcResponse;
+    try {
+      if (this.opts.respond && this.calls.npc < BUDGETS.npc) {
+        this.calls.npc++;
+        response = await this.opts.respond(request);
+      } else response = offlineNpcResponse(request);
+    } catch { response = {reply:"暂时无法答复。",decision:"refuse",give:null,want:null,reason:"对话请求失败",source:"error"}; }
+    record.server = response.debug ?? null;
+    record.usage = response.usage ?? null;
+    record.error = response.source === "error" ? response.reason : null;
+    this.endAttempt(record);
+    this.interactionDialogues.push({t:this.engine.t,request,response:structuredClone(response)});
+    if (this.engine.status !== "running" || this.engine.executor.pendingDialogue !== pending) return;
+    this.lastResult = this.engine.dialogue.apply(response);
+    this.engine.notify("spoken_to", `${request.npc.id}：${response.reply}`);
   }
 
   private async decide() {
@@ -152,7 +194,23 @@ export class GameRunner {
 
     if (action) {
       this.consecutiveFailures = 0;
-      if (action.type === "attempt_creative") {
+      if (action.type === "act") {
+        const context = buildIntentContext(engine.world, engine.guards);
+        const record = this.beginAttempt("interpret",turn);
+        let plan: ActionPlan;
+        try {
+          if (this.opts.interpret && this.calls.boss < BUDGETS.boss) {
+            this.calls.boss++;
+            plan = await this.opts.interpret(action.instruction, context);
+          } else plan = parsePlan(action.instruction, context);
+        } catch (error) { record.error = String(error); plan = parsePlan(action.instruction, context); }
+        record.server = plan.debug ?? null;
+        record.usage = plan.usage ?? null;
+        this.endAttempt(record);
+        if (engine.status !== "running") return;
+        outcome = engine.applyAction(action, undefined, plan);
+        this.bossPlans.push({t:engine.t,instruction:action.instruction,plan:structuredClone(plan),outcomes:engine.executor.outcomes});
+      } else if (action.type === "attempt_creative") {
         const record = this.beginAttempt("classification", turn);
         try {
           classification = await this.classify(action.intent, observation);
@@ -221,9 +279,9 @@ export class GameRunner {
       dialogue,
     });
 
-    if (this.decisions.length >= this.maxDecisions && !this.budgetExhausted) {
+    if (this.calls.decisions >= this.maxDecisions && !this.budgetExhausted) {
       this.budgetExhausted = true;
-      engine.world.log("budget", `已用完本局 ${this.maxDecisions} 次决策，之后不再调用模型`, true);
+      engine.world.log("budget", `已用完本局 ${this.maxDecisions} 次决策，之后由离线策略继续`, true);
     }
   }
 
@@ -285,7 +343,9 @@ export class GameRunner {
     this.opts.onChange?.();
     let result: DecisionResult;
     try {
-      result = await this.agent.decide(turn);
+      if (this.budgetExhausted || this.calls.decisions >= this.maxDecisions) result = await this.offline.decide(turn);
+      else { this.calls.decisions++; result = await this.agent.decide(turn); }
+
     } catch (err) {
       result = { action: null, thinking: null, usage: null, model: null, latencyMs: 0, error: String(err) };
     } finally {

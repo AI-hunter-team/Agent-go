@@ -190,8 +190,8 @@ describe("prompts and tools", () => {
   test("public negotiation and stair tools are explained without listing hidden jump mechanics", () => {
     const { rules } = buildSystemPrompt("", null);
     expect(rules).not.toMatch(/翻越|jump_gate|cut_in_line/);
-    expect(rules).toContain("request_cut_in");
-    expect(rules).toContain("descend_stairs");
+    expect(rules).toContain("talk(goal: yield)");
+    expect(rules).toContain("traverse(route: stairs)");
     expect(rules).toContain("STAIRS_TOP");
   });
 

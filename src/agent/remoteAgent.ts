@@ -11,7 +11,7 @@ import type {
 import type { OperationDebug } from "../shared/debug";
 import type { GameSettings } from "../shared/gameSettings";
 import { classifyByKeywords } from "../sim/intent";
-import type { Agent, Classifier, NpcNegotiator } from "./agent";
+import type { Agent, Classifier, NpcNegotiator, Interpreter, NpcResponder } from "./agent";
 
 let activeModelToken: string | null = null;
 
@@ -37,7 +37,7 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
   try { data = text ? JSON.parse(text) : null; }
   catch { throw new Error("API 服务返回格式异常，请检查服务是否已启动"); }
   // NPC failures also carry their raw model response and paid usage for the run log.
-  if (!res.ok && !(path === "/api/npc/negotiate" && data?.source === "error" && data?.accepted === false)) {
+  if (!res.ok && !((path === "/api/npc/negotiate" || path === "/api/npc/respond") && data?.source === "error")) {
     throw new Error(data?.error ?? `HTTP ${res.status}`);
   }
   return data as T;
@@ -65,6 +65,8 @@ export const Api = {
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn } }),
   classify: (intent: string, observation: Observation, sessionId?: string, runId?: string) =>
     api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId } }),
+  interpret: (sessionId: string, instruction: string, context: import("../shared/types").BossContext) => api<import("../shared/types").ActionPlan>("/api/boss/interpret", { body: {sessionId,instruction,context} }),
+  respond: (sessionId: string, request: import("../shared/types").NpcDialogueRequest) => api<import("../shared/types").NpcResponse>("/api/npc/respond", {body:{sessionId,request}}),
   saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report } }),
   deleteSession: (sessionId: string) => api<null>(`/api/session/${sessionId}`, { method: "DELETE" }),
   negotiate: (request: CutInDialogueRequest, sessionId?: string) => api<NpcReply>("/api/npc/negotiate", { body: { ...request, sessionId } }),
@@ -83,6 +85,9 @@ export class RemoteAgent implements Agent {
   decide(turn: AgentTurn): Promise<DecisionResult> {
     return Api.decide(this.sessionId, turn);
   }
+
+  readonly interpret: Interpreter = (instruction, context) => Api.interpret(this.sessionId, instruction, context);
+  readonly respond: NpcResponder = request => Api.respond(this.sessionId, request);
 
   readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId, this.runId);
 

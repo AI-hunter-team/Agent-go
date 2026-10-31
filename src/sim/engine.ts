@@ -1,3 +1,4 @@
+import { playerCanSee } from "./observation";
 import type {
   ActionResult,
   ActionPlan,
@@ -88,12 +89,17 @@ export class Engine {
       ...[...this.world.persons.values()].filter((p) => !p.isPlayer).map((p) => ({ id: p.id, role: "npc" as const, pos: p.pos, facing: p.facing, incapacitated: p.incapacitated })),
       ...this.guards.guards.map((g) => ({ id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated })),
     ];
+    const previousChanges = this.alerts.history.length;
     const percepts = this.perception.step(observers);
     const result = this.alerts.step(percepts, (a, b) => {
       const observer = observers.find((o) => o.id === a);
       const subject = this.world.persons.get(b) ?? this.guards.guards.find((g) => g.def.id === b);
       return Boolean(observer && subject && this.perception.canSee(observer, subject.pos));
     }, dt, (id) => (observers.find((o) => o.id === id)?.incapacitated ?? 0) > 0);
+    for (const change of this.alerts.history.slice(previousChanges)) {
+      const observer = observers.find(o => o.id === change.observerId);
+      if (change.subjectId === "player" && observer && playerCanSee(this.player.pos,observer.pos)) this.world.notifyPlayer("noticed", `${observer.id} 开始留意你的举动`);
+    }
     this.npcBrain.perceive(percepts);
     this.guards.respond(percepts, this.alerts, this.events);
     for (const record of this.alerts.records.values()) {
@@ -241,7 +247,7 @@ export class Engine {
   }
 
   /** Validate and start an action. `mechanic` is required for attempt_creative. */
-  applyAction(action: AgentAction | InteractionAction, mechanic?: CreativeMechanic): ActionResult {
+  applyAction(action: AgentAction | InteractionAction, mechanic?: CreativeMechanic, interpreted?: ActionPlan): ActionResult {
     const w = this.world;
     const p = this.player;
     if (this.status !== "running") return { ok: false, text: "本局已结束" };
@@ -263,7 +269,7 @@ export class Engine {
       case "talk": {
         let plan: ActionPlan;
         if (action.type === "act") {
-          plan = parsePlan(action.instruction, buildIntentContext(w, this.guards));
+          plan = interpreted ?? parsePlan(action.instruction, buildIntentContext(w, this.guards));
         } else {
           let step: PlanStep;
           switch (action.type) {
@@ -283,7 +289,11 @@ export class Engine {
         if(action.route!=="stairs") return {ok:false,text:"扶梯布局尚未接入"};
         const err=w.descendStairs(p); return {ok:!err,text:err??"开始下楼梯"};
       }
-      case "observe": return {ok:false,text:"详细观察工具由 IV2-10 接入"};
+      case "observe": {
+        const n = w.persons.get(action.targetId);
+        if (!n || n.isPlayer || !playerCanSee(p.pos,n.pos)) return {ok:false,text:"目标不在可见范围"};
+        return {ok:true,text: `${n.id}：${n.persona ? Object.values(n.persona.look).flat().join("、") : n.kind}；${n.activity.kind}`} ;
+      }
       case "move_to": {
         const target = resolveTarget(action.target);
         if (!target) return { ok: false, text: `未知地点 ${action.target}。可用：${NAV_NODES.map((n) => n.id).join("、")}，或设施编号` };

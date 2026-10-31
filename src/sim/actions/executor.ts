@@ -225,7 +225,7 @@ export class ActionExecutor {
     this.consent = null;
     this.context.world.cutInReservations.delete(this.context.world.player!.id);
     this.resetActivity();
-    this.context.world.notifyPlayer("action_failed", text);
+    this.context.world.notifyPlayer("action_interrupted", text);
   }
   private resetActivity() {
     const p = this.context.world.player!;

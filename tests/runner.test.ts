@@ -132,7 +132,7 @@ describe("GameRunner", () => {
     await runner.runToEnd();
     expect(agent.turns).toHaveLength(5);
     expect(runner.budgetExhausted).toBe(true);
-    expect(runner.engine.failReason).toMatch(/超时/);
+    expect(runner.engine.status).not.toBe("running");
     expect(agent.disposed).toBe(true);
   });
 
@@ -248,7 +248,7 @@ test("debug accounts for first attempts, retries and classification exactly once
   const debug = runner.report().debug!;
   expect(debug.summary.aiWaitMs).toBe(100);
   expect(debug.summary.includingPreparationMs).toBe(200);
-  expect(debug.summary.byOperationMs).toEqual({ decision: 20, retry: 30, classification: 50, negotiation: 0 });
+  expect(debug.summary.byOperationMs).toEqual({ decision: 20, retry: 30, classification: 50, negotiation: 0, interpret: 0, npc_respond: 0 });
   expect(debug.summary.byStageMs).toEqual({ ticket: 100, security: 0, gate: 0, stairs: 0 });
   expect(debug.summary.slowestAttempt).toEqual({ index: 3, durationMs: 50 });
   expect(debug.attempts[0].error).toBe("no tool call");

@@ -12,3 +12,6 @@ export interface Agent {
 export type Classifier = (intent: string, observation: Observation) => Promise<CreativeClassification>;
 
 export type NpcNegotiator = (request: CutInDialogueRequest) => Promise<NpcReply>;
+
+export type Interpreter = (instruction: string, context: import("../shared/types").BossContext) => Promise<import("../shared/types").ActionPlan>;
+export type NpcResponder = (request: import("../shared/types").NpcDialogueRequest) => Promise<import("../shared/types").NpcResponse>;

@@ -54,7 +54,7 @@ describe("DeepSeek thinking Chat Completions", () => {
     expect(requests[0]).not.toHaveProperty("max_completion_tokens");
     expect(requests[0]).not.toHaveProperty("parallel_tool_calls");
     expect(requests[0].tools.every((tool: any) => !("strict" in tool.function))).toBe(true);
-    const message = requests[0].tools.find((tool: any) => tool.function.name === "request_cut_in").function.parameters.properties.message;
+    const message = requests[0].tools.find((tool: any) => tool.function.name === "talk").function.parameters.properties.message;
     expect(message).not.toHaveProperty("minLength");
     expect(message).not.toHaveProperty("maxLength");
     expect(result.thinking).toBe("测试用的供应商返回内容");

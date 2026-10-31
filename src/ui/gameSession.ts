@@ -43,7 +43,9 @@ export class GameSession {
     const seed = this.engine.seed;
     this.preview(seed);
     const generation = this.generation;
+    const interaction = agent as Agent & Pick<RunnerOptions, "interpret" | "respond">;
     this.runner = new GameRunner(this.engine, agent, classifier, {
+      interpret: interaction.interpret, respond: interaction.respond,
       ...opts,
       onChange: () => {
         if (generation !== this.generation) return;

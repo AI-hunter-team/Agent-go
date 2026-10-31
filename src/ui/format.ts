@@ -3,6 +3,13 @@ import type { AgentAction, CreativeMechanic, DecisionUsage } from "../shared/typ
 export function describeAction(a: AgentAction | null): string {
   if (!a) return "（无动作）";
   switch (a.type) {
+    case "act": return `行动：${a.instruction}`;
+    case "talk": return `对 ${a.npcId} 说：${a.message}`;
+    case "traverse": return a.route === "stairs" ? "下楼梯到站台" : "乘扶梯到站台";
+    case "observe": return `观察 ${a.targetId}`;
+    case "take": return `拿取 ${a.itemId}`;
+    case "give": return `将 ${a.itemId} 给 ${a.npcId}`;
+    case "drop": return `放下 ${a.itemId}`;
     case "move_to":
       return `前往 ${a.target}`;
     case "join_queue":

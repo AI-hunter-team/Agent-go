@@ -19,7 +19,7 @@ export type PassengerKind = "normal" | "elderly" | "luggage" | "hurried" | "play
 // ---------------------------------------------------------------------------
 // Agent actions (what the agent may request; the engine validates and executes)
 
-export type AgentAction =
+export type AgentAction = import("./interaction").InteractionAction
   | { type: "move_to"; target: string; reason: string }
   | { type: "join_queue"; facility: string; reason: string }
   | { type: "leave_queue"; reason: string }
@@ -63,7 +63,10 @@ export type TriggerKind =
   | "queue_closed"
   | "creative_done"
   | "periodic"
-  | "fallback";
+  | "fallback"
+  | "action_interrupted"
+  | "noticed"
+  | "spoken_to";
 
 export interface Trigger {
   kind: TriggerKind;
