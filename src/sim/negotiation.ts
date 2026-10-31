@@ -4,6 +4,7 @@ import { dist } from "./geometry";
 import { findPath } from "./nav";
 import { playerCanSee } from "./observation";
 import { PROFILES, RULES } from "./scenario";
+import { temperamentDescription } from "./persona";
 
 export function prepareCutIn(world: World, npcId: string, message: string, history: CutInDialogueRequest["history"]):
   { ok: true; request: CutInDialogueRequest } | { ok: false; text: string } {
@@ -19,7 +20,7 @@ export function prepareCutIn(world: World, npcId: string, message: string, histo
   }
   const mine = world.queuePosition(p);
   if (mine?.facility === q.facility && mine.index <= q.index) return { ok: false, text: "这位乘客在你后面，无需向他请求插队" };
-  const temperament = npc.irritable ? "急躁，重视排队公平；不会因为礼貌措辞就轻易让位" :
+  const temperament = npc.persona ? temperamentDescription(npc.persona) : npc.irritable ? "急躁，重视排队公平；不会因为礼貌措辞就轻易让位" :
     npc.kind === "hurried" ? "自己也赶时间，会权衡对方的紧急程度和自己的损失" :
       npc.kind === "elderly" ? "谨慎，重视秩序与安全，也会体谅合理的紧急情况" : "平和，愿意听解释，但有边界，也在意排队公平";
   return { ok: true, request: {

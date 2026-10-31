@@ -1,5 +1,6 @@
-import type { FacilityStatus, GameEvent, PassengerKind, Trigger, TriggerKind, Vec } from "../shared/types";
-import { dist } from "./geometry";
+import type { FacilityStatus, GameEvent, PassengerKind, Persona, Trigger, TriggerKind, Vec } from "../shared/types";
+import { angleTo, dist } from "./geometry";
+import { generatePersona } from "./persona";
 import { FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
@@ -33,6 +34,8 @@ export interface Person {
   onPlatform: boolean;
   irritable: boolean;
   activity: Activity;
+  persona?: Persona;
+  facing: number;
   /** Actual service durations, sampled once from the profile ranges. Hidden from the agent. */
   serviceTime: { tvm: number; security: number; gate: number };
 }
@@ -51,6 +54,7 @@ export class World {
   t = 0;
   readonly rng: Rng;
   readonly items: ItemSystem;
+  private readonly personaRng: Rng;
   readonly persons = new Map<string, Person>();
   readonly facilities = new Map<string, Facility>();
   readonly events: GameEvent[] = [];
@@ -107,12 +111,15 @@ export class World {
       return [{ x: minX - margin, y: f.def.head.y - margin, w: maxX - minX + margin * 2, h: margin * 2 }];
     });
     const waypoint = detour ? detourAroundQueues(p.pos, target, queues) : target;
+    const before = { ...p.pos };
     p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), this.collisionBodies(p.id), detour);
+    if (dist(before, p.pos) > 1e-8) p.facing = angleTo(before, p.pos);
     return dist(p.pos, target) < 1e-6;
   }
 
   constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds) {
     this.rng = new Rng(seed);
+    this.personaRng = this.rng.fork("persona");
     this.items = new ItemSystem((id) => this.persons.get(id), () => this.t);
     for (const spot of ITEM_SPOTS) for (const kind of spot.stock) this.items.spawn(kind, { type: "spot", spotId: spot.id }, null);
     for (const def of FACILITIES) {
@@ -122,10 +129,11 @@ export class World {
 
   // ---------------------------------------------------------------- people
 
-  addPerson(kind: PassengerKind, pos: Vec, opts: { isPlayer?: boolean; hasTicket?: boolean; irritable?: boolean } = {}): Person {
+  addPerson(kind: PassengerKind, pos: Vec, opts: { isPlayer?: boolean; hasTicket?: boolean; irritable?: boolean; persona?: Persona; facing?: number } = {}): Person {
     const profile = PROFILES[kind];
     const sample = (r: [number, number]) => this.rng.range(r[0], r[1]);
     const items = this.items;
+    const persona = kind === "player" || opts.isPlayer ? undefined : opts.persona ?? generatePersona(this.personaRng, kind, opts.irritable);
     const person: Person = {
       id: opts.isPlayer ? "player" : `p${this.nextId++}`,
       kind,
@@ -137,7 +145,9 @@ export class World {
       screened: false,
       passedGate: false,
       onPlatform: false,
-      irritable: opts.irritable ?? false,
+      irritable: persona ? persona.traits.temper > 0.6 : opts.irritable ?? false,
+      persona,
+      facing: opts.facing ?? 0,
       activity: { kind: "idle" },
       serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
     };
@@ -314,6 +324,7 @@ export class World {
         const f = this.facilities.get(a.facility)!;
         const i = f.queue.indexOf(p.id);
         if (i >= 0) this.movePerson(p, this.queueStandPoint(f, i), stride, false);
+        if (i >= 0 && dist(p.pos, this.queueStandPoint(f, i)) < 0.1) p.facing = angleTo(p.pos, f.def.pos);
         break;
       }
       case "waiting": {
