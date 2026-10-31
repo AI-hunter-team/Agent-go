@@ -18,13 +18,18 @@ export interface SceneProps {
   quality: "standard" | "low";
   reducedMotion: boolean;
   assetUrl: string;
+  assetRotation: number;
+  guardAssetUrl: string;
+  guardAssetRotation: number;
   onAssetError: (message: string) => void;
+  onGuardAssetError: (message: string) => void;
   onFailure: (message: string) => void;
   metrics: FrameMetrics;
   showVision: boolean;
   showTrail: boolean;
 }
 
+/** 按游戏中的真实朝向跟随主角，支持环绕、缩放、总览及墙体避让。 */
 function CameraRig({ session, settings, reducedMotion }: { session: GameSession; settings: CameraSettings; reducedMotion: boolean }) {
   const { gl, size, set } = useThree();
   const cameras = useMemo(() => ({ follow: new PerspectiveCamera(58, 1, 0.08, 160), overview: new OrthographicCamera(-35, 35, 20, -20, 0.1, 180) }), []);
@@ -88,6 +93,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
   return null;
 }
 
+/** 显示调试用的保安视距扇形，与角色模型外观无关。 */
 function GuardVision({ id, session }: { id: string; session: GameSession }) {
   const mesh = useRef<Mesh>(null);
   useFrame(() => {
@@ -98,6 +104,7 @@ function GuardVision({ id, session }: { id: string; session: GameSession }) {
   return <mesh ref={mesh}><circleGeometry args={[RULES.guardRange, 40, -half, half * 2]} /><meshBasicMaterial color="#7f9485" transparent opacity={0.18} depthWrite={false} /></mesh>;
 }
 
+/** 从会话快照绘制调试视距、历史轨迹及当前路线。 */
 function DebugGround({ session, vision, trail }: { session: GameSession; vision: boolean; trail: boolean }) {
   const player = session.presentation.current.actors.get("player");
   const points = session.engine.trail;
@@ -132,6 +139,7 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   </group>;
 }
 
+/** 组合站厅、人物与显示层工具，将主角和保安的独立外观传给角色。 */
 function Contents(props: SceneProps) {
   const { session, metrics } = props;
   const { gl } = useThree();
@@ -156,11 +164,12 @@ function Contents(props: SceneProps) {
     <directionalLight position={[-8, 28, -12]} intensity={3} castShadow={props.quality === "standard"} shadow-mapSize={[1024, 1024]} shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={40} shadow-camera-bottom={-40} shadow-camera-far={100} shadow-normalBias={0.04} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
     <Station session={session} />
-    {actors.map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
+    {actors.map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
 }
 
+/** 建立三维画布及质量设置，将角色外观与世界展示组合。 */
 export default function GameScene(props: SceneProps) {
   return <Canvas shadows={props.quality === "standard"} dpr={props.quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: props.quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维调试地图。</span>}>
     <Contents {...props} />

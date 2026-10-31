@@ -20,24 +20,31 @@ import { FrameMetrics } from "./frameMetrics";
 import { Hint, Modal, TooltipProvider } from "./overlays";
 import type { ViewOptions } from "./presentation";
 import { useGameSession } from "./useGameSession";
+import { useAvatarModel } from "./useAvatarModel";
+import { AvatarSettings } from "./AvatarSettings";
 import styles from "./App.module.css";
 
 const GameScene = lazy(() => import("./scene/GameScene"));
 type Stage = "setup" | "confirm" | "playing";
 class SceneBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { error: boolean }> {
   state = { error: false };
+  /** 将三维渲染异常切换为可恢复的场景提示。 */
   static getDerivedStateFromError() { return { error: true }; }
+  /** 保留界面与对局，只替换失败的画面。 */
   render() { return this.state.error ? this.props.fallback : this.props.children; }
 }
+/** 显示应用现有的地铁品牌标识。 */
 function Brand() {
   return <div className={styles.brand}><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 6h26v22l-6 6H13l-6-6V6Zm6 6v11h14V12H13Zm1 16h1m10 0h1M10 37l5-5m15 5-5-5" /></svg><div>Agent Go<span>METRO · 交通剧场</span></div></div>;
 }
+/** 下载调试采集到的前端性能摘要。 */
 function downloadMetrics(metrics: FrameMetrics) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(metrics.summary(), null, 2)], { type: "application/json" }));
   const link = document.createElement("a"); link.href = url; link.download = "transit-performance.json"; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** 组织对局、观战画面与显示设置，不让外观设置参与世界结算。 */
 export function App() {
   const session = useGameSession();
   const [health, setHealth] = useState<{ llm: boolean; model: string | null }>({ llm: false, model: null });
@@ -60,8 +67,8 @@ export function App() {
   const [showVision, setShowVision] = useState(false);
   const [showTrail, setShowTrail] = useState(false);
   const [assetInput, setAssetInput] = useState("");
-  const [assetUrl, setAssetUrl] = useState("");
-  const [assetError, setAssetError] = useState("");
+  const avatar = useAvatarModel("player");
+  const guardAvatar = useAvatarModel("guard");
   const [metrics] = useState(() => new FrameMetrics());
   const [debug] = useState(() => new URLSearchParams(window.location.search).get("debug") === "1");
   const requests = useRef(0);
@@ -69,7 +76,8 @@ export function App() {
   const optionsRef = useRef<ViewOptions>({ showVision: false, showTrail: false, thinking: false });
   engineRef.current = session.engine;
   optionsRef.current = { showVision, showTrail, thinking: session.runner?.phase === "thinking", trail: session.engine.trail };
-  const onAssetError = useCallback((message: string) => setAssetError(message), []);
+  // 稳定的回调避免模型错误边界因 UI 刷新重复触发。
+  const onAssetError = avatar.onError;
   const onSceneFailure = useCallback((message: string) => setSceneFailure(message), []);
   const runner = session.runner;
   const ended = intent === "playing" && runner?.phase === "ended";
@@ -92,6 +100,7 @@ export function App() {
     return () => media.removeEventListener("change", change);
   }, []);
 
+  /** 整理赛前指导，完成后进入确认出发。 */
   const prepare = async () => {
     if (busy) return;
     const request = ++requests.current;
@@ -107,6 +116,7 @@ export function App() {
     } catch (failure) { if (request === requests.current) setError(`整理指导失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
+  /** 创建选择的角色 Agent 并开始新的一局。 */
   const start = async () => {
     if (busy) return;
     const request = ++requests.current;
@@ -128,12 +138,12 @@ export function App() {
     } catch (failure) { if (request === requests.current) setError(`开局失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
+  /** 返回指导编辑并重置预览。 */
   const edit = () => { requests.current++; preparationRef.current = null; setIntent("setup"); setError(null); session.preview(seed); };
+  /** 重新挂载三维画面，保留当前对局。 */
   const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
-  const applyAsset = (path: string) => {
-    if (path && (!path.startsWith("/models/") || path.includes("..") || !/\.(gltf|glb)$/i.test(path))) { setAssetError("请输入 /models/ 下的 .glb 或 .gltf 文件路径。"); return; }
-    setAssetError(""); setAssetInput(path); setAssetUrl(path ? `${path}?v=${Date.now()}` : "");
-  };
+  /** 将调试路径交给统一的角色外观管理器。 */
+  const applyAsset = (path: string) => { setAssetInput(path); avatar.applyPath(path); };
   const fallback = <div className={styles.sceneError} role="alert"><span className={styles.eyebrow}>画面暂不可用</span><h2>三维画面需要重新连接</h2><p>{sceneFailure ?? "浏览器无法建立三维画面。对局与报告仍然保留。"}</p><div className="row"><button onClick={retryScene}>重试三维</button><button onClick={() => setRenderer("2d")}>进入二维调试</button></div></div>;
 
   return <TooltipProvider delayDuration={250}><div className={styles.app} data-reduced-motion={reducedMotion}>
@@ -144,6 +154,9 @@ export function App() {
         <label className="field"><span>画面质量</span><select aria-label="画面质量" value={quality} onChange={(event) => setQuality(event.target.value as typeof quality)}><option value="standard">标准 · 动态阴影</option><option value="low">低画质 · 关闭阴影</option></select></label>
         <label className="check"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /> 减少镜头缓动与角色装饰动效</label>
         <p className="small muted">拖动画面环绕角色，滚轮调整距离。点击“回正”恢复跟随镜头。</p>
+        <AvatarSettings avatar={avatar} />
+        <AvatarSettings avatar={guardAvatar} />
+        <p className="small muted">GLB · 每个最大 20 MB · 贴图需内嵌。导入后保存在此浏览器，不会上传。</p>
       </Modal>
     </header>
     <main className={styles.layout}>
@@ -151,7 +164,7 @@ export function App() {
         <div className={styles.scene}>
           {renderer === "2d" ? <MapCanvas engineRef={engineRef} optionsRef={optionsRef} /> : sceneFailure ? fallback : <SceneBoundary key={sceneAttempt} fallback={fallback}>
             <Suspense fallback={<div className={styles.loading}><span className={styles.loader} />正在搭建交通剧场…</div>}>
-              <GameScene session={session} camera={camera} quality={quality} reducedMotion={reducedMotion} assetUrl={assetUrl} onAssetError={onAssetError} onFailure={onSceneFailure} metrics={metrics} showVision={showVision} showTrail={showTrail} />
+              <GameScene session={session} camera={camera} quality={quality} reducedMotion={reducedMotion} assetUrl={avatar.url} assetRotation={avatar.rotation} guardAssetUrl={guardAvatar.url} guardAssetRotation={guardAvatar.rotation} onAssetError={onAssetError} onGuardAssetError={guardAvatar.onError} onFailure={onSceneFailure} metrics={metrics} showVision={showVision} showTrail={showTrail} />
             </Suspense>
           </SceneBoundary>}
         </div>
@@ -195,11 +208,11 @@ export function App() {
               <h3>决策记录</h3><DecisionLog decisions={runner.decisions} />{ended && <EventTimeline report={runner.report()} />}
             </Modal>
           </>}
-          {debug && <details className={styles.debug}><summary>开发调试</summary><div className="row"><button onClick={() => setRenderer((value) => value === "3d" ? "2d" : "3d")}>切换到 {renderer === "3d" ? "2D" : "3D"}</button><button onClick={retryScene}>重建三维画面</button></div><label className="check"><input type="checkbox" checked={showVision} onChange={(event) => setShowVision(event.target.checked)} />视距示意（未裁剪遮挡）</label><label className="check"><input type="checkbox" checked={showTrail} onChange={(event) => setShowTrail(event.target.checked)} />角色轨迹</label><label className="field"><span>角色模型路径</span><input value={assetInput} onChange={(event) => setAssetInput(event.target.value)} placeholder="/models/character.glb" /></label><div className="row"><button onClick={() => applyAsset(assetInput)}>应用模型</button><button onClick={() => applyAsset("/models/sample-sculpture.gltf")}>加载样例</button><button onClick={() => applyAsset("")}>几何占位</button></div>{assetError && <p role="status" className="error">{assetError}</p>}<div className="row"><button disabled={metrics.active} onClick={() => { metrics.start(); session.notify(); }}>采样 60 秒</button><button onClick={() => downloadMetrics(metrics)}>导出性能记录</button></div><pre>{JSON.stringify(metrics.summary(), null, 2)}</pre></details>}
+          {debug && <details className={styles.debug}><summary>开发调试</summary><div className="row"><button onClick={() => setRenderer((value) => value === "3d" ? "2d" : "3d")}>切换到 {renderer === "3d" ? "2D" : "3D"}</button><button onClick={retryScene}>重建三维画面</button></div><label className="check"><input type="checkbox" checked={showVision} onChange={(event) => setShowVision(event.target.checked)} />视距示意（未裁剪遮挡）</label><label className="check"><input type="checkbox" checked={showTrail} onChange={(event) => setShowTrail(event.target.checked)} />角色轨迹</label><label className="field"><span>角色模型路径</span><input value={assetInput} onChange={(event) => setAssetInput(event.target.value)} placeholder="/models/character.glb" /></label><div className="row"><button onClick={() => applyAsset(assetInput)}>应用模型</button><button onClick={() => applyAsset("/models/sample-sculpture.gltf")}>加载样例</button><button onClick={() => applyAsset("")}>几何占位</button></div>{avatar.error && <p role="status" className="error">{avatar.error}</p>}<div className="row"><button disabled={metrics.active} onClick={() => { metrics.start(); session.notify(); }}>采样 60 秒</button><button onClick={() => downloadMetrics(metrics)}>导出性能记录</button></div><pre>{JSON.stringify(metrics.summary(), null, 2)}</pre></details>}
         </div>
         <div className={styles.ticketFoot}><span>一步一步，直到抵达。</span><div className={styles.barcode} aria-hidden="true" /></div>
       </aside>
     </main>
-    <footer className={styles.footer}><span>自然语言指导 · 自主行动 · 动态世界</span><span>{playing ? "观看角色，发现计划之外的可能。" : "场景与角色使用几何占位，后续接入正式资产。"}</span><span>TRANSIT THEATRE / V1</span></footer>
+    <footer className={styles.footer}><span>自然语言指导 · 自主行动 · 动态世界</span><span>{playing ? "观看角色，发现计划之外的可能。" : "在显示设置中导入自己的主角模型。"}</span><span>TRANSIT THEATRE / V1</span></footer>
   </div></TooltipProvider>;
 }
