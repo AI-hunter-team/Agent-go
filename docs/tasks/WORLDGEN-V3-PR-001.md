@@ -1,6 +1,6 @@
 # WORLDGEN-V3-PR-001：V3 后续PR交付
 
-状态：2026-11-01 整合与本地复验完成，准备推送并创建PR。用户明确要求“创建pr”，授权本任务普通push及创建PR，不授权合并、部署或付费模型。单一负责人/集成负责人为本聊天Codex，串行处理共享文件和中央记录。
+状态：2026-11-01 整合、本地复验、普通push及[PR #71](https://github.com/AI-hunter-team/Agent-go/pull/71)创建完成；远端检查状态见PR，未合并/部署。用户明确要求“创建pr”，授权本任务普通push及创建PR，不授权合并、部署或付费模型。单一负责人/集成负责人为本聊天Codex，串行处理共享文件和中央记录。
 
 实现基线：干净e3e5c977a4b1a54fdee1246880c18d1015908d74，来源codex/worldgen-v3；已验收预览工作区保持不动。PR专用分支codex/worldgen-v3-pr，独立同名worktree。已fetch并核实origin/main为fa5551b8ac725377ace494866141e7109342cee2；前置PR #68尚未合入，最新head codex/worldgen-lounge-minimap-pr为6409272ce8efe933eb1753e1b4128ad5298672fa，包含新增首页/豆包/角色动画。后续PR以该分支为base，待#68合入后再独立改base并复验，不把前置整包再次塞入main差异。
 
