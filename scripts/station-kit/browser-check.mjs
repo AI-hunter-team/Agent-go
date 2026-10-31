@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 const [chrome, destination, address = "http://127.0.0.1:5190/"] = process.argv.slice(2);
 if (!chrome || !destination) throw new Error("Usage: node browser-check.mjs <Chrome executable> <artifact directory> [preview URL]");
 const output = resolve(destination); await mkdir(output, { recursive: true });
-const profile = await mkdtemp(join(tmpdir(), "ai-hunter-kit-browser-"));
+const profile = await mkdtemp(join(tmpdir(), "agent-go-kit-browser-"));
 const browser = spawn(chrome, [
   "--headless=new", "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=0",
   "--user-data-dir=" + profile, "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
@@ -141,7 +141,7 @@ try {
   socket?.close(); browser.kill();
   await sleep(700);
   // Only clean the unique temporary profile created by this process.
-  if (resolve(profile).startsWith(resolve(tmpdir()) + sep) && profile.split(sep).pop().startsWith("ai-hunter-kit-browser-")) {
+  if (resolve(profile).startsWith(resolve(tmpdir()) + sep) && profile.split(sep).pop().startsWith("agent-go-kit-browser-")) {
     try { await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* Chrome children can release files later. */ }
   }
 }

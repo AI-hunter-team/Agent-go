@@ -1,8 +1,10 @@
-# Agent Go
+# agent-go
+
+项目名称统一使用英文 `agent-go`，页面品牌、包名、下载文件前缀和新生成的素材元数据采用同一拼写。
 
 玩家用最多 300 字指导一个角色，让它在动态地铁站里自主完成 **买票 → 安检 → 过闸机 → 下楼梯 → 进入站台**。世界由程序模拟，Agent 只能请求行动，不能改写世界事实。
 
-项目仓库：[AI-hunter-team/Agent-go](https://github.com/AI-hunter-team/Agent-go)。
+项目仓库：[agent-go](https://github.com/AI-hunter-team/Agent-go)。
 
 **当前开发版本已增加3D 站厅与楼梯示意、几何角色、跟随/总览镜头及完整游戏界面，支持 Luna 兼容 API 与 Anthropic 接入。** 规则仍由原模拟器结算，二维地图保留为调试视图。3D 浏览器证据及未完成验收见 [3D-MIG-001](docs/validation/3D-MIG-001.md)，模型实测见 [验收记录](docs/验收记录.md)，原 3D 集成见 [PR7-MERGE-001](docs/validation/PR7-MERGE-001.md)，本次集成见 [PR-REMAINING-001](docs/validation/PR-REMAINING-001.md)。
 

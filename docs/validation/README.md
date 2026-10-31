@@ -6,6 +6,8 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [PR18-MERGE-001](PR18-MERGE-001.md) | 名称统一 PR 与最新 main 的文档冲突解决及集成验证；最终合入见原 PR |
+| [BRAND-002](BRAND-002.md) | 英文名agent-go及包/下载/素材生成标识统一；验证范围与结果见报告 |
 | [NPC-PR-001](NPC-PR-001.md) | 人物修复与最新 main 兼容、PR/CI/合并及已合并分支清理，进行中 |
 | [NPC-VISUAL-001](NPC-VISUAL-001.md) | 连续移动避让、队列/办理占位、设施朝向、364 项检查及离线浏览器复验 |
 | [DEEPSEEK-THINKING-001](DEEPSEEK-THINKING-001.md) | 官方 DeepSeek 思考模式工具选择、多轮回传及 JSON 模式适配；模拟接口验证，不代表真实模型验收 |
