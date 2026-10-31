@@ -108,7 +108,7 @@ export function App() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
   const [reviewState, setReviewState] = useState<{ generation: number; expanded: boolean } | null>(null);
-  const [collapsedRecordGeneration, setCollapsedRecordGeneration] = useState<number | null>(null);
+  const [expandedRecordGeneration, setExpandedRecordGeneration] = useState<number | null>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
@@ -159,7 +159,7 @@ export function App() {
   };
   const broadcast = useBroadcast(session, watching);
   const won = report?.status === "success";
-  const recordExpanded = collapsedRecordGeneration !== session.generation;
+  const recordExpanded = expandedRecordGeneration === session.generation;
   const reviewOpened = reviewState?.generation === session.generation;
   const expandedReview = reviewOpened && reviewState.expanded;
   const messageMode: HeadMessageMode = watching ? recordExpanded ? "icons" : "full" : thought ? "icons" : "hidden";
@@ -690,7 +690,7 @@ export function App() {
             )}
             <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录">
               <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
-                onClick={() => setCollapsedRecordGeneration(recordExpanded ? session.generation : null)}>
+                onClick={() => setExpandedRecordGeneration(recordExpanded ? null : session.generation)}>
                 <span>{recordExpanded ? "收起行程记录" : "展开行程记录"}</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
               </button>
