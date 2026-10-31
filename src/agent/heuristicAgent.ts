@@ -35,7 +35,7 @@ export class HeuristicAgent implements Agent {
     if (self.passedGate) {
       if (self.activity.startsWith("正在下楼梯")) return { type: "wait", seconds: 3, reason: "正在下楼梯，等到达下层站台" };
       if (Math.hypot(self.position.x - STAIRS_TOP.x, self.position.y - STAIRS_TOP.y) <= STAIRS_REACH) {
-        return { type: "descend_stairs", reason: "已到楼梯入口，下楼到站台" };
+        return { type: "traverse", route: "stairs", reason: "已到楼梯入口，下楼到站台" };
       }
       return { type: "move_to", target: "STAIRS_TOP", reason: "已过闸机，前往楼梯入口" };
     }

@@ -13,12 +13,12 @@ export interface Observer {
 }
 
 export class PerceptionSystem {
-  constructor(readonly bus: EventBus, private actor: (id: string) => { pos: Vec } | undefined) {}
+  constructor(readonly bus: EventBus, private actor: (id: string) => { pos: Vec } | undefined, private lightAt: (pos: Vec) => number = () => 1) {}
 
   canSee(observer: Observer, pos: Vec): boolean {
     const npc = observer.role === "npc";
     return !(observer.incapacitated && observer.incapacitated > 0)
-      && inViewCone(observer.pos, observer.facing, npc ? PERCEPTION_RULES.npcFovDeg : RULES.guardFovDeg, npc ? PERCEPTION_RULES.npcSightRange : RULES.guardRange, pos)
+      && inViewCone(observer.pos, observer.facing, npc ? PERCEPTION_RULES.npcFovDeg : RULES.guardFovDeg, (npc ? PERCEPTION_RULES.npcSightRange : RULES.guardRange) * Math.min(this.lightAt(observer.pos), this.lightAt(pos)), pos)
       && lineOfSight(observer.pos, pos, SIGHT_OCCLUDERS);
   }
 

@@ -32,7 +32,7 @@ export class DialogueSystem {
     if (!p || !npc?.persona || npc.isPlayer || npc.incapacitated) return "对话对象不存在或无法回应";
     if (!step.message.trim() || [...step.message].length > 200) return "对话需要 1–200 字";
     if ((this.history.get(npc.id)?.length ?? 0) >= 3) return "与这位乘客的三轮对话已结束";
-    if (requireReach && (dist(p.pos, npc.pos) > 3 || !playerCanSee(p.pos, npc.pos) || !findPath(p.pos, npc.pos))) return "请到可见可达的乘客 3 米内对话";
+    if (requireReach && (dist(p.pos, npc.pos) > 3 || !playerCanSee(p.pos, npc.pos, this.world.lightAt) || !findPath(p.pos, npc.pos))) return "请到可见可达的乘客 3 米内对话";
     if (step.offerItemId && !this.world.items.holdings(p.id).some(i => i.id === step.offerItemId)) return "没有持有提议交换的物品";
     if ((step.goal === "trade" || step.goal === "bribe") && !step.offerItemId) return "交换或贿赂需要实际物品";
     if (step.goal === "yield") {
@@ -242,7 +242,7 @@ export function prepareCutIn(world: World, npcId: string, message: string, histo
     ok: false,
     text: "这位乘客当前没有在开放的设施排队"
   };
-  if (dist(p.pos, npc.pos) > RULES.cutInDistance || !playerCanSee(p.pos, npc.pos) || !findPath(p.pos, npc.pos)) {
+  if (dist(p.pos, npc.pos) > RULES.cutInDistance || !playerCanSee(p.pos, npc.pos, world.lightAt) || !findPath(p.pos, npc.pos)) {
     return {
       ok: false,
       text: `请先走到可见且可达的乘客附近（${RULES.cutInDistance} 米内）再沟通`

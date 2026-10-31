@@ -7,6 +7,7 @@ import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettings } from ".
 // values for playtesting, not confirmed product rules.
 
 export const DT = 0.1;
+export const INTERACTION_RULES = { backpackSecuritySeconds: 2, inspectItemSeconds: 2, darkSightFactor: .4, npcCutChancePerSecond: .02, npcCutFairnessMax: .25, npcCutHurryMin: .75, npcCutTimeout: 8 } as const;
 
 export const PERCEPTION_RULES = { npcSightRange: 10, npcFovDeg: 140, shoutRadius: 8 } as const;
 export const ALERT_RULES = {
@@ -103,6 +104,8 @@ export interface NpcSpawn {
 
 export type ScriptedEvent =
   | { t: number; type: "status"; facility: string; status: FacilityStatus; note: string; broadcast: string | null }
+  | { t: number; type: "power"; zone: import("./layout").Zone; duration: number }
+  | { t: number; type: "damage"; facility: string }
   | { t: number; type: "recheck"; facility: string; extra: [number, number] };
 
 export interface Scenario {
@@ -172,6 +175,7 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
         note: "临时停用",
         broadcast: "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
       },
+      { t: 65, type: "power", zone: "concourse", duration: 12 },
       { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
     ],
   };

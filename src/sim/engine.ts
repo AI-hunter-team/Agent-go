@@ -1,3 +1,4 @@
+import { resolveLoadout } from "../shared/interaction";
 import { playerCanSee } from "./observation";
 import type {
   ActionResult,
@@ -63,11 +64,15 @@ export class Engine {
   /** A wait requested while still walking or queueing: fires wait_done without interrupting. */
   private wakeAt: number | null = null;
 
-  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}, scenarioOverride?: Scenario) {
+  readonly loadout: Readonly<import("../shared/interaction").Loadout>;
+  constructor(readonly seed = 1, settings: Partial<GameSettings> = {}, scenarioOverride?: Scenario, loadout?: import("../shared/interaction").Loadout) {
     this.settings = resolveGameSettings(settings);
-    this.world = new World(seed, this.settings.timeLimitSeconds);
+    this.loadout = resolveLoadout(loadout);
+    this.world = new World(seed, this.settings.timeLimitSeconds, this.loadout);
+    this.world.onWorldEvent = event => { this.events.emit(event); };
+    this.guards.lightAt = this.world.lightAt;
     this.npcs = new NpcDirector(this.world, scenarioOverride ?? buildScenario(seed, this.settings));
-    this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id));
+    this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id), this.world.lightAt);
     this.alerts = new AlertSystem(this.events, (id) => this.guards.guards.find((g) => g.def.id === id)?.role ?? (this.world.persons.has(id) && id !== "player" ? "npc" : undefined), () => this.t);
     this.npcBrain = new NpcBrain(this.world, this.guards, this.events, this.alerts);
     this.dialogue = new DialogueSystem(this.world,this.events,this.alerts,this.npcBrain);
@@ -98,7 +103,7 @@ export class Engine {
     }, dt, (id) => (observers.find((o) => o.id === id)?.incapacitated ?? 0) > 0);
     for (const change of this.alerts.history.slice(previousChanges)) {
       const observer = observers.find(o => o.id === change.observerId);
-      if (change.subjectId === "player" && observer && playerCanSee(this.player.pos,observer.pos)) this.world.notifyPlayer("noticed", `${observer.id} 开始留意你的举动`);
+      if (change.subjectId === "player" && observer && playerCanSee(this.player.pos,observer.pos,this.world.lightAt)) this.world.notifyPlayer("noticed", `${observer.id} 开始留意你的举动`);
     }
     this.npcBrain.perceive(percepts);
     this.guards.respond(percepts, this.alerts, this.events);
@@ -114,7 +119,7 @@ export class Engine {
   private failForGuard(guardId: string, eventId: string) {
     const guard = this.guards.guards.find((g) => g.def.id === guardId);
     const kind = this.events.get(eventId)?.kind;
-    const action = kind === "vault" ? "翻越闸机" : kind === "strike" || kind === "knockout" ? "击打行为" : "违规行为";
+    const action = kind === "vault" ? "翻越闸机或安检栏杆" : kind === "strike" || kind === "knockout" ? "击打行为" : "违规行为";
     this.end("failed", `被${guard?.def.label ?? guardId}确认${action}，判负`);
   }
 
@@ -257,7 +262,7 @@ export class Engine {
     if (action.type !== "wait") {
       if (p.activity.kind === "service") return { ok: false, text: "正在办理中，请等办理完成" };
       if (p.activity.kind === "creative") return { ok: false, text: "上一个行动尚未完成" };
-      if (p.activity.kind === "stairs") return { ok: false, text: "正在下楼梯，请等到达站台" };
+      if (p.activity.kind === "stairs" && !(p.activity.route === "escalator" && action.type === "act")) return { ok: false, text: "正在下楼梯，请等到达站台" };
     }
     this.wakeAt = null;
 
@@ -286,13 +291,15 @@ export class Engine {
         return result;
       }
       case "traverse": {
-        if(action.route!=="stairs") return {ok:false,text:"扶梯布局尚未接入"};
-        const err=w.descendStairs(p); return {ok:!err,text:err??"开始下楼梯"};
+        const err=w.traverse(p, action.route, action.walking); return {ok:!err,text:err??"开始下楼梯"};
       }
       case "observe": {
         const n = w.persons.get(action.targetId);
-        if (!n || n.isPlayer || !playerCanSee(p.pos,n.pos)) return {ok:false,text:"目标不在可见范围"};
-        return {ok:true,text: `${n.id}：${n.persona ? Object.values(n.persona.look).flat().join("、") : n.kind}；${n.activity.kind}`} ;
+        if (!n || n.isPlayer || !playerCanSee(p.pos, n.pos, w.lightAt)) return {ok:false,text:"目标不在可见范围"};
+        if (p.activity.kind === "idle" || p.activity.kind === "waiting") p.activity = { kind: "waiting", remaining: 1 };
+        else this.wakeAt = round1(w.t + 1);
+        const holding = w.items.holdings(n.id).filter(i => w.items.slot(i) === "hand").map(i => i.kind).join("、") || "无";
+        return {ok:true,text: `${n.id}：${n.persona ? Object.values(n.persona.look).flat().join("、") : n.kind}；${n.activity.kind}；手持：${holding}`} ;
       }
       case "move_to": {
         const target = resolveTarget(action.target);

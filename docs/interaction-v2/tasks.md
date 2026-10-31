@@ -1,6 +1,6 @@
 # 交互 2.0：任务拆分、顺序与验收
 
-状态：**IV2-01–12 本地实现及软件验证完成；13–19 继续实施**（2026-10-31）。证据及尚未接入的布局/网络/展示见 [专题状态表](README.md#状态与后续)。以下保留任务范围与依赖，不代表后续已排期。规则与接口见 [design.md](design.md)；开工前按 [任务简报模板](../templates/task-brief.md) 建立 `docs/tasks/IV2-xx.md`，验证写 `docs/validation/IV2-xx.md`，流程遵守 [AGENTS.md](../../AGENTS.md) 与 [DEVELOPMENT](../DEVELOPMENT.md)。
+状态：**IV2-01–19 本地实现完成；第二阶段集成验收结果见 IV2-18**（2026-10-31）。证据及尚未接入的布局/网络/展示见 [专题状态表](README.md#状态与后续)。以下保留原任务范围与依赖，实际状态以验证记录为准。规则与接口见 [design.md](design.md)；开工前按 [任务简报模板](../templates/task-brief.md) 建立 `docs/tasks/IV2-xx.md`，验证写 `docs/validation/IV2-xx.md`，流程遵守 [AGENTS.md](../../AGENTS.md) 与 [DEVELOPMENT](../DEVELOPMENT.md)。
 
 ## 给开发 Agent（Codex）的执行约定
 

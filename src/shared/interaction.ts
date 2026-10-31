@@ -1,8 +1,15 @@
 // Interaction 2.0 contracts (docs/interaction-v2/design.md C1–C9).
-// Declaring a contract does not enable its tools; runtime integration is staged.
+// Runtime consumers: simulator, server, runner, report and scene presentation.
 import type { OperationDebug } from "./debug";
 import type { DecisionUsage } from "./types";
 import type { Vec } from "./types";
+
+export interface Loadout { backpack: boolean }
+export const DEFAULT_LOADOUT: Readonly<Loadout> = Object.freeze({ backpack: true });
+export function resolveLoadout(value: unknown = DEFAULT_LOADOUT): Readonly<Loadout> {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(k => k !== "backpack") || typeof (value as Loadout).backpack !== "boolean") throw new RangeError("背包配置须为 { backpack: boolean }");
+  return Object.freeze({ backpack: (value as Loadout).backpack });
+}
 
 export type AlertLevel = "none" | "white" | "yellow" | "red";
 export type ObserverRole = "npc" | "guard" | "security_staff";
@@ -64,7 +71,7 @@ export interface MemoryEntry {
 export type WorldEventKind =
   | "item_dropped" | "item_thrown" | "collision" | "push" | "snatch" | "strike" | "knockout"
   | "threaten" | "vault" | "slide_handrail" | "escalator_exit" | "force_cut_in"
-  | "argument" | "report" | "facility_damaged" | "power_out" | "odd_behaviour";
+  | "argument" | "report" | "facility_damaged" | "power_out" | "power_restored" | "odd_behaviour";
 
 export interface WorldEvent {
   id: string;
@@ -128,6 +135,7 @@ export type PlanStep =
   | { op: "snatch"; npcId: string; itemKind: ItemKind }
   | { op: "push"; npcId: string }
   | { op: "strike"; npcId: string; itemId?: string; aim: "knockout" | "hurt" }
+  | { op: "strike"; facilityId: string; itemId?: string; aim: "hurt" }
   | { op: "vault"; obstacle: "gate" | "railing" | "escalator_side" }
   | { op: "slide_handrail" }
   | { op: "force_cut_in"; npcId: string }
@@ -176,9 +184,9 @@ export interface NpcResponse extends ModelMetadata {
   source: "llm" | "offline" | "error";
 }
 
-/** C7 contracts only; IV2-10 connects them to AgentAction and the engine. */
+/** C7 actions consumed by AgentAction and the engine. */
 export type InteractionAction = (
-  | { type: "traverse"; route: "stairs" | "escalator" }
+  | { type: "traverse"; route: "stairs" | "escalator"; walking?: boolean }
   | { type: "observe"; targetId: string }
   | { type: "take"; itemId: string }
   | { type: "give"; itemId: string; npcId: string }

@@ -9,7 +9,7 @@ import { OpenAIClient, OpenAILlmService } from "../server/openai";
 import { SessionStore } from "../server/sessions";
 import { GameRunner } from "../src/agent/runner";
 import { Engine } from "../src/sim/engine";
-import type { CreativeClassification, DecisionResult, GameReport } from "../src/shared/types";
+import type { DecisionResult, GameReport } from "../src/shared/types";
 
 test("HTTP flow correlates preparation, decision, classification and persisted final report", async () => {
   const dir = await mkdtemp(join(tmpdir(), "agent-debug-api-"));
@@ -17,10 +17,10 @@ test("HTTP flow correlates preparation, decision, classification and persisted f
   const logger = new DebugLogger(true, dir, [secret]);
   const fetcher = debugFetch((async (_url, init) => {
     const request = JSON.parse(init!.body as string);
-    const value = request.tools ? { role: "assistant", content: null, tool_calls: [{ id: "t1", type: "function", function: { name: "attempt_creative", arguments: JSON.stringify({ intent: "飞过去", reason: "测试" }) } }] }
+    const value = request.tools ? { role: "assistant", content: null, tool_calls: [{ id: "t1", type: "function", function: { name: "act", arguments: JSON.stringify({ instruction: "飞过去", reason: "测试" }) } }] }
       : { role: "assistant", content: JSON.stringify(request.response_format.json_schema.name === "guidance"
         ? { summary: "测试", risk: "未说明", priorities: [], rules: [], creativeIdeas: [], notExecutable: [], initialPlan: [] }
-        : { mechanic: "unsupported", reason: "不支持飞行" }) };
+        : { status:"unsupported",steps:[],summary:"不支持飞行",reason:"不支持飞行" }) };
     return Response.json({ model: "luna-test", choices: [{ finish_reason: request.tools ? "tool_calls" : "stop", message: value }], usage: { prompt_tokens: 100, completion_tokens: 20 } }, { headers: { "x-request-id": "upstream-id" } });
   }) as typeof fetch);
   const llm = new OpenAILlmService(new OpenAIClient("https://example.test/v1", secret, fetcher), { model: "luna-test", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false });
@@ -45,8 +45,8 @@ test("HTTP flow correlates preparation, decision, classification and persisted f
         expect((await api(`/api/session/${sessionId}/report`, { report })).status).toBe(204);
         await api(`/api/session/${sessionId}`, undefined, "DELETE");
       })(),
-    }, async (intent, observation) => (await api("/api/creative/classify", { sessionId, intent, observation })).body as CreativeClassification,
-    { runId, preparation: { durationMs: 1, server: normalized.body.debug } });
+    }, async () => ({mechanic:"unsupported",reason:"",source:"keywords"}),
+    { interpret:(instruction,context)=>api("/api/boss/interpret",{sessionId,instruction,context}).then(r=>r.body), runId, preparation: { durationMs: 1, server: normalized.body.debug } });
     runner.start(); await runner.pending;
     expect(runner.report().debug!.attempts.map((a) => a.server?.calls[0].providerRequestId)).toEqual(["upstream-id", "upstream-id"]);
     const mismatch = await api(`/api/session/${sessionId}/report`, { report: { status: "success", debug: { runId: "wrong" } } });
@@ -57,11 +57,11 @@ test("HTTP flow correlates preparation, decision, classification and persisted f
     expect(logs).not.toContain(secret);
     const records = logs.trim().split("\n").map((line) => JSON.parse(line));
     const operations = records.filter((r) => r.event === "model_operation");
-    expect(operations.map((r) => r.debug.operation)).toEqual(["normalize", "decide", "classify"]);
+    expect(operations.map((r) => r.debug.operation)).toEqual(["normalize", "decide", "interpret"]);
     expect(operations.every((r) => r.debug.runId === runId)).toBe(true);
     const final = records.find((r) => r.event === "run_report");
     expect(final.report.debug.attempts).toHaveLength(2);
-    expect(final.report.debug.attempts[1].classification).toMatchObject({ mechanic: "unsupported", source: "llm" });
+    expect(final.report.boss[0].plan).toMatchObject({ status: "unsupported", source: "llm" });
     expect(final.report.debug.summary.aiWaitMs).toBeGreaterThan(0);
     expect(final.report.debug.summary.internalReasoningMs).toBeNull();
   } finally {

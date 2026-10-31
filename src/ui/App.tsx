@@ -47,6 +47,8 @@ export function App() {
   const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
   const [seed, setSeed] = useState(session.engine.seed);
   const settings = DEFAULT_GAME_SETTINGS;
+  const [backpack, setBackpack] = useState(true);
+  const loadout = { backpack };
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
   const [intent, setIntent] = useState<Stage>("setup");
@@ -115,11 +117,10 @@ export function App() {
     const preparation = preparationRef.current;
     const runId = preparation?.runId ?? crypto.randomUUID();
     try {
-      const agent = agentKind === "llm" ? await RemoteAgent.create(guidance, normalized, runId, settings) : new HeuristicAgent();
+      const agent = agentKind === "llm" ? await RemoteAgent.create(guidance, normalized, runId, settings, loadout) : new HeuristicAgent();
       if (request !== requests.current) { await agent.dispose(); return; }
-      session.start(agent, agent instanceof RemoteAgent ? agent.classify : offlineClassifier, {
+      session.start(agent, offlineClassifier, {
         runId,
-        negotiate: agent instanceof RemoteAgent ? agent.negotiate : undefined,
         preparation: agentKind === "llm" && preparation ? { durationMs: preparation.durationMs, server: preparation.server } : undefined,
         guidance: agentKind === "llm" ? guidance : "",
         normalizedGuidance: agentKind === "llm" ? normalized : null,
@@ -183,7 +184,7 @@ export function App() {
             preparationRef.current = null;
             setError(null);
           }} />}
-          {intent === "setup" && !showModelConfig && <SetupPanel llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
+          {intent === "setup" && !showModelConfig && <SetupPanel backpack={backpack} onBackpack={value => { setBackpack(value); session.preview(seed, settings, { backpack: value }); }} llmAvailable={health.llm} model={health.model} agentKind={agentKind} onAgentKind={setAgentKind} seed={seed} onSeed={(value) => { setSeed(value); session.preview(value, settings); }} guidance={guidance} onGuidance={setGuidance} busy={busy} onPrepare={prepare} onConfigureModel={() => setShowModelConfig(true)} />}
           {intent === "confirm" && <section className="card"><span className={styles.eyebrow}>READY TO DEPART</span><h2>确认这次出发</h2><p className="muted">{agentKind === "llm" ? "角色将依据以下指导自主行动。" : "离线规则 Agent 按默认守序方案行动。"}</p><p className="small">时限 {settings.timeLimitSeconds} 秒 · 每条开放队列额外 {settings.extraQueuePeople} 人</p><GuidanceCard guidance={agentKind === "llm" ? guidance : ""} normalized={normalized} /><div className="row"><button className="primary" disabled={busy !== null} onClick={start}>{busy ?? "出发"} <span aria-hidden="true">→</span></button><button className="ghost" disabled={busy !== null} onClick={() => setIntent("setup")}>返回修改</button></div></section>}
           {intent === "playing" && runner && <>
             <section className={styles.runHeading}><span className={styles.eyebrow}>本次行程 / {agentKind === "llm" ? "大模型" : "离线规则"}</span><div className={styles.timer} aria-label="世界时间">{session.engine.t.toFixed(1)}<span> / {session.engine.settings.timeLimitSeconds}s</span></div><JourneyProgress player={player} status={session.engine.status} /></section>

@@ -43,7 +43,7 @@ function ItemMarker({id,session}:{id:string;session:GameSession}) {
     if(i) mesh.current.position.set(i.x+(i.holderId?.length? .3:0),i.holderId ? 1:.16,i.z);
   });
   const item=session.presentation.current.items.find(i=>i.id===id);
-  return <mesh ref={mesh} name={item ? ITEM_DEFS[item.kind].label:id}><boxGeometry args={[.24,.2,.13]} /><meshStandardMaterial color={item?.kind==="ticket" ? colors.white:colors.ochre} /></mesh>;
+  return <mesh ref={mesh} name={item ? ITEM_DEFS[item.kind].label:id}><boxGeometry args={[.45,.2,.25]} /><meshStandardMaterial color={item?.kind==="ticket" ? colors.white:colors.ochre} /></mesh>;
 }
 export function SceneItems({session}:{session:GameSession}) {
   return <>{[...session.engine.world.items.items.keys()].map(id=><ItemMarker key={id} id={id} session={session}/>)}</>;

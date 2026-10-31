@@ -28,6 +28,7 @@ export interface Guard {
 export class GuardSystem {
   readonly guards: Guard[];
   private clock = 0;
+  lightAt: (pos: Vec) => number = () => 1;
 
   constructor(definitions: readonly GuardDef[] = GUARDS) {
     this.guards = definitions.map((def) => ({
@@ -101,7 +102,7 @@ export class GuardSystem {
   }
 
   canSee(g: Guard, p: Vec): boolean {
-    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange, p) && lineOfSight(g.pos, p, SIGHT_OCCLUDERS);
+    return g.incapacitated <= 0 && inViewCone(g.pos, g.facing, RULES.guardFovDeg, RULES.guardRange * Math.min(this.lightAt(g.pos), this.lightAt(p)), p) && lineOfSight(g.pos, p, SIGHT_OCCLUDERS);
   }
 
   investigate(g: Guard, point: Vec, priority: number) {

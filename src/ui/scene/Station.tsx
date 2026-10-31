@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { CanvasTexture, DoubleSide, SRGBColorSpace, type Mesh, type MeshBasicMaterial } from "three";
-import { FACILITIES, QUEUE_SPACING, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_WALL, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
+import { CanvasTexture, DoubleSide, SRGBColorSpace, type Mesh, type PointLight, type MeshBasicMaterial } from "three";
+import { ESCALATOR_TOP, RAILING_SEGMENTS, FACILITIES, QUEUE_SPACING, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_WALL, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
 import type { GameSession } from "../gameSession";
 import { box, materials, plane, type colors } from "./resources";
 
@@ -61,6 +61,7 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
 
 export const Station = memo(function Station({ session }: { session: GameSession }) {
   return <group>
+    <OutageOverlay session={session} />
     <Block position={[STAIRS_TOP.x / 2, -0.09, HEIGHT / 2]} scale={[STAIRS_TOP.x, 0.18, HEIGHT + 2]} color="chalk" />
     <Block position={[(STAIRS_BOTTOM.x + WIDTH) / 2, -2.09, HEIGHT / 2]} scale={[WIDTH - STAIRS_BOTTOM.x + 2, 0.18, HEIGHT + 2]} color="sage" />
     {Array.from({ length: 12 }, (_, index) => {
@@ -68,12 +69,18 @@ export const Station = memo(function Station({ session }: { session: GameSession
       const top = -2 * index / 12;
       return <Block key={`stairs${index}`} position={[STAIRS_TOP.x + width * (index + 0.5), top - 0.1, STAIRS_TOP.y]} scale={[width, 0.2, 4]} color={index % 2 ? "chalk" : "ochre"} />;
     })}
+    {Array.from({ length: 16 }, (_, i) => <Block key={`escalator${i}`} position={[48 + 9 * (i + .5) / 16, -2 * i / 16 - .1, ESCALATOR_TOP.y]} scale={[9 / 16, .2, 2]} color="grey" />)}
+    {[ESCALATOR_TOP.y - 1.1, ESCALATOR_TOP.y + 1.1, STAIRS_TOP.y - 2.1].map(z => <group key={z} position={[52.5, -.1, z]} rotation={[0,0,-Math.atan2(2,9)]}><Block position={[0,.6,0]} scale={[9.2,.12,.15]} color="ink" /></group>)}
+    <Sign text="扶梯 / ESCALATOR ↓" position={[47.5, 2.8, 20]} width={4} />
     <Sign text="04   下楼梯 / PLATFORM  ↓" position={[47.5, 2.8, 15]} width={5.8} />
     <Block position={[(SECURITY_X + GATE_X) / 2, -0.015, HEIGHT / 2]} scale={[GATE_X - SECURITY_X, 0.025, HEIGHT]} color="white" />
     <Block position={[(GATE_X + STAIRS_TOP.x) / 2, -0.012, HEIGHT / 2]} scale={[STAIRS_TOP.x - GATE_X, 0.025, HEIGHT]} color="sage" />
     {Array.from({ length: Math.floor(STAIRS_TOP.x / 3) + 1 }, (_, i) => <mesh key={`x${i}`} geometry={box} material={materials.line} position={[i * 3, 0.002, HEIGHT / 2]} scale={[0.015, 0.005, HEIGHT]} />)}
     {Array.from({ length: 11 }, (_, i) => <mesh key={`z${i}`} geometry={box} material={materials.line} position={[STAIRS_TOP.x / 2, 0.003, i * 3]} scale={[STAIRS_TOP.x, 0.005, 0.015]} />)}
-    {SECURITY_WALL.map((r, i) => <Block key={`wall${i}`} position={[r.x + r.w / 2, 1.75, r.y + r.h / 2]} scale={[r.w, 3.5, r.h]} color="ochre" />)}
+    {SECURITY_WALL.flatMap((r, i) => {
+      const boundaries = [r.y, r.y+r.h, ...RAILING_SEGMENTS.flatMap(s => [s.minY,s.maxY]).filter(y => y > r.y && y < r.y+r.h)].sort((a,b)=>a-b);
+      return boundaries.slice(0,-1).map((y,j) => { const end=boundaries[j+1], low=RAILING_SEGMENTS.some(s => (y+end)/2 >= s.minY && (y+end)/2 <= s.maxY), height=low?1:3.5; return <Block key={`wall${i}-${j}`} position={[r.x+r.w/2,height/2,(y+end)/2]} scale={[r.w,height,end-y]} color="ochre" />; });
+    })}
     {PILLARS.map((r, i) => <group key={`pillar${i}`}>
       <Block position={[r.x + r.w / 2, 1.75, r.y + r.h / 2]} scale={[r.w, 3.5, r.h]} color="chalk" />
       <Block position={[r.x + r.w / 2 - 0.01, 0.12, r.y + r.h / 2]} scale={[r.w + 0.04, 0.24, r.h + 0.04]} color="ink" />
@@ -95,3 +102,11 @@ export const Station = memo(function Station({ session }: { session: GameSession
     </group>)}
   </group>;
 });
+
+function OutageOverlay({session}: {session: GameSession}) {
+ const refs=useRef<(Mesh|null)[]>([]);
+ const lights=useRef<(PointLight|null)[]>([]);
+ const zones=[{x:13,w:26},{x:35,w:18},{x:46.5,w:5},{x:52.5,w:7},{x:63,w:14}];
+ useFrame(()=>zones.forEach((z,i)=>{ const dark=session.engine.world.lightAt({x:z.x,y:15})<1; if(refs.current[i]) refs.current[i]!.visible=dark; if(lights.current[i]) lights.current[i]!.intensity=dark?0:60; }));
+ return <group>{zones.map((z,i)=><pointLight key={`light${i}`} ref={l=>{lights.current[i]=l;}} position={[z.x,4,15]} intensity={60} distance={24} decay={2}/>)}{zones.map((z,i)=><mesh key={i} ref={m=>{refs.current[i]=m;}} rotation={[-Math.PI/2,0,0]} position={[z.x,z.x>56?-1.97:.03,15]}><planeGeometry args={[z.w,30]}/><meshBasicMaterial color="#121a22" transparent opacity={.65} depthWrite={false}/></mesh>)}</group>;
+}

@@ -1,28 +1,11 @@
 import { interpret, type Structured } from "./boss";
 import { respond } from "./npcDialogue";
 import Anthropic from "@anthropic-ai/sdk";
-import type { LlmService, NpcService } from "./app";
+import type { LlmService } from "./app";
 import { ClaudeDecider, configFromEnv } from "./claude";
 import { OpenAIClient, OpenAILlmService } from "./openai";
 import { classifyIntent, negotiateNpc, normalizeGuidance, structuredCall } from "./structured";
 import { debugFetch } from "./debug";
-
-/** Map only developer NPC settings; do not inherit any Agent configuration. */
-export function createNpcLlm(env: NodeJS.ProcessEnv = process.env): NpcService | null {
-  if (!env.NPC_MODEL?.trim()) return null;
-  const llm = createLlm({
-    AGENT_PROVIDER: env.NPC_PROVIDER,
-    AGENT_MODEL: env.NPC_MODEL.trim(),
-    AGENT_FALLBACK: "off",
-    OPENAI_API_KEY: env.NPC_OPENAI_API_KEY,
-    OPENAI_STREAM: "0",
-    OPENAI_BASE_URL: env.NPC_OPENAI_BASE_URL || "https://api.openai.com/v1",
-    ANTHROPIC_API_KEY: env.NPC_ANTHROPIC_API_KEY,
-    ANTHROPIC_AUTH_TOKEN: env.NPC_ANTHROPIC_AUTH_TOKEN,
-    ANTHROPIC_BASE_URL: env.NPC_ANTHROPIC_BASE_URL || "https://api.anthropic.com",
-  });
-  return llm?.negotiate ? { model: llm.model, negotiate: (request) => llm.negotiate!(request) } : null;
-}
 
 export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | null {
   const provider = env.AGENT_PROVIDER || (env.OPENAI_API_KEY ? "openai" : "anthropic");
@@ -43,7 +26,14 @@ export function createLlm(env: NodeJS.ProcessEnv = process.env): LlmService | nu
   });
   const cfg = configFromEnv(env);
   const decider = new ClaudeDecider(client, cfg);
-  const call: Structured = (system, user, schema, _name, maxTokens) => structuredCall(client, cfg, { system, user, schema, maxTokens, validate: (value): value is unknown => value !== undefined });
+  const call: Structured = async (system, user, schema, _name, maxTokens) => {
+    let metadata: import("../src/shared/interaction").ModelMetadata = {model:cfg.model,usage:null};
+    try { const value=await structuredCall(client,cfg,{system,user,schema,maxTokens,validate:(value):value is unknown=>value!==undefined,onResponse:response=>{
+      const u=response.usage; metadata={model:response.model,usage:u?{inputTokens:(u.input_tokens??0)+(u.cache_read_input_tokens??0)+(u.cache_creation_input_tokens??0),outputTokens:u.output_tokens??0,thinkingTokens:u.output_tokens_details?.thinking_tokens??null,cacheReadTokens:u.cache_read_input_tokens??0}:null};
+    }});
+    return {value,metadata};
+    } catch(error) { throw Object.assign(error instanceof Error ? error : new Error("结构化调用失败"),{modelMetadata:metadata}); }
+  };
   return {
     interpret: (instruction, context) => interpret(call, instruction, context),
     respond: (request) => respond(call, request),

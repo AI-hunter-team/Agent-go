@@ -115,11 +115,11 @@ describe("DeepSeek thinking Chat Completions", () => {
 
   test("relaxing the upstream schema does not permit oversized dialogue arguments", async () => {
     const response = completion();
-    response.choices[0].message.tool_calls[0].function = { name: "request_cut_in", arguments: JSON.stringify({ npcId: "p2", message: "问".repeat(201), reason: "让位" }) };
+    response.choices[0].message.tool_calls[0].function = { name: "talk", arguments: JSON.stringify({ npcId: "p2", goal:"yield", message: "问".repeat(201), reason: "让位" }) };
     const { service } = fake([response]);
     const result = await service.decide(new SessionStore().create("", null), turn());
     expect(result.action).toBeNull();
-    expect(result.error).toContain("200");
+    expect(result.error).toContain("工具参数无效");
   });
 
   test("reasoning cap still rejects actions and keeps actual usage", async () => {

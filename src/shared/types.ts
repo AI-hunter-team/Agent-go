@@ -258,8 +258,12 @@ export interface GameReport {
   worldEvents?: WorldEvent[];
   personas?: Record<string, Persona>;
   boss?: BossRecord[];
+  interactionDialogues?: { t: number; request: import("./interaction").NpcDialogueRequest; response: import("./interaction").NpcResponse }[];
+  calls?: { decisions: number; boss: number; npc: number };
+  operationUsage?: Record<string, { calls: number; inputTokens: number; outputTokens: number; unknownUsage: number; realSeconds: number }>;
   /** Missing only on recordings made before configurable difficulty. */
   settings?: GameSettings;
+  loadout?: import("./interaction").Loadout;
   debug?: RunDebug;
   seed: number;
   agentKind: "llm" | "offline";

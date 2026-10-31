@@ -67,6 +67,8 @@ export class NpcDirector {
 
   private apply(e: ScriptedEvent) {
     const w = this.world;
+    if (e.type === "power") { w.powerOut(e.zone, e.duration); return; }
+    if (e.type === "damage") { w.damageFacility(e.facility); return; }
     if (e.type === "recheck") {
       const f = w.facility(e.facility)!;
       f.pendingRecheck = w.rng.range(e.extra[0], e.extra[1]);

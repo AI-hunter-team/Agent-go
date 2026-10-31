@@ -16,8 +16,8 @@ export class GameSession {
   private accumulator = 0;
   private listeners = new Set<() => void>();
 
-  constructor(seed = 1, settings: Partial<GameSettings> = {}) {
-    this.engine = new Engine(seed, settings);
+  constructor(seed = 1, settings: Partial<GameSettings> = {}, loadout?: import("../shared/interaction").Loadout) {
+    this.engine = new Engine(seed, settings, undefined, loadout);
     this.presentation = new PresentationBuffer(this.engine);
   }
   subscribe(listener: () => void) {
@@ -29,11 +29,11 @@ export class GameSession {
   get alpha() { return this.frozen ? 1 : Math.min(1, this.accumulator / DT); }
   get visualTime() { return this.presentation.time(this.alpha); }
 
-  preview(seed: number, settings: Partial<GameSettings> = this.engine.settings) {
+  preview(seed: number, settings: Partial<GameSettings> = this.engine.settings, loadout = this.engine.loadout) {
     this.generation++;
     if (this.runner && this.runner.phase !== "ended") this.runner.stop();
     this.runner = null;
-    this.engine = new Engine(seed, settings);
+    this.engine = new Engine(seed, settings, undefined, loadout);
     this.accumulator = 0;
     this.paused = false;
     this.presentation.reset(this.engine);

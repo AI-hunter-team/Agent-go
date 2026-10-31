@@ -6,7 +6,7 @@ import { angleTo, dist, inViewCone, lineOfSight } from "./geometry";
 import type { GuardSystem } from "./guards";
 import { HEIGHT, SIGHT_OCCLUDERS, WIDTH } from "./layout";
 import { findPath } from "./nav";
-import { DT, PERCEPTION_RULES } from "./scenario";
+import { DT, INTERACTION_RULES, PERCEPTION_RULES } from "./scenario";
 import type { Activity, Person, World } from "./world";
 
 export type Reaction = "glance" | "murmur" | "keep_distance" | "complain" | "argue" | "expel" | "flee" | "confront" | "report";
@@ -19,9 +19,12 @@ export class NpcBrain {
   private chosen = new Map<string, Reaction>();
   private remembered = new Set<string>();
   private rng;
+  private cutRng;
+  private cutCheckAt = 0;
+  readonly cuts = new Map<string, { targetId: string; facility: string; until: number; eventId: string }>();
   /** The executor supplies a contest-backed reclaim attempt in IV2-08. */
   reclaim: ((npc: Person, subject: Person) => void) | null = null;
-  constructor(private world: World, private guards: GuardSystem, private bus: EventBus, private alerts: AlertSystem) { this.rng = world.rng.fork("reaction"); }
+  constructor(private world: World, private guards: GuardSystem, private bus: EventBus, private alerts: AlertSystem) { this.rng = world.rng.fork("reaction"); this.cutRng = world.rng.fork("npc-cut-in"); }
 
   remember(id: string, entry: MemoryEntry) {
     const list = this.memory.get(id) ?? [];
@@ -87,6 +90,7 @@ export class NpcBrain {
   }
   blocks(npcId: string, subjectId: string) { const a = this.active.get(npcId); return a?.subjectId === subjectId && (a.action === "expel" || a.action === "confront"); }
   step() {
+    this.stepCuts();
     for (const [id, a] of this.active) {
       const npc = this.world.persons.get(id), subject = this.world.persons.get(a.subjectId);
       if (!npc || npc.incapacitated > 0 || npc.activity.kind !== "reacting") { this.finish(id); continue; }
@@ -127,7 +131,38 @@ export class NpcBrain {
       }
     }
   }
-  private sees(npc: Person, point: Vec) { return !npc.incapacitated && inViewCone(npc.pos,npc.facing,PERCEPTION_RULES.npcFovDeg,PERCEPTION_RULES.npcSightRange,point) && lineOfSight(npc.pos,point,SIGHT_OCCLUDERS); }
+  private stepCuts() {
+    const w = this.world;
+    for (const [id, cut] of this.cuts) {
+      const p = w.persons.get(id), f = w.facility(cut.facility);
+      const valid = p && !p.incapacitated && p.activity.kind === "acting" && f?.status === "open" && f.queue.includes(cut.targetId);
+      if (!valid || w.t >= cut.until || this.blocks(cut.targetId, id)) {
+        this.bus.endAct(id); w.cutInReservations.delete(id); this.cuts.delete(id);
+        if (p?.activity.kind === "acting") { p.activity = { kind: "idle" }; if (f?.status === "open") w.joinQueue(p, f.def.id); }
+        continue;
+      }
+      const dest = w.cutInPoint(p!, f!);
+      if (w.movePerson(p!, dest, p!.speed * DT) && w.t >= cut.until - 6) {
+        f!.queue.splice(f!.queue.indexOf(cut.targetId), 0, id);
+        p!.activity = { kind: "queued", facility: f!.def.id };
+        this.bus.endAct(id); w.cutInReservations.delete(id); this.cuts.delete(id);
+      }
+    }
+    if (w.t < this.cutCheckAt) return;
+    this.cutCheckAt = w.t + 1;
+    for (const p of w.persons.values()) {
+      if (p.isPlayer || !p.persona || p.incapacitated || p.activity.kind !== "queued" || p.persona.traits.fairness >= INTERACTION_RULES.npcCutFairnessMax || p.persona.situation.hurry <= INTERACTION_RULES.npcCutHurryMin || !this.cutRng.chance(INTERACTION_RULES.npcCutChancePerSecond)) continue;
+      const q = w.queuePosition(p); if (!q || q.index < 1 || q.facility.status !== "open") continue;
+      const targetId = q.facility.queue[q.index - 1];
+      if (this.cuts.has(targetId)) continue;
+      w.removeFromQueue(p); p.activity = { kind: "acting", op: "force_cut_in", progress: 0 };
+      w.cutInReservations.set(p.id, { facility: q.facility.def.id, npcId: targetId });
+      const event = this.bus.emit({ t: w.t, kind: "force_cut_in", severity: "affecting", actorId: p.id, targetId, pos: { ...p.pos }, loudness: 3 });
+      this.bus.beginAct({ actorId: p.id, kind: event.kind, severity: event.severity, eventId: event.id, targetId });
+      this.cuts.set(p.id, { targetId, facility: q.facility.def.id, until: w.t + INTERACTION_RULES.npcCutTimeout, eventId: event.id });
+    }
+  }
+  private sees(npc: Person, point: Vec) { return !npc.incapacitated && inViewCone(npc.pos,npc.facing,PERCEPTION_RULES.npcFovDeg,PERCEPTION_RULES.npcSightRange * Math.min(this.world.lightAt(npc.pos), this.world.lightAt(point)),point) && lineOfSight(npc.pos,point,SIGHT_OCCLUDERS); }
   private walk(npc: Person, a: Active, point: Vec, stop: number) {
     if (dist(npc.pos,point) <= stop) return;
     if (!a.path.length || dist(a.path.at(-1)!,point) > 1) a.path = findPath(npc.pos,point) ?? [];

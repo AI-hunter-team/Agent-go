@@ -52,11 +52,11 @@ npm run dev
 
 ### 难度与设施故障
 
-对局规则固定为 **120 秒、每条初始开放队列额外 3 人**，玩家无需选择难度。空队列也增加人数，初始故障通道不增加；途中客流和故障时刻保持原样。页面、模型会话和重试使用相同规则，复盘、完整 JSON 和 Debug JSON 均记录本局设置。更早的对局或无设置字段的历史报告保留原版本规则，不重新计算成绩。
+对局规则固定为 **150 秒、每条初始开放队列额外 3 人**，玩家无需选择难度。空队列也增加人数，初始故障通道不增加；途中客流和故障时刻保持原样。页面、模型会话和重试使用相同规则，复盘、完整 JSON 和 Debug JSON 均记录本局设置。更早的对局或无设置字段的历史报告保留原版本规则，不重新计算成绩。
 
 设施故障或停用会立即中断尚未完成的办理：售票不出票、安检不算完成、普通过闸不算通过，需要另选开放设施重新排队。已经完成的服务保留。此项修复会改变旧版本部分通关耗时，不能直接沿用历史成绩。
 
-可运行 `node --import tsx scripts/compare-difficulty.ts --seeds=50` 做无费用的开发对照。种子 1–50、同为 120 秒时，不额外加人的离线守序通关率为 70%，当前每队额外 3 人后为 26%。这只反映离线规则 Agent，不代表 DeepSeek 或所有常规策略。详细结果及边界见 [DIFFICULTY-002](docs/validation/DIFFICULTY-002.md)，原可调方案保留在 [历史报告](docs/validation/DIFFICULTY-001.md)。
+可运行 `node --import tsx scripts/compare-difficulty.ts --seeds=50` 做无费用的开发对照。种子 1–50、同为 120 秒时，不额外加人的离线守序通关率为 70%，当前每队额外 3 人后为 26%。这是旧版本历史数据，仅反映当时离线规则 Agent，不代表当前通关率；当前 150 秒对照见 [IV2-18](docs/validation/IV2-18.md)。详细结果及边界见 [DIFFICULTY-002](docs/validation/DIFFICULTY-002.md)，原可调方案保留在 [历史报告](docs/validation/DIFFICULTY-001.md)。
 
 ### 角色轨迹回放
 
@@ -108,7 +108,7 @@ Copy-Item .env.example .env
 
 编辑 `.env`，分别填入 Agent 和 NPC 对应的 API Key，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
 
-- 模板以 DeepSeek Agent 和 Kimi NPC 为例：Agent 使用 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`、`AGENT_MODEL=deepseek-flash`；NPC 使用独立的 `NPC_*` 配置与 `kimi-k2.6`。分别填写 `ANTHROPIC_API_KEY` 和 `NPC_OPENAI_API_KEY`，由 Node 服务端发出请求。模型可用性以各账号 `/models` 列表为准；Kimi K2.6 的 NPC 请求关闭思考，不发送其不支持的 `reasoning_effort`。
+- 模板以 DeepSeek 的 Anthropic 兼容接口为例；Boss 与 NPC 对话按交互 2.0 D8 复用同一会话绑定配置，原独立 NPC_* 变量不再使用。页面自定义配置会同时用于角色、Boss、NPC。
 - Luna 默认使用 `reasoning_effort=none` 降低生成等待，其他兼容模型默认 `low`；可用 `OPENAI_REASONING_EFFORT=low` 恢复更多推理。兼容接口默认通过 HTTP SSE 流式接收（`OPENAI_STREAM=0` 可关闭），强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
 - 流式接收不等于提前执行：服务端等完整动作与结束标记、完成流聚合后才校验并交给模拟器；末尾用量会保留，缺失用量记为未知；浏览器仍通过 HTTP JSON 获取完整决策。首段数据时间与完整动作等待分别记录，换成 WebSocket 不保证降低上游排队或生成耗时。当前 `gpt-6-luna` 的 `none` 已在配置的兼容接口做小请求与完整对局验证；复杂策略质量、上游偶发空响应及稳定时延仍需独立验收，详见 [LLM-LATENCY-001](docs/validation/LLM-LATENCY-001.md)。
 - 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
@@ -121,16 +121,7 @@ Copy-Item .env.example .env
 - 兼容 API 接入固定关闭应用侧模型回退；Anthropic 可通过 `AGENT_FALLBACK=default` 开启服务端拒答回退。日志记录供应商响应的模型名。
 - 指导整理属于赛前操作，输出上限 4096；创造性归类独立调用，上限 1024。角色决策（含重试）与 NPC 沟通的 token 分列统计，**不是全局账单**。
 
-NPC 由开发者在服务端 `.env` 单独配置，随后重启服务；页面不提供 NPC 配置入口：
-
-```dotenv
-NPC_PROVIDER=openai
-NPC_MODEL=your-npc-model-id
-NPC_OPENAI_BASE_URL=https://api.example.com/v1
-NPC_OPENAI_API_KEY=your-npc-api-key
-```
-
-使用 Anthropic 时，改为 `NPC_PROVIDER=anthropic`，设置 `NPC_MODEL` 和 `NPC_ANTHROPIC_API_KEY` 或 `NPC_ANTHROPIC_AUTH_TOKEN`，可选 `NPC_ANTHROPIC_BASE_URL`。NPC 不继承任何 Agent 模型、接口或凭据；必须提供 `NPC_MODEL` 和对应凭据。NPC 输出上限为 1024 token，不启用模型回退；未配置时协商返回 503，调用失败返回 502，均不授予插队许可。已有部署升级后也需补充 NPC 配置，Docker 说明见 [部署教程](docs/DOCKER.md)。
+Boss 解释上限 2048 token、NPC 答复上限 1024 token。NPC 不可用时返回 503，调用失败返回 502，不授予许可。原 `/api/npc/negotiate`、`/api/creative/classify` 和旧工具别名已停用，使用 `/api/npc/respond`、`/api/boss/interpret` 及 `talk` / `act` / `traverse`。旧报告仍可读取。
 
 ### Debug 日志与 AI 耗时
 

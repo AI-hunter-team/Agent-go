@@ -18,14 +18,14 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
         kind: i.kind
       }))
     },
-    people: [...[...world.persons.values()].filter(n => !n.isPlayer && playerCanSee(p.pos, n.pos)).map(n => ({
+    people: [...[...world.persons.values()].filter(n => !n.isPlayer && playerCanSee(p.pos, n.pos, world.lightAt)).map(n => ({
       id: n.id,
       look: n.persona?.look.outfit ?? n.kind,
       position: {
         ...n.pos
       },
       queue: world.queuePosition(n)?.facility.def.id ?? null
-    })), ...guards.guards.filter(g => playerCanSee(p.pos, g.pos)).map(g => ({
+    })), ...guards.guards.filter(g => playerCanSee(p.pos, g.pos, world.lightAt)).map(g => ({
       id: g.def.id,
       look: g.def.label,
       position: {
@@ -33,14 +33,14 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
       },
       queue: null
     }))],
-    items: world.items.visibleItems(p.pos).map(i => ({
+    items: world.items.visibleItems(p.pos, world.lightAt).map(i => ({
       id: i.id,
       kind: i.kind,
       position: {
         ...world.items.position(world.items.items.get(i.id)!)!
       }
     })),
-    facilities: [...world.facilities.values()].filter(f => playerCanSee(p.pos, f.def.pos)).map(f => ({
+    facilities: [...world.facilities.values()].filter(f => playerCanSee(p.pos, f.def.pos, world.lightAt)).map(f => ({
       id: f.def.id,
       label: f.def.label
     }))
@@ -72,7 +72,7 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
   let previousKind: ItemKind | undefined;
   for (const text of clauses) {
     const named = text.match(/\b[ni]\d+\b/g) ?? [];
-    const known = new Set([...context.people, ...context.items, ...inventory].map(v => v.id));
+    const known = new Set([...context.people, ...context.items, ...inventory, ...context.facilities].map(v => v.id));
     if (named.some(id => !known.has(id))) return result("needs_precondition", [], "指明的实体不在可见上下文中");
     const kind = kindWords.find(([, r]) => r.test(text))?.[0] ?? previousKind;
     const people = () => {
@@ -127,7 +127,9 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
         itemKind: kind
       };
     } else if (/击晕|打晕|击打|打|strike|knock/i.test(text)) {
-      if (npcId) step = {
+      const facility = context.facilities.find(f => hasId(text, f.id));
+      if (facility) step = { op: "strike", facilityId: facility.id, aim: "hurt" };
+      else if (npcId) step = {
         op: "strike",
         npcId,
         aim: /击晕|打晕|knock/i.test(text) ? "knockout" : "hurt"

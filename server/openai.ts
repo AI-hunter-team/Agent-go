@@ -212,10 +212,10 @@ export class OpenAILlmService implements LlmService {
   }
 
   async interpret(instruction: string, context: BossContext) {
-    return interpret((...args) => this.structured(...args), instruction, context);
+    return interpret((...args) => this.structuredDetailed(...args), instruction, context);
   }
   async respond(request: NpcDialogueRequest) {
-    return respond((...args) => this.structured(...args), request);
+    return respond((...args) => this.structuredDetailed(...args), request);
   }
 
   async negotiate(request: CutInDialogueRequest): Promise<NpcReply> {
@@ -248,16 +248,22 @@ export class OpenAILlmService implements LlmService {
     }
   }
 
-  private async structured(system: string, user: string, schema: object, name: string, maxTokens: number): Promise<unknown> {
+  private async structured(...args: Parameters<OpenAILlmService["structuredDetailed"]>): Promise<unknown> { return (await this.structuredDetailed(...args)).value; }
+  private async structuredDetailed(system: string, user: string, schema: object, name: string, maxTokens: number): Promise<import("./boss").StructuredEnvelope> {
     const response = await this.client.complete({
-      ...this.completionOptions(maxTokens),
+      ...(name === "npc_response" && this.model === "kimi-k2.6" ? {model:this.model,max_completion_tokens:maxTokens,thinking:{type:"disabled"}} : this.completionOptions(maxTokens)),
       ...this.jsonOptions(system, user, schema, name),
     });
-    const choice = response.choices?.[0];
-    if (choice?.message?.refusal || choice?.finish_reason === "content_filter") throw new Error("模型拒绝了这次请求");
-    if (choice?.finish_reason === "length") throw new Error("输出被截断");
-    if (!choice?.message?.content) throw new Error("模型未返回结构化内容");
-    return JSON.parse(choice.message.content);
+    const usage=response.usage;
+    const metadata={model:response.model ?? this.cfg.model,usage:usage ? {inputTokens:usage.prompt_tokens ?? 0,outputTokens:usage.completion_tokens ?? 0,thinkingTokens:usage.completion_tokens_details?.reasoning_tokens ?? null,cacheReadTokens:usage.prompt_tokens_details?.cached_tokens ?? 0}:null};
+    try {
+      const choice = response.choices?.[0];
+      if (choice?.message?.refusal || choice?.finish_reason === "content_filter") throw new Error("模型拒绝了这次请求");
+      if (choice?.finish_reason === "length") throw new Error("输出被截断");
+      if (!choice?.message?.content) throw new Error("模型未返回结构化内容");
+      return {value:JSON.parse(choice.message.content),metadata};
+    } catch(error) { throw Object.assign(error instanceof Error ? error : new Error("结构化输出无效"),{modelMetadata:metadata}); }
+
   }
 
   async normalize(text: string): Promise<NormalizedGuidance> {

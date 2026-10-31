@@ -25,3 +25,19 @@ test("OpenAI structured adapter handles valid, refused and truncated replies", a
     expect((await llm.interpret("等1秒",context)).source).toBe(finish_reason === "stop" ? "llm" : "keywords");
   }
 });
+test("facility strikes use the visible facility branch and reject mixed/invented targets",()=>{
+ const c={...context,facilities:[{id:"TVM-2",label:"售票机"}]};
+ expect(validatePlan({...plan,steps:[{op:"strike",facilityId:"TVM-2",aim:"hurt"}]},c)).not.toBeNull();
+ for(const step of [{op:"strike",facilityId:"TVM-9",aim:"hurt"},{op:"strike",npcId:"n1",facilityId:"TVM-2",aim:"hurt"},{op:"strike",facilityId:"TVM-2",aim:"knockout"}]) expect(validatePlan({...plan,steps:[step]},c)).toBeNull();
+});
+test("Boss accepts public item spots and rejects invented spots",()=>{
+ expect(validatePlan({...plan,steps:[{op:"approach",target:{kind:"spot",id:"convenience"}}]},context)).not.toBeNull();
+ expect(validatePlan({...plan,steps:[{op:"approach",target:{kind:"spot",id:"invented"}}]},context)).toBeNull();
+});
+test("paid usage survives truncated Boss and NPC output",async()=>{
+ const client=new OpenAIClient("https://example.test/v1","fake",async()=>Response.json({model:"test-model",usage:{prompt_tokens:13,completion_tokens:7},choices:[{finish_reason:"length",message:{content:"{"}}]}));
+ const llm=new OpenAILlmService(client,{model:"test-model",maxTokens:4096,maxThinkingTokens:1024,fallback:false});
+ expect(await llm.interpret("等1秒",context)).toMatchObject({source:"keywords",usage:{inputTokens:13,outputTokens:7}});
+ const {dialogueFixture}=await import("./fixtures/dialogue");
+ expect(await llm.respond(dialogueFixture())).toMatchObject({source:"error",decision:"refuse",usage:{inputTokens:13,outputTokens:7}});
+});

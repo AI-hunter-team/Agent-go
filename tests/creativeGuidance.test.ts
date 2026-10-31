@@ -34,8 +34,8 @@ describe("creative strategy boundaries", () => {
     "先观察再试试挖地道，不行就调整",
   ])("accepts game goals and conditional attempts without granting success: %s", (text) => {
     expect(() => assertSafeText(text)).not.toThrow();
-    const parsed = parseToolUse("attempt_creative", { intent: text, reason: "按玩家策略尝试" });
-    expect(parsed).toEqual({ action: { type: "attempt_creative", intent: text, reason: "按玩家策略尝试" } });
+    const parsed = parseToolUse("act", { instruction: text, reason: "按玩家策略尝试" });
+    expect(parsed).toEqual({ action: { type: "act", instruction: text, reason: "按玩家策略尝试" } });
     expect(() => new SessionStore().create(text, preserved)).not.toThrow();
   });
 
@@ -95,7 +95,7 @@ describe("creative strategy boundaries", () => {
       messages = JSON.parse(init!.body as string).messages;
       return Response.json({ model: cfg.model, choices: [{ finish_reason: "tool_calls", message: {
         role: "assistant", content: null, tool_calls: [{ id: "try-original", type: "function", function: {
-          name: "attempt_creative", arguments: JSON.stringify({ intent: "不买票，翻越闸机进入闸机内", reason: "按原始指导尝试" }),
+          name: "act", arguments: JSON.stringify({ instruction: "不买票，翻越闸机进入闸机内", reason: "按原始指导尝试" }),
         } }],
       } }] });
     };
@@ -111,10 +111,10 @@ describe("creative strategy boundaries", () => {
     await runner.pending;
     expect(messages[0].content).toContain("以原始指导为准");
     expect(JSON.parse(messages[1].content.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken });
-    expect(runner.decisions[0]).toMatchObject({ action: { type: "attempt_creative" }, classification: { mechanic: "jump_gate" }, result: { ok: true } });
+    expect(runner.decisions[0]).toMatchObject({ action: { type: "act" }, result: { ok: true } });
     expect(engine.player.hasTicket).toBe(false);
-    expect(engine.player.activity).toMatchObject({ kind: "creative", mechanic: "jump_gate" });
-    expect(engine.creative.violations).toHaveLength(1);
+    expect(engine.player.activity).toMatchObject({ kind: "acting", op: "vault" });
+    expect(engine.events.events.some(e => e.kind === "vault")).toBe(true);
     runner.stop();
   });
 

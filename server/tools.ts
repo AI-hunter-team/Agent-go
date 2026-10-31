@@ -37,33 +37,23 @@ export const AGENT_TOOLS: Anthropic.Beta.BetaTool[] = [
   tool("wait", "等待若干秒（1–20）后重新评估。行走、排队或办理时保持当前动作；无短时机策略时优先 20 秒以减少无效轮询，到达、办理完成和设施变化等事件仍会提前唤起。", {
     seconds: { type: "integer", description: "1 到 20 之间的整数" },
   }),
-  tool("traverse", "过闸后从楼梯或扶梯到下层站台，先靠近入口。", {route:{type:"string",enum:["stairs","escalator"]}}),
+  tool("traverse", "过闸后从楼梯或扶梯到下层站台，先靠近入口。", {route:{type:"string",enum:["stairs","escalator"]},walking:{type:"boolean",description:"扶梯上是否步行；楼梯忽略"}}),
   tool("observe", "观察可见人物的外观和表现，不提供隐藏性格。", {targetId:{type:"string"}}),
   tool("take", "靠近并拿取可见物品。", {itemId:{type:"string"}}),
   tool("give", "把持有物交给可见人物。", {itemId:{type:"string"},npcId:{type:"string"}}),
   tool("drop", "放下或丢下持有物。", {itemId:{type:"string"},mode:{type:"string",enum:["place","drop"]}}),
   tool("talk", "向可见乘客说话、协商或交换。对方自主回复，实际结果由环境裁定。", {npcId:{type:"string"},message:{type:"string",maxLength:200},goal:{type:"string",enum:["chat","ask_ticket","trade","yield","persuade","threaten","bribe"]},offerItemId:{anyOf:[{type:"string"},{type:"null"}]}}),
   tool("act", "用自然语言提出具体游戏行动，由环境解释与裁定，不能宣布成功。", {instruction:{type:"string",maxLength:200}}),
-  tool("descend_stairs", "过闸后走到 STAIRS_TOP 楼梯入口，再下楼到站台；下楼期间不能改向。", {}),
-  tool("request_cut_in", "向附近可见的具体排队乘客请求让位，必须说出话术；NPC 将根据性格与请求决定是否同意。只有同意才移动到该乘客前面，拒绝保留当前位次。", {
-    npcId: { type: "string", description: "当前观察 facilities.people 中的乘客 id" },
-    message: { type: "string", minLength: 1, maxLength: 200, description: "你直接对这位乘客说的话，最多 200 字" },
-  }),
-  tool(
-    "attempt_creative",
-    "尝试玩家提出的常规流程之外的游戏行动，用自然语言描述具体做法和条件。违规风险或未知支持度都可交由环境裁定；这不是宣称成功或修改规则。环境返回前置条件后可先满足条件再尝试，返回不支持时再调整。",
-    { intent: { type: "string", description: "想做的具体行动" } },
-  ),
-].filter(t => !["descend_stairs","request_cut_in","attempt_creative"].includes(t.name));
+];
 
 /** Convert a tool call into an action, rejecting anything malformed. */
 export function parseToolUse(name: string, input: unknown): { action: AgentAction } | { error: string } {
   if (!input || typeof input !== "object" || Array.isArray(input)) return { error: "工具参数必须是对象" };
   const i = input as Record<string, unknown>;
   const allowed: Record<string, string[]> = {
-    act:["instruction","reason"], talk:["npcId","message","goal","offerItemId","reason"], traverse:["route","reason"], observe:["targetId","reason"], take:["itemId","reason"], give:["itemId","npcId","reason"], drop:["itemId","mode","reason"],
+    act:["instruction","reason"], talk:["npcId","message","goal","offerItemId","reason"], traverse:["route","walking","reason"], observe:["targetId","reason"], take:["itemId","reason"], give:["itemId","npcId","reason"], drop:["itemId","mode","reason"],
     move_to: ["target", "reason"], join_queue: ["facility", "reason"], leave_queue: ["reason"],
-    wait: ["seconds", "reason"], descend_stairs: ["reason"], request_cut_in: ["npcId", "message", "reason"], attempt_creative: ["intent", "reason"],
+    wait: ["seconds", "reason"],
   };
   if (!Object.hasOwn(allowed, name)) return { error: "未知工具，未执行" };
   if (Object.keys(i).some((key) => !allowed[name].includes(key))) return { error: "工具含有未授权参数，未执行" };
@@ -77,7 +67,7 @@ export function parseToolUse(name: string, input: unknown): { action: AgentActio
   const text = (v: unknown): v is string => typeof v === "string" && !!v.trim() && [...v].length <= 200;
   switch (name) {
     case "act": if (text(i.instruction)) return {action:{type:"act",instruction:i.instruction,reason:why}}; break;
-    case "traverse": if (i.route === "stairs" || i.route === "escalator") return {action:{type:"traverse",route:i.route,reason:why}}; break;
+    case "traverse": if (i.route === "stairs" || i.route === "escalator") return {action:{type:"traverse",route:i.route,...(typeof i.walking === "boolean" ? {walking:i.walking}:{}),reason:why}}; break;
     case "observe": if (text(i.targetId)) return {action:{type:"observe",targetId:i.targetId,reason:why}}; break;
     case "take": if (text(i.itemId)) return {action:{type:"take",itemId:i.itemId,reason:why}}; break;
     case "give": if (text(i.itemId) && text(i.npcId)) return {action:{type:"give",itemId:i.itemId,npcId:i.npcId,reason:why}}; break;
@@ -94,23 +84,11 @@ export function parseToolUse(name: string, input: unknown): { action: AgentActio
       return { error: "join_queue 的 facility 无效" };
     case "leave_queue":
       return { action: { type: "leave_queue", reason: why } };
-    case "descend_stairs":
-      return { action: { type: "descend_stairs", reason: why } };
-    case "request_cut_in":
-      if (typeof i.npcId === "string" && /^p\d+$/.test(i.npcId) && typeof i.message === "string" && i.message.trim() && [...i.message].length <= 200) {
-        return { action: { type: "request_cut_in", npcId: i.npcId, message: i.message, reason: why } };
-      }
-      return { error: "request_cut_in 需要可见乘客的 npcId 和 1–200 字话术" };
     case "wait": {
       const s = i.seconds;
       if (typeof s !== "number" || !Number.isFinite(s)) return { error: "wait 的 seconds 无效" };
       return { action: { type: "wait", seconds: Math.min(20, Math.max(1, Math.round(s))), reason: why } };
     }
-    case "attempt_creative":
-      if (typeof i.intent === "string" && i.intent.trim()) {
-        return { action: { type: "attempt_creative", intent: i.intent.slice(0, 200), reason: why } };
-      }
-      return { error: "attempt_creative 缺少 intent" };
     default:
       return { error: `未知工具 ${name}` };
   }

@@ -37,15 +37,15 @@ describe("offline heuristic agent", () => {
   });
 
   test("new fixed crowd can time out orderly play while retaining a legal route on other seeds", async () => {
-    const difficult = await play(1);
+    const difficult = await play(2);
     expect(difficult.engine.status).toBe("failed");
-    expect(difficult.engine.t).toBe(120);
+    expect(difficult.engine.t).toBe(150);
     expect(difficult.engine.failReason).toContain("超时");
     expect(difficult.engine.creative.violations).toHaveLength(0);
     // Seed 28 remains a legal success fixture with randomized facility failures and physical avoidance.
     const possible = await play(28);
     expect(possible.engine.status).toBe("success");
-    expect(possible.engine.t).toBeLessThan(120);
+    expect(possible.engine.t).toBeLessThan(150);
     expect(possible.engine.creative.violations).toHaveLength(0);
   });
 
@@ -57,7 +57,7 @@ describe("offline heuristic agent", () => {
     expect(action).toMatchObject({ type: "move_to", target: "STAIRS_TOP" });
     observation.self.position = { x: 48, y: 15 };
     const atEntrance = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });
-    expect(atEntrance.action).toMatchObject({ type: "descend_stairs" });
+    expect(atEntrance.action).toMatchObject({ type: "traverse", route: "stairs" });
     observation.self.activity = "正在下楼梯（剩余 3 秒）";
     observation.self.position = { x: 52.5, y: 15 };
     const descending = await new HeuristicAgent().decide({ triggers: [], lastResult: null, observation });

@@ -196,10 +196,10 @@ describe("prompts and tools", () => {
   });
 
   test("dialogue and stair tools validate concrete requests", () => {
-    expect(parseToolUse("request_cut_in", { npcId: "p2", message: "能让我先过吗？", reason: "赶车" })).toEqual({ action: { type: "request_cut_in", npcId: "p2", message: "能让我先过吗？", reason: "赶车" } });
-    expect(parseToolUse("request_cut_in", { npcId: "p2", message: "x".repeat(201) })).toHaveProperty("error");
-    expect(parseToolUse("request_cut_in", { npcId: "", message: "可以吗" })).toHaveProperty("error");
-    expect(parseToolUse("descend_stairs", { reason: "到站台" })).toEqual({ action: { type: "descend_stairs", reason: "到站台" } });
+    expect(parseToolUse("talk", {npcId:"p2",message:"能让我先过吗？",goal:"yield",reason:"赶车"})).toEqual({action:{type:"talk",npcId:"p2",message:"能让我先过吗？",goal:"yield",reason:"赶车"}});
+    expect(parseToolUse("talk",{npcId:"p2",message:"x".repeat(201),goal:"yield"})).toHaveProperty("error");
+    expect(parseToolUse("traverse",{route:"stairs",reason:"到站台"})).toEqual({action:{type:"traverse",route:"stairs",reason:"到站台"}});
+    for (const name of ["request_cut_in","descend_stairs","attempt_creative"]) expect(parseToolUse(name,{})).toHaveProperty("error");
   });
 
   test("a turn renders triggers, last result and observation", () => {

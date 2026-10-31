@@ -85,10 +85,10 @@ export class ItemSystem {
     const bag = this.items.get(loc.containerId);
     return bag && bag.location.type !== "container" ? this.position(bag) : null;
   }
-  visibleItems(from: Vec): ItemObservation[] {
+  visibleItems(from: Vec, lightAt: (pos: Vec) => number = () => 1): ItemObservation[] {
     return [...this.items.values()].filter((i) => i.location.type === "ground" || i.location.type === "spot").flatMap((i) => {
       const pos = this.position(i);
-      return pos && dist(from, pos) <= RULES.visionRange && lineOfSight(from, pos, SIGHT_OCCLUDERS)
+      return pos && dist(from, pos) <= RULES.visionRange * Math.min(lightAt(from),lightAt(pos)) && lineOfSight(from, pos, SIGHT_OCCLUDERS)
         ? [{ id: i.id, kind: i.kind, where: this.where(i.location), distance: Math.round(dist(from, pos) * 10) / 10 }] : [];
     });
   }

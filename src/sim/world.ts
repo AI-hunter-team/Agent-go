@@ -1,11 +1,13 @@
 import type { FacilityStatus, GameEvent, PassengerKind, Persona, Trigger, TriggerKind, Vec } from "../shared/types";
 import { angleTo, dist } from "./geometry";
 import { generatePersona } from "./persona";
-import { FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
+import { zoneOf, type Zone, ESCALATOR_TOP, ESCALATOR_BOTTOM, ESCALATOR_SECONDS, ESCALATOR_WALK_SECONDS, FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
-import { DT, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
+import { DT, INTERACTION_RULES, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { DEFAULT_LOADOUT, resolveLoadout, type Loadout } from "../shared/interaction";
+import { ITEM_DEFS } from "./content/items";
 import { ItemSystem } from "./items";
 import { ITEM_SPOTS } from "./layout";
 import { clearOfPeople, clearServiceExit, detourAroundQueues, personRadius, steer, type MovingBody } from "./movement";
@@ -17,7 +19,7 @@ export type Activity =
   | { kind: "queued"; facility: string }
   | { kind: "service"; facility: string }
   | { kind: "waiting"; remaining: number }
-  | { kind: "stairs"; remaining: number; start: Vec }
+  | { kind: "stairs"; remaining: number; start: Vec; route?: "stairs" | "escalator"; duration?: number; end?: Vec }
   | { kind: "reacting"; reaction: string; subjectId: string }
   | { kind: "acting"; op: string; progress: number }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
@@ -55,11 +57,27 @@ export interface Facility {
 
 export class World {
   t = 0;
+  readonly outages = new Map<Zone, number>();
+  onWorldEvent: ((event: Omit<import("../shared/interaction").WorldEvent, "id">) => void) | null = null;
+  lightAt = (pos: Vec) => (this.outages.get(zoneOf(pos)) ?? 0) > this.t ? INTERACTION_RULES.darkSightFactor : 1;
+  powerOut(zone: Zone, duration: number) {
+    this.outages.set(zone, this.t + duration);
+    const x = { hall: 13, concourse: 35, landing: 46, stairs: 52, platform: 60 }[zone];
+    this.onWorldEvent?.({ t: this.t, kind: "power_out", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 12 });
+    this.log("power_out", `${zone} 区域断电 ${duration} 秒，视距降低`, true);
+  }
+  damageFacility(id: string, actorId: string | null = null, causeId?: string) {
+    const f = this.facility(id); if (!f) return false;
+    this.setStatus(id, "broken", "受损停用");
+    this.onWorldEvent?.({ t: this.t, kind: "facility_damaged", actorId, targetId: id, severity: "violation", pos: { ...f.def.pos }, loudness: 10, causeId });
+    return true;
+  }
   readonly rng: Rng;
   readonly items: ItemSystem;
   private readonly personaRng: Rng;
   private readonly wakeAt = new Map<string, number>();
   readonly persons = new Map<string, Person>();
+  readonly personas: Record<string, Persona> = {};
   readonly facilities = new Map<string, Facility>();
   readonly events: GameEvent[] = [];
   /** Decision triggers for the player character, drained by the engine. */
@@ -121,7 +139,8 @@ export class World {
     return dist(p.pos, target) < 1e-6;
   }
 
-  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds) {
+  constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds, readonly loadout: Readonly<Loadout> = DEFAULT_LOADOUT) {
+    this.loadout = resolveLoadout(loadout);
     this.rng = new Rng(seed);
     this.personaRng = this.rng.fork("persona");
     this.items = new ItemSystem((id) => this.persons.get(id), () => this.t);
@@ -157,8 +176,9 @@ export class World {
       serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
     };
     this.persons.set(person.id, person);
+    if (persona) this.personas[person.id] = structuredClone(persona);
     if (person.isPlayer) {
-      this.items.spawn("backpack", { type: "held", personId: person.id, slot: "bag" }, person.id);
+      if (this.loadout.backpack) this.items.spawn("backpack", { type: "held", personId: person.id, slot: "bag" }, person.id);
       this.items.spawn("coins", { type: "held", personId: person.id, slot: "pocket" }, person.id);
     }
     if (opts.hasTicket) this.items.spawn("ticket", { type: "held", personId: person.id, slot: "pocket" }, person.id);
@@ -253,6 +273,16 @@ export class World {
     return null;
   }
 
+  traverse(p: Person, route: "stairs" | "escalator", walking = false): string | null {
+    if (route === "stairs") return this.descendStairs(p);
+    if (["service", "creative", "acting", "stairs"].includes(p.activity.kind)) return "当前行动尚未完成";
+    if (!p.passedGate || p.onPlatform || dist(p.pos, ESCALATOR_TOP) > STAIRS_REACH) return "请先通过闸机并前往 ESCALATOR_TOP";
+    this.removeFromQueue(p);
+    const duration = walking ? ESCALATOR_WALK_SECONDS : ESCALATOR_SECONDS;
+    p.activity = { kind: "stairs", route, remaining: duration, duration, start: { ...p.pos }, end: ESCALATOR_BOTTOM };
+    return null;
+  }
+
   setStatus(facilityId: string, status: FacilityStatus, note: string | null) {
     const f = this.facilities.get(facilityId);
     if (!f) return;
@@ -285,6 +315,12 @@ export class World {
 
   /** Advance people and facilities by one fixed step. */
   stepPeopleAndFacilities(startsCaptured = false) {
+    for (const [zone, until] of this.outages) if (until <= this.t) {
+      this.outages.delete(zone);
+      const x = { hall: 13, concourse: 35, landing: 46, stairs: 52, platform: 60 }[zone];
+      this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: null, severity: "odd", pos: { x, y: 15 }, loudness: 4 });
+      this.log("power_restored", `${zone} 区域恢复照明`, true);
+    }
     if (!startsCaptured) {
       this.tickStarts.clear();
       for (const p of this.persons.values()) this.tickStarts.set(p.id, { ...p.pos });
@@ -357,16 +393,17 @@ export class World {
       }
       case "stairs": {
         const remaining = Math.max(0, a.remaining - DT);
-        const progress = Math.min(1, (STAIRS_SECONDS - remaining) / STAIRS_SECONDS);
+        const duration = a.duration ?? STAIRS_SECONDS, end = a.end ?? STAIRS_BOTTOM;
+        const progress = Math.min(1, (duration - remaining) / duration);
         const next = {
-          x: a.start.x + (STAIRS_BOTTOM.x - a.start.x) * progress,
-          y: a.start.y + (STAIRS_BOTTOM.y - a.start.y) * progress,
+          x: a.start.x + (end.x - a.start.x) * progress,
+          y: a.start.y + (end.y - a.start.y) * progress,
         };
         if (!clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
         p.pos = next;
         a.remaining = remaining;
         if (a.remaining <= 1e-9) {
-          p.pos = { ...STAIRS_BOTTOM };
+          p.pos = { ...end };
           p.onPlatform = true;
           p.activity = { kind: p.isPlayer ? "done" : "idle" };
           this.personEvent(p, "arrived", "已下楼梯，到达下层站台");
@@ -425,6 +462,7 @@ export class World {
     }
     f.queue.shift();
     let duration = head.serviceTime[f.def.kind] * multiplierOf(f.def.id);
+    if (f.def.kind === "security") duration += (this.items.bag(head.id) ? INTERACTION_RULES.backpackSecuritySeconds : 0) + this.items.holdings(head.id).filter(i => ITEM_DEFS[i.kind].security === "inspect").length * INTERACTION_RULES.inspectItemSeconds;
     let recheck = false;
     if (f.pendingRecheck !== null && !head.isPlayer) {
       duration += f.pendingRecheck;
@@ -445,6 +483,7 @@ export class World {
         this.personEvent(p, "service_done", `在 ${f.def.id} 买到单程票`);
         break;
       case "security":
+        for (const item of this.items.holdings(p.id)) if (ITEM_DEFS[item.kind].security === "confiscate") this.items.move(item.id, { type: "spot", spotId: `confiscated-${f.def.id}` }, "confiscate");
         p.screened = true;
         p.pos = { ...f.def.exit! };
         p.activity = { kind: "idle" };

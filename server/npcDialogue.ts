@@ -1,5 +1,5 @@
 import type { NpcDialogueRequest, NpcResponse } from "../src/shared/types";
-import type { Structured } from "./boss";
+import { failureMetadata, unpackStructured, type Structured } from "./boss";
 import { SAFETY_SYSTEM_PROMPT, untrustedData } from "./security";
 const kinds = ["ticket", "coins", "umbrella", "water_bottle", "newspaper", "snack", "backpack"];
 const decisions = ["accept", "refuse", "counter", "comply_under_threat", "flee", "call_guard"];
@@ -18,7 +18,7 @@ export function dialogueRequestValid(value: unknown): value is NpcDialogueReques
     && Array.isArray(n.memory) && n.memory.length <= 12 && n.memory.every(m => text(m,40))
     && (n.queue === null || (!!n.queue && text(n.queue.facility,80) && Number.isInteger(n.queue.position) && n.queue.position >= 1 && Number.isInteger(n.queue.length) && n.queue.length >= n.queue.position))
     && !!r.speaker && text(r.speaker.look,500) && holdings(r.speaker.holding) && goals.includes(r.goal) && text(r.message,200) && (r.offer === null || kinds.includes(r.offer))
-    && Array.isArray(r.history) && r.history.length <= 3 && r.history.every(h => text(h.message,200) && text(h.reply,500) && decisions.includes(h.decision));
+    && Array.isArray(r.history) && r.history.length <= 3 && r.history.every(h => h && text(h.message,200) && text(h.reply,500) && decisions.includes(h.decision));
 }
 export function validateResponse(value: unknown, request: NpcDialogueRequest): NpcResponse | null {
   if (!value || typeof value !== "object") return null;
@@ -29,6 +29,6 @@ export function validateResponse(value: unknown, request: NpcDialogueRequest): N
 }
 export function responseFailure(): NpcResponse { return { reply: "暂时无法答复。", decision: "refuse", give: null, want: null, reason: "模型对话不可用", source: "error" }; }
 export async function respond(call: Structured, request: NpcDialogueRequest): Promise<NpcResponse> {
-  try { return validateResponse(await call(RESPONSE_SYSTEM, untrustedData("NPC 对话资料", request), RESPONSE_SCHEMA, "npc_response", 1024), request) ?? responseFailure(); }
-  catch { return responseFailure(); }
+  try { const {value,metadata}=unpackStructured(await call(RESPONSE_SYSTEM, untrustedData("NPC 对话资料", request), RESPONSE_SCHEMA, "npc_response", 1024)); return {...(validateResponse(value,request) ?? responseFailure()),...metadata}; }
+  catch (error) { return {...responseFailure(),...failureMetadata(error)}; }
 }

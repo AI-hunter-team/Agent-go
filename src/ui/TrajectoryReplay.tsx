@@ -1,3 +1,4 @@
+import { EVENT_LABEL } from "./interactionLabels";
 import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { GameReport } from "../shared/types";
 import { getReplayFrame } from "../replay/trajectory";
@@ -87,6 +88,8 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
         </div>
       </div>
       <div className="replay-context">
+        {!!frame.events?.length && <details open><summary>截至此时的交互事件</summary>{frame.events.slice(-12).map(e => <p key={e.id}>{e.t.toFixed(1)}s {EVENT_LABEL[e.kind]} · {e.actorId ?? "环境"} → {e.targetId ?? "周围"}</p>)}</details>}
+        <p className="muted">警戒变化 {frame.alerts?.length ?? 0} 条 · 物品转移 {frame.items?.length ?? 0} 条。地图中的乘客与设施为终局位置；角色轨迹和上述记录按回放时间展示。</p>
         <h3>当时的决策</h3>
         {frame.decision ? <DecisionLog decisions={[frame.decision]} /> : <p className="muted">此时还没有决策记录。</p>}
       </div>

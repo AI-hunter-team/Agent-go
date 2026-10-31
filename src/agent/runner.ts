@@ -209,7 +209,7 @@ export class GameRunner {
         this.endAttempt(record);
         if (engine.status !== "running") return;
         outcome = engine.applyAction(action, undefined, plan);
-        this.bossPlans.push({t:engine.t,instruction:action.instruction,plan:structuredClone(plan),outcomes:engine.executor.outcomes});
+        this.bossPlans.push({t:engine.t,instruction:action.instruction,plan:structuredClone(plan),outcomes:outcome.ok ? engine.executor.outcomes : [{...outcome,eventIds:[]}]});
       } else if (action.type === "attempt_creative") {
         const record = this.beginAttempt("classification", turn);
         try {
@@ -417,9 +417,23 @@ export class GameRunner {
     const round = (n: number) => Math.round(n * 10) / 10;
     const tb = e.timeBreakdown;
     return {
+      alerts: structuredClone(e.alerts.history),
+      items: structuredClone(e.world.items.transfers),
+      worldEvents: structuredClone(e.events.events),
+      personas: structuredClone(e.world.personas),
+      boss: structuredClone(this.bossPlans),
+      interactionDialogues: structuredClone(this.interactionDialogues),
+      calls: { ...this.calls },
+      operationUsage: this.debug.attempts.reduce<NonNullable<GameReport["operationUsage"]>>((summary, a) => {
+        const row = summary[a.operation] ??= { calls: 0, inputTokens: 0, outputTokens: 0, unknownUsage: 0, realSeconds: 0 };
+        row.calls++; row.inputTokens += a.usage?.inputTokens ?? 0; row.outputTokens += a.usage?.outputTokens ?? 0;
+        row.unknownUsage += Number(!a.usage); row.realSeconds += (a.durationMs ?? 0) / 1000;
+        return summary;
+      }, {}),
       debug: this.snapshotDebug(),
       seed: e.seed,
       settings: { ...e.settings },
+      loadout: { ...e.loadout },
       agentKind: this.agent.kind,
       guidance: this.opts.guidance ?? "",
       normalizedGuidance: this.opts.normalizedGuidance ?? null,
@@ -441,10 +455,10 @@ export class GameRunner {
       attempts: this.attempts,
       dialogues: this.dialogues,
       npcTotals: {
-        calls: this.dialogues.length,
-        inputTokens: this.dialogues.reduce((sum, d) => sum + (d.response?.usage?.inputTokens ?? 0), 0),
-        outputTokens: this.dialogues.reduce((sum, d) => sum + (d.response?.usage?.outputTokens ?? 0), 0),
-        realSeconds: round(this.npcRealMs / 1000),
+        calls: this.dialogues.length + this.interactionDialogues.length,
+        inputTokens: [...this.dialogues,...this.interactionDialogues].reduce((sum, d) => sum + (d.response?.usage?.inputTokens ?? 0), 0),
+        outputTokens: [...this.dialogues,...this.interactionDialogues].reduce((sum, d) => sum + (d.response?.usage?.outputTokens ?? 0), 0),
+        realSeconds: round((this.npcRealMs + this.debug.attempts.filter(a=>a.operation==="npc_respond").reduce((sum,a)=>sum+a.durationMs,0)) / 1000),
       },
       events: [...e.world.events],
       trail: e.trail,

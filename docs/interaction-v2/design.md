@@ -1,6 +1,6 @@
 # 交互 2.0：规则规范与技术设计
 
-状态：**现行规则与分阶段实现规划**（2026-10-31）。原规划依据用户[角色设计提案](source-角色设计.md)及当时 `main`（`d4884a8`）；IV2-01–08 现已本地实现，后续仍是规划，具体证据与缺口见 [README 状态表](README.md#状态与后续)。D1–D8 已确认；标注“推荐”的数值仍是试玩起始值，可按测试与试玩数据调整。B2 的“现状”保留原基线快照，不代表当前实现。
+状态：**现行规则与分阶段实现规划**（2026-10-31）。原规划依据用户[角色设计提案](source-角色设计.md)及当时 `main`（`d4884a8`）；IV2-01–19 现已本地实现，软件、浏览器和真实模型证据分别记录，具体证据与缺口见 [README 状态表](README.md#状态与后续)。D1–D8 已确认；标注“推荐”的数值仍是试玩起始值，可按测试与试玩数据调整。B2 的“现状”保留原基线快照，不代表当前实现。
 
 本文分三部分：A 规则规范（做什么）、B 技术设计（怎么做）、C 接口契约（各模块之间的约定）。任务拆分、文件归属与验收见 [tasks.md](tasks.md)。
 
@@ -168,7 +168,7 @@
 
 ### A10. 时限与预算
 
-- 时限暂保留 120 秒；垂直切片完成后用离线和真实模型试玩复评（任务 IV2-18），确认取道具、交涉、躲避有实际使用空间。
+- 时限正式为 150 秒。IV2-18 离线 50 seeds 在 120/150/180 秒下分别通关 6/21/32 局；用户于 2026-10-31 明确选择 150 秒以保留赶车压力。旧报告保留当局 settings。
 - 推荐预算：角色决策 80 次 / 局；Boss 20 次 / 局；NPC 对话 30 次 / 局；单次决策思考 ≤ 1024 token（沿用）。
 
 ---
@@ -444,7 +444,7 @@ export interface ActionPlan {
 export interface StepOutcome { ok: boolean; text: string; eventIds: string[] }
 ```
 
-执行器接收模拟侧校验过的闭合步骤，最多 4 步；开始时保留计划副本。每帧先推进接近/持续阶段，感知处理后在 `finishFrame()` 再校验和结算，确保最后一帧仍能被目击。中断清理 ongoing act 与队列预约。现有闸机可执行；栏杆/扶梯/扶手须由 IV2-14/15 提供几何，未接入时返回明确的前置条件失败。
+执行器接收模拟侧校验过的闭合步骤，最多 4 步；开始时保留计划副本。每帧先推进接近/持续阶段，感知处理后在 `finishFrame()` 再校验和结算，确保最后一帧仍能被目击。中断清理 ongoing act 与队列预约。现有闸机可执行；栏杆/扶梯/扶手已由 IV2-14/15 提供几何与结算；前置条件不满足时明确失败。
 
 `contest`（`src/sim/actions/contest.ts`）推荐公式，概率夹在 [0.05, 0.95]，用每局初始化时创建并保留的 `contestRng = rng.fork("contest")` 连续抽样（每次判定调用 `contestRng.next()`，不得重新 fork）：
 
@@ -493,7 +493,7 @@ export interface NpcResponse {
 
 | 工具 | 参数 | 执行 |
 |---|---|---|
-| `traverse` | `route: "stairs" \| "escalator"` | 替代 `descend_stairs`（旧名保留为别名） |
+| `traverse` | `route: "stairs" \| "escalator"` | 公开替代 `descend_stairs`；`walking?: boolean` 仅用于扶梯；旧名只在内部历史适配保留 |
 | `observe` | `targetId` | 1 s；返回目标详细外观、可见行为、持有的可见物品 |
 | `take` | `itemId` | 可及范围内的地面物品或取物点库存 |
 | `give` | `itemId`, `npcId` | 交付；对方是否收下由对话 / 规则决定 |
@@ -533,10 +533,24 @@ GameReport.boss?: { t: number; instruction: string; plan: ActionPlan; outcomes: 
 | `POST /api/boss/interpret` | `{ sessionId, instruction, context: BossContext }` | `ActionPlan & { debug }` | 无模型时 200 返回关键词解析结果 |
 | `POST /api/npc/respond` | `{ sessionId, request: NpcDialogueRequest }` | `NpcResponse & { debug }` | 无模型 503，客户端走离线启发式 |
 | `POST /api/session` | 增加 `loadout?: { backpack: boolean }` | 不变 | 校验同 `settings` 风格 |
-| `/api/creative/classify`、`/api/npc/negotiate` | 不变 | 不变 | 保留到 IV2-19 再移除 |
+| `/api/creative/classify`、`/api/npc/negotiate` | 已移除 | HTTP 404 | IV2-19 完成；调用方迁移到 `/api/boss/interpret`、`/api/npc/respond` |
 
 `BossContext`：角色位置与持有物、视野内人物（含 id、外观、位置、持有可见物品）、可见物品与取物点、设施状态、玩家原始指令。Boss 只需要能把指令中的指代（“那位穿红衣服的乘客”）解析到 id；隐藏性格不提供给 Boss，以免 Boss 依据性格替角色挑软柿子。
 
 ### IV2-09 接口补充（实现同步）
 
-BossContext 共享可见位置、人物外观/队列、物品 id 与设施；导航节点是公开固定知识。模型不得补造 id。严格 JSON Schema 的可选字段以 null 返回，服务端转为省略后校验。ActionPlan / NpcResponse 可附 debug、model、usage 元数据，不影响模拟器结算。新接口必须使用 session 绑定的同一角色模型配置；旧协商接口留待 IV2-19 清理。错误计划降级关键词；不可用的在线 NPC 答复不授予许可。
+BossContext 共享可见位置、人物外观/队列、物品 id 与设施；导航节点是公开固定知识。模型不得补造 id。严格 JSON Schema 的可选字段以 null 返回，服务端转为省略后校验。ActionPlan / NpcResponse 可附 debug、model、usage 元数据，不影响模拟器结算。新接口必须使用 session 绑定的同一角色模型配置；旧协商接口已在 IV2-19 移除；历史报告和模拟动作通过内部适配读取。错误计划降级关键词；不可用的在线 NPC 答复不授予许可。
+
+### 第二阶段集成补充（IV2-13–19，2026-10-31）
+
+由当前串行集成人依据用户“完成整个第二阶段”授权落实：`loadout?: { backpack: boolean }` 独立于固定难度 settings；省略默认有包。`traverse` 增加可选 `walking`，仅扶梯使用，站立 10 秒、步行 5 秒，楼梯保持 6 秒。内部继续兼容 `stairs` 活动标签，以可选 route/duration/end 表示两条路线，旧报告不需迁移。
+
+C5 `strike` 增加设施分支 `{ op: "strike", facilityId: string, itemId?: string, aim: "hurt" }`，与 npcId 分支互斥；Boss 仅能引用可见设施，模拟器再次验证距离与状态后结算损坏。环境脚本新增 power（区域、持续时间）及 damage（设施 id），统一发出世界事件。断电视距系数 0.4，恢复后为 1；视觉与保安/NPC 连续追踪采用同一系数。以上扩展为原方案已有行为提供缺失表达能力，不允许模型直接提交世界状态。
+
+安检起始调参：背包 +2 秒，每件 inspect 物品 +2 秒；没收物品移交到通道保管点并记录转移。安检后设置公开饮水架（免费），避免将未实现的收费流程伪装成售货机。时间参数最终以 IV2-18 的实际验证为准。
+
+公开取物点 `spot` 引用与导航点一样按 layout 白名单校验，Boss 提示提供固定 id/坐标；可见物品 id 仍只允许 context 中实体。
+
+C9 增量：报告还保存 `loadout`、`interactionDialogues`、`calls` 与 `operationUsage`。后者按 decision/retry/interpret/npc_respond 等操作累计调用、输入/输出 token、现实耗时及 unknownUsage，供应商未返回用量时不伪装为完整零费用。具体类型见 shared/types。
+
+IV2-18 实测修复：`observe` 按 C7 消耗 1 秒并唤醒下一次决策，继续保持排队/移动状态；仅返回手持可见物品。Boss 提示重复给出闭合输出结构和 vault 示例，避免将翻闸误译为重复 approach。

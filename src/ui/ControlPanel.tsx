@@ -6,6 +6,8 @@ import { randomSeed } from "./seed";
 export type AgentChoice = "llm" | "offline";
 
 interface SetupProps {
+  backpack?: boolean;
+  onBackpack?: (value: boolean) => void;
   llmAvailable: boolean;
   model: string | null;
   agentKind: AgentChoice;
@@ -29,6 +31,7 @@ export function SetupPanel(p: SetupProps) {
         {`唯一目标：限时 ${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台；角色依据你的指导自主选择方案，结果由环境判定。`}
       </p>
 
+      <label className="check"><input type="checkbox" checked={p.backpack ?? true} disabled={p.busy !== null} onChange={e => p.onBackpack?.(e.target.checked)} />携带背包（容量 4，安检增加 2 秒；可途中丢弃）</label>
       <div className="field" role="group" aria-label="角色驱动方式">
         <span>角色由谁驱动</span>
         <div className="segmented">

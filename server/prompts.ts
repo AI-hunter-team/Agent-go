@@ -44,6 +44,7 @@ function fixedKnowledge(settings: Readonly<GameSettings>): string {
 - 安检墙位于 x = 26，只能经安检通道进入安检后大厅。
 - 安检后大厅：26 < x < 44，中间有两根柱子遮挡视线。
 - 闸机线位于 x = 44，常规刷票通行需要有效车票；普通步行不能穿过闸机线，其他行动由环境裁定。
+- 扶梯入口 ESCALATOR_TOP（48,20）与楼梯并列；扶梯站立10秒、walking=true步行5秒。traverse(route: escalator, walking: true/false)。安检墙 y=8–12、18–21 为低栏杆。安检后饮水架免费，可取水。
 - 闸机内连接区：44 < x < ${STAIRS_X}。通过闸机还没有到站台，必须先 move_to STAIRS_TOP，收到到达结果后才能调用 traverse(route: stairs)；下楼 ${STAIRS_SECONDS} 秒后才进入 x > ${PLATFORM_X} 的下层站台，普通步行不能绕过楼梯。
 
 ## 可前往的地点（move_to 的 target 也可以填设施编号，表示走到该设施附近）

@@ -1,7 +1,7 @@
 import { captureScene } from "./presentation";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import type { Engine } from "../sim/engine";
-import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_WALL, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
+import { ESCALATOR_TOP, ESCALATOR_BOTTOM, RAILING_SEGMENTS, FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_WALL, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
 import { RULES } from "../sim/scenario";
 
 // Palette follows the chosen visual direction (design/ui-concepts-v3, 方案 02):
@@ -75,6 +75,9 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   ctx.fillText("入口 →", px(0.2), px(16.6));
 
   drawStairs(ctx);
+  ctx.fillStyle="#b1b9b2";ctx.fillRect(px(49),px(19),px(7),px(2));
+  ctx.strokeStyle=COLORS.ink; line(ctx,ESCALATOR_TOP,ESCALATOR_BOTTOM);
+  ctx.fillStyle=COLORS.ink;ctx.fillText("扶梯 ↓",px(51),px(21.8));
 
   // Nav nodes (faint markers so players can read agent targets)
   ctx.fillStyle = "rgba(43,42,39,0.25)";
@@ -94,6 +97,9 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   ctx.fillStyle = COLORS.green;
   for (const r of PILLARS) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
 
+  ctx.strokeStyle=COLORS.ochre;ctx.lineWidth=5;
+  for(const s of RAILING_SEGMENTS) line(ctx,{x:SECURITY_X,y:s.minY},{x:SECURITY_X,y:s.maxY});
+  if (!replay) for(const region of MAP_REGIONS) if(world.lightAt({x:(region.start+region.end)/2,y:15})<1) { ctx.fillStyle="rgba(18,26,34,.55)";ctx.fillRect(px(region.start),0,px(region.end-region.start),MAP_PX.h); }
   // Facilities
   for (const def of FACILITIES) {
     const f = world.facility(def.id)!;

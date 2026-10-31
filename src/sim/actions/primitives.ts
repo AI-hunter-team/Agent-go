@@ -106,7 +106,7 @@ export function isPlanStep(value: unknown): value is PlanStep {
     case "force_cut_in":
       return string(s.npcId);
     case "strike":
-      return string(s.npcId) && oneOf(s.aim, ["knockout", "hurt"]) && (s.itemId === undefined || string(s.itemId));
+      return ((string(s.npcId) && s.facilityId === undefined && oneOf(s.aim, ["knockout", "hurt"])) || (string(s.facilityId) && s.npcId === undefined && s.aim === "hurt")) && (s.itemId === undefined || string(s.itemId));
     case "vault":
       return oneOf(s.obstacle, ["gate", "railing", "escalator_side"]);
     case "slide_handrail":

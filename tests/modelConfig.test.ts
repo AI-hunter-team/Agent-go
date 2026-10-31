@@ -1,10 +1,10 @@
+import {buildIntentContext} from "../src/sim/intent";
+import { dialogueFixture } from "./fixtures/dialogue";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ModelConfigStore } from "../server/modelConfig";
-import { createApp, type AppDeps } from "../server/app";
-import { OpenAIClient, OpenAILlmService } from "../server/openai";
-import { debugFetch } from "../server/debug";
+import { createApp } from "../server/app";
 import { SessionStore } from "../server/sessions";
 import { Engine } from "../src/sim/engine";
 import { DebugLogger } from "../server/debug";
@@ -22,9 +22,9 @@ const list = () => Response.json({ data: [{ id: "model-b" }, { id: "model-a" }, 
 let server: Server | null = null;
 afterEach(() => { server?.close(); server = null; vi.useRealTimers(); });
 
-async function start(fetcher: typeof fetch, debugLogger?: DebugLogger, npc: Pick<AppDeps, "npcLlm" | "npcModelParameters"> = {}) {
+async function start(fetcher: typeof fetch, debugLogger?: DebugLogger) {
   const modelConfigs = new ModelConfigStore(fetcher);
-  server = createApp({ llm: null, sessions: new SessionStore(), modelConfigs, debugLogger, ...npc }).listen(0, "127.0.0.1");
+  server = createApp({ llm: null, sessions: new SessionStore(), modelConfigs, debugLogger }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server!.once("listening", resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const call = async (path: string, body?: unknown, token?: string, method = body === undefined ? "GET" : "POST") => {
@@ -127,12 +127,6 @@ describe("browser model configuration", () => {
 
   test("activates only the requesting browser and pins each game's model", async () => {
     const requestedModels: string[] = [];
-    const npcSecret = "developer-npc-private-key";
-    const npcRequests: { url: string; authorization: string | null; body: any }[] = [];
-    const npcLlm = new OpenAILlmService(new OpenAIClient("https://npc-gateway.test/v1", npcSecret, debugFetch(async (input, init) => {
-      npcRequests.push({ url: String(input), authorization: new Headers(init?.headers).get("authorization"), body: JSON.parse(String(init?.body)) });
-      return Response.json({ model: "developer-npc", choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ accepted: true, reply: "可以，你先吧", reason: "愿意帮助" }) } }] });
-    })), { model: "developer-npc", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false });
     const { call } = await start(async (input, init) => {
       if (String(input).endsWith("/models")) return list();
       const request = JSON.parse(String(init?.body));
@@ -140,13 +134,13 @@ describe("browser model configuration", () => {
       if (request.response_format) {
         const value = request.response_format.json_schema.name === "guidance"
           ? { summary: "自定义模型指导", risk: "保守", priorities: [], rules: [], creativeIdeas: [], notExecutable: [], initialPlan: [] }
-          : request.response_format.json_schema.name === "npc_reply"
-            ? { accepted: true, reply: "可以，你先吧", reason: "愿意帮助" }
-            : { mechanic: "unsupported", reason: "自定义模型分类" };
+          : request.response_format.json_schema.name === "npc_response"
+            ? {decision:"accept",give:null,want:null,reply:"可以，你先吧",reason:"愿意帮助"}
+            : {status:"unsupported",steps:[],summary:"不支持飞行",reason:"自定义模型分类"};
         return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(value) } }] });
       }
       return completion();
-    }, undefined, { npcLlm, npcModelParameters: { provider: "openai", model: "developer-npc", maxTokens: 1024 } });
+    });
     const verified = await call("/api/model/verify", { baseUrl: "https://gateway.test", apiKey: secret });
     const token = verified.body.token;
     expect(verified.status).toBe(200);
@@ -166,25 +160,19 @@ describe("browser model configuration", () => {
     expect(decision.body.debug.calls).toHaveLength(1);
     expect(decision.body.debug.calls[0]).toMatchObject({ model: "model-a", status: 200 });
     expect(JSON.stringify(decision.body.debug)).not.toContain(secret);
-    const classification = { sessionId: session.body.sessionId, intent: "飞过去", observation: turn.observation };
-    expect((await call("/api/creative/classify", classification)).status).toBe(403);
-    expect((await call("/api/creative/classify", classification, token)).body).toMatchObject({ reason: "自定义模型分类", source: "llm" });
-    const dialogue = { sessionId: session.body.sessionId, npc: { id: "p2", trait: "普通乘客", temperament: "愿意帮助", facility: "TVM-1", queuePosition: 1, queueLength: 2 }, message: "能让我先吗", history: [], model: "model-b", apiKey: secret, baseUrl: "https://gateway.test" };
-    expect((await call("/api/npc/negotiate", dialogue)).status).toBe(403);
-    const npc = await call("/api/npc/negotiate", dialogue, token);
-    expect(npc.body).toMatchObject({ accepted: true, source: "llm", model: "developer-npc", debug: { runId: "configured-debug-run", operation: "negotiate", parameters: { model: "developer-npc", maxTokens: 1024 } } });
+    const classification = {sessionId:session.body.sessionId,instruction:"飞过去",context:buildIntentContext(new Engine(1).world,new Engine(1).guards)};
+    expect((await call("/api/boss/interpret", classification)).status).toBe(403);
+    expect((await call("/api/boss/interpret", classification, token)).body).toMatchObject({ reason: "自定义模型分类", source: "llm" });
+    const dialogue = { sessionId: session.body.sessionId, request: dialogueFixture() };
+    expect((await call("/api/npc/respond", dialogue)).status).toBe(403);
+    const npc = await call("/api/npc/respond", dialogue, token);
+    expect(npc.body).toMatchObject({ decision:"accept", source: "llm", model: "model-a", debug: { runId: "configured-debug-run", operation: "npc_respond", parameters: { model: "model-a", maxTokens: 4096 } } });
     expect(npc.body.debug.calls).toHaveLength(1);
     expect(JSON.stringify(npc.body.debug)).not.toContain(secret);
-    expect(JSON.stringify(npc.body)).not.toContain(npcSecret);
     const nextSession = await call("/api/session", { guidance: "向 NPC 求助" }, token);
-    const nextNpc = await call("/api/npc/negotiate", { ...dialogue, sessionId: nextSession.body.sessionId }, token);
-    expect(nextNpc.body.model).toBe("developer-npc");
-    expect(npcRequests).toHaveLength(2);
-    for (const sent of npcRequests) {
-      expect(sent).toMatchObject({ url: "https://npc-gateway.test/v1/chat/completions", authorization: `Bearer ${npcSecret}`, body: { model: "developer-npc" } });
-      expect(JSON.stringify(sent.body)).not.toContain(secret);
-    }
-    expect(requestedModels).toEqual(["model-a", "model-a", "model-b", "model-a", "model-a"]);
+    const nextNpc = await call("/api/npc/respond", { ...dialogue, sessionId: nextSession.body.sessionId }, token);
+    expect(nextNpc.body.model).toBe("model-b");
+    expect(requestedModels).toEqual(["model-a", "model-a", "model-b", "model-a", "model-a", "model-a", "model-b"]);
     const report = { status: "success", debug: { runId: "configured-debug-run" } };
     expect((await call(`/api/session/${session.body.sessionId}/report`, { report })).status).toBe(403);
     expect((await call(`/api/session/${session.body.sessionId}/report`, { report }, token)).status).toBe(204);
@@ -194,19 +182,9 @@ describe("browser model configuration", () => {
     expect((await call("/api/health", undefined, token)).status).toBe(401);
   });
 
-  test("a user-configured agent cannot supply the missing developer NPC model", async () => {
-    const requestedModels: string[] = [];
-    const { call } = await start(async (input, init) => {
-      if (String(input).endsWith("/models")) return list();
-      requestedModels.push(JSON.parse(String(init?.body)).model);
-      return completion();
-    });
-    const { body: { token } } = await call("/api/model/verify", { baseUrl: "https://gateway.test", apiKey: secret });
-    await call("/api/model/enable", { model: "model-a" }, token);
-    const { body: { sessionId } } = await call("/api/session", { guidance: "向 NPC 求助" }, token);
-    const npc = await call("/api/npc/negotiate", { sessionId, npc: { id: "p2", trait: "普通乘客", temperament: "友善", facility: "TVM-1", queuePosition: 1, queueLength: 2 }, message: "能让我先吗", history: [] }, token);
-    expect(npc.status).toBe(503);
-    expect(npc.body).toMatchObject({ accepted: false, source: "error", model: null });
-    expect(requestedModels).toEqual(["model-a"]);
+  test("session without a model cannot invoke NPC dialogue", async () => {
+    const {call}=await start(async()=>list());
+    const {body:{sessionId}}=await call("/api/session",{guidance:""});
+    expect((await call("/api/npc/respond",{sessionId,request:dialogueFixture()})).status).toBe(503);
   });
 });

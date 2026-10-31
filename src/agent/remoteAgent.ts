@@ -1,17 +1,13 @@
 import type {
   AgentTurn,
-  CreativeClassification,
   DecisionResult,
   NormalizedGuidance,
-  Observation,
-  NpcReply,
-  CutInDialogueRequest,
   GameReport,
 } from "../shared/types";
 import type { OperationDebug } from "../shared/debug";
 import type { GameSettings } from "../shared/gameSettings";
 import { classifyByKeywords } from "../sim/intent";
-import type { Agent, Classifier, NpcNegotiator, Interpreter, NpcResponder } from "./agent";
+import type { Agent, Classifier, Interpreter, NpcResponder } from "./agent";
 
 let activeModelToken: string | null = null;
 
@@ -60,26 +56,23 @@ export const Api = {
   },
   health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
   normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
-  createSession: (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings) =>
-    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings } }),
+  createSession: (guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout) =>
+    api<{ sessionId: string }>("/api/session", { body: { guidance, normalized, runId, settings, loadout } }),
   decide: (sessionId: string, turn: AgentTurn) => api<DecisionResult>("/api/agent/decide", { body: { sessionId, turn } }),
-  classify: (intent: string, observation: Observation, sessionId?: string, runId?: string) =>
-    api<CreativeClassification>("/api/creative/classify", { body: { intent, observation, sessionId, runId } }),
   interpret: (sessionId: string, instruction: string, context: import("../shared/types").BossContext) => api<import("../shared/types").ActionPlan>("/api/boss/interpret", { body: {sessionId,instruction,context} }),
   respond: (sessionId: string, request: import("../shared/types").NpcDialogueRequest) => api<import("../shared/types").NpcResponse>("/api/npc/respond", {body:{sessionId,request}}),
   saveReport: (sessionId: string, report: GameReport) => api<void>(`/api/session/${sessionId}/report`, { body: { report } }),
   deleteSession: (sessionId: string) => api<null>(`/api/session/${sessionId}`, { method: "DELETE" }),
-  negotiate: (request: CutInDialogueRequest, sessionId?: string) => api<NpcReply>("/api/npc/negotiate", { body: { ...request, sessionId } }),
 };
 
 /** Model-driven agent: each decision is a call to the API server, which holds in-run memory. */
 export class RemoteAgent implements Agent {
   readonly kind = "llm" as const;
-  private constructor(private sessionId: string, private runId?: string) {}
+  private constructor(private sessionId: string) {}
 
-  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings): Promise<RemoteAgent> {
-    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings);
-    return new RemoteAgent(sessionId, runId);
+  static async create(guidance: string, normalized: NormalizedGuidance | null, runId?: string, settings?: GameSettings, loadout?: import("../shared/interaction").Loadout): Promise<RemoteAgent> {
+    const { sessionId } = await Api.createSession(guidance, normalized, runId, settings, loadout);
+    return new RemoteAgent(sessionId);
   }
 
   decide(turn: AgentTurn): Promise<DecisionResult> {
@@ -89,9 +82,7 @@ export class RemoteAgent implements Agent {
   readonly interpret: Interpreter = (instruction, context) => Api.interpret(this.sessionId, instruction, context);
   readonly respond: NpcResponder = request => Api.respond(this.sessionId, request);
 
-  readonly classify: Classifier = (intent, observation) => Api.classify(intent, observation, this.sessionId, this.runId);
 
-  readonly negotiate: NpcNegotiator = (request) => Api.negotiate(request, this.sessionId);
 
   async dispose(report?: GameReport) {
     try { if (report) await Api.saveReport(this.sessionId, report); }
@@ -99,10 +90,4 @@ export class RemoteAgent implements Agent {
   }
 }
 
-/** Standalone server classifier; the runner records transport errors and applies keyword fallback. */
-export const remoteClassifier: Classifier = (intent, observation) =>
-  Api.classify(intent, observation);
-
 export const offlineClassifier: Classifier = async (intent) => classifyByKeywords(intent);
-
-export const remoteNpcNegotiator: NpcNegotiator = (request) => Api.negotiate(request);
