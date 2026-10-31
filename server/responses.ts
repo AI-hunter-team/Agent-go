@@ -9,6 +9,8 @@ import { assertSafeText, untrustedData, validateNormalized } from "./security";
 import { readResponsesStream } from "./responsesStream";
 import { modelHttpError } from "./modelError";
 import { assertCompleted, parseResponse, responseOutput, responseText, responseThinking, responseUsage, type ModelResponse } from "./responsesTypes";
+import { DRAFT_SCHEMA, DRAFT_SYSTEM, REVIEW_SCHEMA, REVIEW_SYSTEM } from "./review";
+import { ReviewFailure, validateDraft, validateReview, type DraftResult, type ReviewInput, type ReviewMetadata, type ReviewResult, type ReviewStrategy } from "../src/shared/review";
 
 /** 通用 Responses HTTP 客户端，凭据只保留在服务端。 */
 export class ResponsesClient {
@@ -142,6 +144,32 @@ export class ResponsesLlmService implements LlmService {
     const text = responseText(response);
     try { return JSON.parse(text); }
     catch { throw new Error("模型未返回有效的结构化 JSON"); }
+  }
+
+  /** 赛后调用与局内会话隔离，失败也保留供应商已返回的用量。 */
+  private async reviewCall<T>(system: string, input: unknown, schema: object, name: string, validate: (value: unknown) => T, operation: "review" | "draft") {
+    const started = Date.now();
+    let metadata: ReviewMetadata = { model: this.model, usage: null, latencyMs: 0 };
+    try {
+      const value = await this.structured(system, untrustedData("赛后资料", input), schema, name, response => {
+        metadata = { model: response.model ?? this.model, usage: responseUsage(response), latencyMs: Date.now() - started };
+      });
+      return { value: validate(value), ...metadata, latencyMs: Date.now() - started };
+    } catch {
+      throw new ReviewFailure("模型未返回有效的复盘或草稿，请重试", { ...metadata, latencyMs: Date.now() - started, operation, status: "error" });
+    }
+  }
+
+  /** 基于已结束对局的观察、全局历史与结果生成可核对的复盘。 */
+  async review(input: ReviewInput): Promise<ReviewResult> {
+    const { value, ...metadata } = await this.reviewCall(REVIEW_SYSTEM, input, REVIEW_SCHEMA, "round_review", v => validateReview(v, input), "review");
+    return { analysis: value, ...metadata };
+  }
+
+  /** 仅把玩家选中的建议合并到原指导，不保存为角色跨局记忆。 */
+  async draftGuidance(guidance: string, strategies: ReviewStrategy[]): Promise<DraftResult> {
+    const { value, ...metadata } = await this.reviewCall(DRAFT_SYSTEM, { guidance, strategies }, DRAFT_SCHEMA, "review_guidance", validateDraft, "draft");
+    return { ...value, ...metadata };
   }
 
   /** 整理玩家指导，保留原有策略与安全校验。 */
