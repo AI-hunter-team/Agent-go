@@ -89,3 +89,9 @@
 - 已读取 [本地最终简报](../tasks/FINAL-LOCAL-001.md) 和 [验证报告](FINAL-LOCAL-001.md)：类型、53 文件 / 444 项（maxWorkers=2、命令行 testTimeout=15000）、构建及 5173 页面核对通过。没有把该 15 秒命令说成默认 5 秒检查通过；远端继续运行默认门禁。
 - 发布分支只追加交接文档，业务代码与已验收本地快照一致，无新函数或测试；保持用户 5173 测试页面/服务和本地标签，未调用真实模型。
 - 抽搐修复、时限选择与函数职责使用原报告，不重新设计；当前用户已明确授权全部推送及合入，源任务仅本地结论为历史阶段边界。最终接续 PR 承载真实提交、CI 与合入状态。
+
+## 接续 PR #26 的 CI 执行预算
+
+- 初轮 [CI 41178529708](https://github.com/AI-hunter-team/Agent-go/actions/runs/41178529708) 两个平台失败均为 5000ms 超时：Windows 为 gameSession seed 1 与 heuristicAgent 多局检查；Ubuntu 另有 runner 整局。没有断言错误；[Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41178529627) 已通过。
+- `.github/workflows/ci.yml` 测试命令改为源版本已实际通过的 `npm test -- --maxWorkers=2 --testTimeout=15000`；全部 444 项检查继续执行。`package.json`、断言、产品时限和业务代码不变，开发流程同步该真实命令。没有再次重复同一批本地检查，后续远端结果如实由 PR 承载。
+- 普通 push 新建 `codex/character-jitter`、`codex/deadline-selection` 两个独立分支名时返回 GH007；这些提交已通过 `codex/all-local-final` 的成功推送完整到达远端，Git `rev-list --branches --not --remotes` 为空。保留本地源分支，不绕过隐私保护、不改写已发布祖先，统一通过 [PR #26](https://github.com/AI-hunter-team/Agent-go/pull/26) 合入。
