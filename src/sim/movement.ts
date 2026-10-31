@@ -11,7 +11,8 @@ const floorEdges: Rect[] = [
   { x: 48, y: -1, w: 9, h: 14 }, { x: 48, y: 17, w: 9, h: HEIGHT - 16 },
 ];
 const solids = [...PILLARS, ...furniture, ...floorEdges];
-const obstacles = [...MOVE_BLOCKERS.slice(0, 3), ...solids];
+/** Shared by persistent route planning and the per-tick collision sweep. */
+export const SCENERY_OBSTACLES: readonly Rect[] = [...MOVE_BLOCKERS.slice(0, 3), ...solids];
 
 /** Service may cross its scanner/gate opening, but never a solid side barrier. */
 export function clearServiceExit(from: Vec, to: Vec, radius: number): boolean {
@@ -45,7 +46,7 @@ export function clearOfPeople(from: Vec, to: Vec, radius: number, others: readon
 
 export function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
   if (to.x < radius || to.x > WIDTH - radius || to.y < radius || to.y > HEIGHT - radius) return false;
-  return obstacles.every((obstacle) => {
+  return SCENERY_OBSTACLES.every((obstacle) => {
     const r = { x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + radius * 2, h: obstacle.h + radius * 2 };
     // Keep existing point-nav corner/fixture positions recoverable, but never cross a wall.
     if (contains(r, from)) return !contains(r, to) || dist(to, { x: r.x + r.w / 2, y: r.y + r.h / 2 }) > dist(from, { x: r.x + r.w / 2, y: r.y + r.h / 2 });

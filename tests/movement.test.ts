@@ -51,6 +51,19 @@ test("walking around a ticket machine never sweeps through its solid geometry", 
   expect(p.pos).toEqual({ x: 17, y: 6 });
 });
 
+test.each(["normal", "luggage"] as const)("%s passenger reaches S1 from behind its conveyor", (kind) => {
+  const w = new World(1), f = w.facility("S1")!;
+  const p = w.addPerson(kind, { x: 19, y: 22 });
+  expect(w.joinQueue(p, "S1")).toBeNull();
+  for (let tick = 0; tick < 600 && p.activity.kind !== "service"; tick++) {
+    const start = { ...p.pos };
+    w.stepPeopleAndFacilities();
+    expect(clearOfScenery(start, p.pos, personRadius(kind))).toBe(true);
+  }
+  expect(p.activity.kind).toBe("service");
+  expect(p.pos).toEqual(f.def.head);
+});
+
 test("a waiting passenger cannot advance onto the passenger being served", () => {
   const w = new World(1), f = w.facility("TVM-2")!;
   const a = w.addPerson("luggage", { ...f.def.head });

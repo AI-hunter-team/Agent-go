@@ -165,7 +165,7 @@ export class World {
   /** Walk to a point. Returns an error message when it cannot be reached on foot. */
   walkTo(p: Person, to: Vec, label: string): string | null {
     if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
-    const path = findPath(p.pos, to);
+    const path = findPath(p.pos, to, personRadius(p.kind));
     if (!path) return `无法步行到达${label}：需要先通过安检或闸机`;
     p.activity = { kind: "walking", path, label };
     return null;
@@ -178,7 +178,7 @@ export class World {
     if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
     if (p.activity.kind === "queued" || p.activity.kind === "service") return "已经在队伍中，需先离队";
     const tail = this.queueStandPoint(f, f.queue.length, p.kind);
-    const path = findPath(p.pos, tail);
+    const path = findPath(p.pos, tail, personRadius(p.kind));
     if (!path) return `无法步行到达 ${facilityId} 的队尾：需要先通过安检或闸机`;
     p.activity = { kind: "to_queue", facility: facilityId, path };
     return null;
