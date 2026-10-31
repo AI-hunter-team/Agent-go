@@ -31,3 +31,6 @@ temp/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local API diagnostics: scripts, credentials and reports stay off GitHub
+/api-debug/
