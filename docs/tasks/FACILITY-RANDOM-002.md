@@ -1,6 +1,6 @@
 # FACILITY-RANDOM-002：修复安检口关闭随机性
 
-状态：本地实现及验证完成，未提交或合入（2026-11-01）。
+状态：已提交并推送，创建 [PR #69](https://github.com/AI-hunter-team/Agent-go/pull/69) 待审查；未合入（2026-11-01）。
 
 ## 目标与分工
 
@@ -45,3 +45,4 @@
 - 本次执行者继续负责串行交付两个独立分支，不混入对方改动或主工作区迁移文档。
 - 已 `git fetch origin` 核实目标主线仍为基线 `fa5551b8ac725377ace494866141e7109342cee2`，无需解决主线冲突。既有 792 项、类型及构建结果对应本次代码；交付阶段仅补充文档并重查完整 diff 与暂存空白。
 - PR 目标 `main`、head `codex/random-facility-closures`；仓库简报及验证记录随分支提交，PR 描述按仓库模板提供范围、验证限制和回退入口。最终 PR URL 与 head SHA 以对应 PR 为准；未合并、未部署，人工审查未进行。
+- 交付成功：[PR #69](https://github.com/AI-hunter-team/Agent-go/pull/69)，实现提交 `96f7ecd3526b66136f7c1da44936ba8048860e9b`。提交推送后分支干净，后续文档提交仅补本链接；PR 为 open、非草稿、目标 main，未合并，未启用自动合并。

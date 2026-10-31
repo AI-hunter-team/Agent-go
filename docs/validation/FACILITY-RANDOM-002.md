@@ -1,6 +1,6 @@
 # FACILITY-RANDOM-002 验证报告
 
-状态：本地修复验证快照（2026-11-01，Asia/Shanghai），未提交或合入。
+状态：修复验证与 [PR #69](https://github.com/AI-hunter-team/Agent-go/pull/69) 交付快照（2026-11-01，Asia/Shanghai）；未合入。
 
 ## 版本与环境
 
@@ -40,3 +40,4 @@
 - 上述未提交状态为软件验证时的快照。用户随后确认授权分别 commit、推送并创建两个 PR，明确不合并 main。
 - `git fetch origin` 后 `origin/main` 仍为 `fa5551b8ac725377ace494866141e7109342cee2`；无新增主线代码需要集成。源码与受测快照相同，本阶段仅补交付记录及检查差异/文档，不重复业务测试。
 - 创建目标：head `codex/random-facility-closures` → `main`；远端 PR/CI 实时结果以对应分支的 PR 为准，历史本地通过记录不代表远端 CI 已通过。人工审查未进行，未授权合并或部署。
+- 实际交付：[PR #69](https://github.com/AI-hunter-team/Agent-go/pull/69) 已创建，open、非草稿、未合并，实现提交 `96f7ecd3526b66136f7c1da44936ba8048860e9b`。本阶段完整/暂存 diff、新文档链接及空白检查通过。未启用自动合并，未部署。
