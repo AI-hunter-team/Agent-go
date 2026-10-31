@@ -77,17 +77,41 @@ export class TransitSystem {
     return [...this.world.persons.values()].filter(p => p.id !== exceptId && (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue" || (p.transitRoute === "escalator" && p.activity.kind === "walking"))).length;
   }
 
+  private useStairs(p: Person) {
+    p.transitRoute = "stairs";
+    if (dist(p.pos, STAIRS_TOP) > STAIRS_REACH) this.world.walkTo(p, STAIRS_TOP, "楼梯入口");
+    else this.world.descendStairs(p);
+  }
+
+  private escalatorIsCrowded(exceptId?: string) {
+    return this.queue.length >= ESCALATOR_CAPACITY || this.approachingCount(exceptId) >= ESCALATOR_CAPACITY;
+  }
+
   routeNpc(p: Person) {
     if (!p.transitRoute) p.transitRoute = this.rng.chance(p.kind === "hurried" ? .25 : .7) ? "escalator" : "stairs";
-    if (p.transitRoute === "escalator" && this.approachingCount(p.id) >= ESCALATOR_CAPACITY) p.transitRoute = "stairs";
+    if (p.transitRoute === "escalator" && this.escalatorIsCrowded(p.id)) p.transitRoute = "stairs";
     const top = p.transitRoute === "escalator" ? { x: ESCALATOR_TOP.x, y: ESCALATOR_TOP.y + 1.2 } : STAIRS_TOP;
-    if (dist(p.pos, top) > (p.transitRoute === "escalator" ? .2 : STAIRS_REACH)) this.world.walkTo(p, top, p.transitRoute === "escalator" ? "扶梯入口" : "楼梯入口");
-    else if (p.transitRoute === "escalator") this.join(p);
-    else this.world.descendStairs(p);
+    if (dist(p.pos, top) > (p.transitRoute === "escalator" ? .2 : STAIRS_REACH)) {
+      this.world.walkTo(p, top, p.transitRoute === "escalator" ? "扶梯入口" : "楼梯入口");
+    } else if (p.transitRoute === "escalator") {
+      const error = this.join(p);
+      // The queue can fill while an NPC is walking to the entrance. Do not
+      // leave it idle at the escalator and retry forever; take the parallel
+      // stairs route as soon as admission is refused for capacity.
+      if (error === "候梯区已满，请等候或选择楼梯") this.useStairs(p);
+    } else {
+      this.world.descendStairs(p);
+    }
   }
 
   step() {
     const w = this.world;
+    // The queue may fill after a passenger has already started walking toward
+    // the entrance. Cancel that stale route before it joins the bottleneck.
+    for (const p of w.persons.values()) {
+      if (p.isPlayer || p.transitRoute !== "escalator" || p.activity.kind !== "walking" || p.activity.label !== "扶梯入口") continue;
+      if (this.escalatorIsCrowded(p.id)) this.useStairs(p);
+    }
     if (w.t >= this.nextCrowdAt) {
       this.nextCrowdAt = w.t + this.crowdInterval * this.rng.range(.8, 1.2);
       if (this.approachingCount() < ESCALATOR_CAPACITY - 1) {

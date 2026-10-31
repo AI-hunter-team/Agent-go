@@ -35,7 +35,10 @@ export interface SceneProps {
   assetRotation: number;
   guardAssetUrl: string;
   guardAssetRotation: number;
-  onAssetError: (message: string) => void;
+  onAssetError: (message: string, url?: string) => void;
+  onModelLoadStart: (url: string) => void;
+  onModelProgress: (progress: number) => void;
+  onModelLoaded: (url: string) => void;
   onGuardAssetError: (message: string) => void;
   onStationAssetError: (message: string) => void;
   onFailure: (message: string) => void;
@@ -367,7 +370,11 @@ function Contents(props: SceneProps) {
   useEffect(() => { invalidate(); }, [props.messageMode, props.thought, invalidate]);
   const { session, metrics } = props;
   const { gl, get } = useThree();
+  const { progress } = useProgress();
   const wasSampling = useRef(false);
+  useEffect(() => {
+    if (props.assetUrl) props.onModelProgress(progress);
+  }, [progress, props.assetUrl, props.onModelProgress]);
   // 沿用现有 debug=1 的只读验收入口，不提供改写世界或强制胜利的方法。
   useEffect(() => {
     if (new URLSearchParams(location.search).get("debug") !== "1") return;
@@ -425,7 +432,7 @@ function Contents(props: SceneProps) {
     <MessageBillboardLayout />
     <SceneItems session={session}/>
     {props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
-    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
+    {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} onModelLoadStart={actor.kind === "player" ? props.onModelLoadStart : undefined} onModelLoaded={actor.kind === "player" ? props.onModelLoaded : undefined} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={`ground-${session.generation}`} session={session} vision={props.showVision} trail={props.showTrail} />
   </>;
 }
