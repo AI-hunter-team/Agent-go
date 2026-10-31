@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrthographicCamera, PerspectiveCamera, Vector3, type Mesh } from "three";
+import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { WIDTH, HEIGHT } from "../../sim/layout";
 import { platformElevation } from "../presentation";
 import { RULES } from "../../sim/scenario";
@@ -178,6 +179,25 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
   </group>;
 }
 
+function StationLighting({ standard }: { standard: boolean }) {
+  const { gl, scene } = useThree();
+  const target = useMemo(() => { const node = new Object3D(); node.position.set(35, 0, 15); return node; }, []);
+  useEffect(() => {
+    const pmrem = new PMREMGenerator(gl), room = new RoomEnvironment();
+    const map = pmrem.fromScene(room, 0.04); const old = scene.environment;
+    scene.environment = map.texture; scene.environmentIntensity = 0.45;
+    room.dispose(); pmrem.dispose();
+    return () => { scene.environment = old; map.dispose(); };
+  }, [gl, scene]);
+  return <>
+    <hemisphereLight args={["#fff2d9", "#a1a28f", 1.1]} />
+    <ambientLight intensity={0.55} />
+    <primitive object={target} />
+    <directionalLight target={target} color="#ffe5bf" position={[18, 9, -16]} intensity={2.3} castShadow={standard} shadow-mapSize={[2048, 2048]} shadow-camera-left={-40} shadow-camera-right={40} shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={110} shadow-normalBias={0.035} />
+    {[8, 24, 39, 63].map((x) => <pointLight key={x} color="#ffdeb2" position={[x, 3.8, 15]} intensity={18} distance={21} decay={2} />)}
+  </>;
+}
+
 /** 组装场景并记录实际渲染开销；节能设置只改变展示层。 */
 function Contents(props: SceneProps) {
   const { session, metrics } = props;
@@ -200,6 +220,7 @@ function Contents(props: SceneProps) {
     metrics.environment.simpleCrowd = Number(props.simpleCrowd);
     metrics.environment.drawCalls = gl.info.render.calls;
     metrics.environment.triangles = gl.info.render.triangles;
+    metrics.environment.geometries = gl.info.memory.geometries; metrics.environment.textures = gl.info.memory.textures;
     metrics.environment.renderedFrames = Number(metrics.environment.renderedFrames ?? 0) + 1;
     const sampling = metrics.active;
     if (sampling && wasSampling.current) metrics.push(delta);
@@ -210,11 +231,10 @@ function Contents(props: SceneProps) {
   const actors = [...session.presentation.current.actors.values()];
   return <>
     <RenderSchedule session={session} targetFps={props.targetFps} metrics={metrics} />
-    <color attach="background" args={["#dddcd1"]} />
-    <ambientLight intensity={1.35} />
-    <directionalLight position={[-8, 28, -12]} intensity={3} castShadow={props.quality === "standard"} shadow-mapSize={[1024, 1024]} shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={40} shadow-camera-bottom={-40} shadow-camera-far={100} shadow-normalBias={0.04} />
+    <color attach="background" args={["#e9e1cf"]} />
+    <StationLighting standard={props.quality === "standard"} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
-    <Station session={session} />
+    <Station session={session} overview={props.camera.mode === "overview"} onAssetError={props.onAssetError} />
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={props.assetUrl} onAssetError={props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />

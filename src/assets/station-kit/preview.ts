@@ -13,6 +13,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { makeMaterials, setFacilityState, setGateProgress, type FacilityState } from "./index";
+import { fitRailingSpan } from "./railing";
 
 interface Entry {
   id: string; label: string; category: string; state: FacilityState; description: string;
@@ -71,7 +72,7 @@ Object.assign(window, { stationKitInspect: () => {
   });
   const guides = content.children.filter((node) => String(node.userData.previewAssetId).startsWith("route-") || node.userData.previewAssetId === "marking-arrow")
     .map((node) => ({ id: node.userData.previewAssetId as string, x: node.position.x, z: node.position.z, rotation: node.rotation.y }));
-  const securityOpenings = content.children.filter((node) => node.userData.previewAssetId === "portal").map((node) => node.position.x);
+  const securityOpenings = content.children.filter((node) => node.userData.previewAssetId === "security-arch").map((node) => node.position.x);
   return { mode, selected, layout, cameraView, state, opening, meshes, hinges, indicators, ceilingPanels, reflections, contactShadows: ssao.enabled, gpuGeometries: renderer.info.memory.geometries, cameraPosition: camera.position.toArray(), guides, securityOpenings };
 } });
 // 克隆已加载的素材，并应用位置、朝向及当前设施状态。
@@ -188,14 +189,24 @@ function buildRoom() {
   const openings = layout === "straight" ? [-1.5, 1.5] : layout === "dogleg" ? [-4.5, 4.5] : [-4.5, -1.5, 1.5];
   for (let x = -7.5; x <= 7.5; x += 3) {
     const open = openings.includes(x);
-    add(open ? "portal" : "wall-straight", x, -1.5);
     if (open) { add("security-arch", x, -1.4); add("marking-queue", x, -0.6); }
   }
+  const railing = (start: number, end: number, z: number) => {
+    if (end - start < 0.32) { if (end > start) add("railing-end", (start + end) / 2, z); return; }
+    const span = fitRailingSpan(prototypes.get("railing-straight")!, end - start);
+    span.position.set((start + end) / 2, 0, z); content.add(span);
+  };
+  let end = -9;
+  for (const x of openings) { railing(end, x - 1.22, -1.5); end = x + 1.22; }
+  railing(end, 9, -1.5);
   const pillars = layout === "dogleg" ? [[2, 0.5], [-2, -5], [4, -8]] : [[2, 0.5], [-3, -6.5], [3, -7.5]];
   for (const [x, z] of pillars) { const pillar = add("pillar", x, z); pillar.scale.y = 4.2 / 3.5; if (z > 0) columnSign(pillar); }
   if (layout === "dogleg") add("partition", 0, -5);
   for (let i = 0; i < 5; i++) add("fare-gate", 1.2 + i * 1.4, -10.5);
-  for (const x of [-7.5, -4.5, -1.5]) add("partition", x, -10.5);
+  end = -9;
+  for (let i = 0; i < 5; i++) { const x = 1.2 + i * 1.4; railing(end, x - 0.61, -10.5); end = x + 0.61; }
+  railing(end, 9, -10.5);
+  add("railing-corner", 6, 4.5); add("railing-end", 7.5, 4.5);
   buildGuideRoutes(openings);
   sign("自助购票", -8.0, 0.8, 2.65, 3.9, Math.PI / 2);
   sign("↑  安全检查", -1.5, -1.24, 2.7, layout === "split" ? 8.8 : 5.8);

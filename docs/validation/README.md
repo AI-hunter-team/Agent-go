@@ -6,6 +6,7 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [STATION-INTEGRATION-001](STATION-INTEGRATION-001.md) | 固定栏杆、33 GLB、正式站厅接入与视线/占地回归；开发/生产浏览器整局、回放、失败重试及本机性能 |
 | [PR18-MERGE-001](PR18-MERGE-001.md) | 名称统一 PR 与最新 main 的文档冲突解决及集成验证；最终合入见原 PR |
 | [BRAND-002](BRAND-002.md) | 英文名agent-go及包/下载/素材生成标识统一；验证范围与结果见报告 |
 | [NPC-PR-001](NPC-PR-001.md) | 人物修复与最新 main 兼容、PR/CI/合并及已合并分支清理，进行中 |
@@ -13,7 +14,7 @@
 | [DEEPSEEK-THINKING-001](DEEPSEEK-THINKING-001.md) | 官方 DeepSeek 思考模式工具选择、多轮回传及 JSON 模式适配；模拟接口验证，不代表真实模型验收 |
 | [STARTUP-API-001](STARTUP-API-001.md) | 本地服务恢复、上游权限 400 与 DeepSeek 工具调用参数 400 诊断、386 项集成回归及真实 Safari 开局；包含临时伪响应入口导致截图 500 的纠正记录 |
 | [STATION-PR-001](STATION-PR-001.md) | 难度/故障修复与最新 main 的冲突、提示一致性和 343 项集成检查；PR 发布前验证快照 |
-| [FAILURE-REVIEW-001](FAILURE-REVIEW-001.md) | 失败全局复盘、玩家选择与指导草稿；原版 413 项/伪模型浏览器，当前 Responses 主线集成 423 项及独立复审；真实模型质量待用户验收 |
+| [FAILURE-REVIEW-001](FAILURE-REVIEW-001.md) | 失败全局复盘、玩家选择与指导草稿；原版 413 项/伪模型浏览器，Responses 集成 423 项及独立复审，最新站厅主线集成复跑 436 项；真实模型质量待用户验收 |
 | [DIFFICULTY-002](DIFFICULTY-002.md) | 固定 120 秒 / 每条开放队列额外 3 人、移除难度选择、318 项回归和 650 局离线对照；覆盖原可调 UI 方案 |
 | [DIFFICULTY-001 / FACILITY-FAIL-001](DIFFICULTY-001.md) | 可调时限/初始队列、办理中故障结算、314 项回归、浏览器与 600 局离线对照；不代表真实模型验收 |
 | [BRAND-001](BRAND-001.md) | Agent Go 品牌文字与现行文档核对、软件检查及品牌浏览器验证 |

@@ -4,7 +4,7 @@ import type { Rect } from "./geometry";
 // Station layout, in metres. See docs/MVP技术方案.md §5.2.
 //
 //  x=0        14           26        36        44       49       56       70
-//   入口 ── 售票厅(TVM) ── 安检墙(S1-3) ── 大厅(柱) ── 闸机 ── 上层平台 ── 下楼梯 ── 站台
+//   入口 ── 售票厅(TVM) ── 安检栏杆(S1-3) ── 大厅(柱) ── 闸机 ── 上层平台 ── 下楼梯 ── 站台
 
 export const WIDTH = 70;
 export const HEIGHT = 30;
@@ -61,8 +61,8 @@ export const PILLARS: Rect[] = [
   { x: 35, y: 17, w: 2, h: 2 },
 ];
 
-/** Wall pieces that block sight: the security wall except at the three lane openings. */
-function securityWallPieces(): Rect[] {
+/** Fixed railings between security openings: block walking, permit sight. */
+function securityBarrierPieces(): Rect[] {
   const gaps = FACILITIES.filter((f) => f.kind === "security").map((f) => f.pos.y);
   const pieces: Rect[] = [];
   let start = 0;
@@ -74,7 +74,7 @@ function securityWallPieces(): Rect[] {
   return pieces;
 }
 
-export const SECURITY_WALL = securityWallPieces();
+export const SECURITY_BARRIERS = securityBarrierPieces();
 
 /** Gate barriers between the gates: block movement but not sight. Used for rendering. */
 export const GATE_BARRIERS: Rect[] = (() => {
@@ -89,7 +89,7 @@ export const GATE_BARRIERS: Rect[] = (() => {
   return pieces;
 })();
 
-export const SIGHT_OCCLUDERS: Rect[] = [...SECURITY_WALL, ...PILLARS];
+export const SIGHT_OCCLUDERS: Rect[] = [...PILLARS];
 
 const inflate = (r: Rect, m: number): Rect => ({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
 

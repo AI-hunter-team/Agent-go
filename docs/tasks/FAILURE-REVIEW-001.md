@@ -3,7 +3,7 @@
 状态：用户已在本次聊天确认交互并要求实现，供本地验收。
 
 - 负责人：本次 Codex 会话，串行实现与集成。
-- 原实现基线：`6dfabc50e9a3d7d5c19f5b54e53d75550aead2ae`，独立分支 `codex/failure-review`，原本地提交 `5cc0e05`。PR 集成基线：当前 GitHub main `67a7703934c3d449d5a0ecb552f9a088eff18995`，分支 `codex/failure-review-responses`。
+- 原实现基线：`6dfabc50e9a3d7d5c19f5b54e53d75550aead2ae`，独立分支 `codex/failure-review`，原本地提交 `5cc0e05`。PR 集成先适配 Responses main `67a7703`，随后合入发布期间更新的 main `186682486f46615f86e915088067c53ab02b95d9`；分支 `codex/failure-review-responses`。
 - 授权内容：失败后自动复盘整局；可读取赛后全局事实；区分当时所知、赛后发现与推测；给出两三条有条件及代价的策略；由玩家选择，合并原指导为可编辑的 300 字内草稿，再由玩家开局。
 - 边界：不增加角色权限或自动跨局记忆；不改成绩、计时、玩法或原工作区。用户后续明确授权 commit 与 GitHub PR；不包含部署或远端合并。
 - 路径：新增 `src/shared/review.ts`、`src/agent/reviewRecorder.ts`、`src/ui/FailureReview.tsx`、`src/ui/reviewSession.ts`、`server/review.ts`；修改共享报告、运行器、模型服务/API、报告/App、模型配置面板、样式；新增相关测试、README/技术差异说明与本任务文档。
