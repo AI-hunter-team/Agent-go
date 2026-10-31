@@ -21,6 +21,7 @@
 .buttons { display: flex; width: 100%; gap: 12px; }
 .buttons button { flex: 1; min-width: 0; min-height: 52px; border-radius: 18px; background: #fffffff5; box-shadow: 0 6px 22px #14203321; font-size: 16px; font-weight: 800; }
 .buttons :global(.primary) { background: #f7cf38; }
+.secondaryActions { display:flex; align-items:center; justify-content:center; gap:12px; }
 .actions .edit { min-height: 36px; border: 0; padding: 4px 14px; background: #ffffffc9; border-radius: 12px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 .confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .confetti i { position: absolute; top: -16px; width: 8px; height: 13px; background: #edbf25; animation: confetti-fall 2.8s ease-out both; }
@@ -46,7 +47,8 @@
   .end[data-outcome=failed] .result h1 { font-size: 28px; }
   .elapsed { margin-top: 6px; padding: 2px 8px; }
 }
-@media (max-height: 500px) { .result { top: 60px; } .result h1 { font-size: 32px; margin-bottom: 2px; } .result p { font-size: 12px; } .actions { bottom: 8px; gap: 2px; } .buttons button { min-height: 42px; } .actions .edit { min-height: 28px; } }
+@media (max-height: 500px) { .result { top: 60px; } .result h1 { font-size: 32px; margin-bottom: 2px; } .result p { font-size: 12px; } .actions { bottom: 8px; gap: 2px; } .buttons button { min-height: 42px; } .secondaryActions { display:flex; align-items:center; justify-content:center; gap:12px; }
+.actions .edit { min-height: 28px; } }
 @media (max-height: 500px) {
   .end[data-outcome=failed] .result { top: 18px; width: min(480px, calc(100% - 360px)); }
   .failureLabel { margin-bottom: 6px; padding: 2px 10px; font-size: 11px; line-height: 18px; }

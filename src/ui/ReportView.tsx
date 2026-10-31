@@ -1,6 +1,6 @@
 import { EVENT_LABEL, LEVEL_LABEL } from "./interactionLabels";
 import { ITEM_DEFS } from "../sim/content/items";
-import { useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import type { GameReport, TimeBreakdown } from "../shared/types";
 import { MECHANIC_NAME } from "./format";
 import { DecisionTrace } from "./DecisionTrace";
@@ -24,9 +24,33 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "idle", label: "空闲", color: "#d9d3c4" },
 ];
 
+const REPORT_TABS = [
+  { id: "next", label: "下一局怎么走" },
+  { id: "replay", label: "轨迹回放" },
+  { id: "records", label: "完整行程记录" },
+] as const;
+type ReportTab = typeof REPORT_TABS[number]["id"];
+
 /** 汇总真实终局成绩、耗时与调用记录，策略采纳入口位于下一局建议模块。 */
-export function ReportSummary({ report, onAdopt, replay, records, active = true, mode = "full" }: { report: GameReport; onAdopt?: (guidance: string) => void; replay?: ReactNode; records?: ReactNode; active?: boolean; mode?: "full" | "data" }) {
-  const [review] = useState(() => mode === "full" && report.status === "failed" ? new ReviewSession(report, Api.forReview(report)) : null);
+export function ReportSummary({ report, onAdopt, replay, records, active = true, mode = "full", reviewSession, readOnly = false }: { report: GameReport; onAdopt?: (guidance: string) => void; replay?: ReactNode; records?: ReactNode; active?: boolean; mode?: "full" | "data"; reviewSession?: ReviewSession | null; readOnly?: boolean }) {
+  const [localReview] = useState(() => reviewSession === undefined && mode === "full" && report.status === "failed" ? new ReviewSession(report, Api.forReview(report)) : null);
+  const review = reviewSession === undefined ? localReview : reviewSession;
+  const tabsId = useId();
+  const [tab, setTab] = useState<ReportTab>("next");
+  const content = useRef<HTMLDivElement>(null);
+  const tablist = useRef<HTMLDivElement>(null);
+  const switchTab = (next: ReportTab) => {
+    if (next === tab) return;
+    const wasScrolled = (content.current?.scrollTop ?? 0) > 0;
+    setTab(next);
+    if (wasScrolled) requestAnimationFrame(() => {
+      const panel = document.getElementById(`${tabsId}-panel-${next}`);
+      const scroll = content.current;
+      if (!panel || !scroll) return;
+      const top = panel.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop - (tablist.current?.getBoundingClientRect().height ?? 0);
+      scroll.scrollTo({ top: Math.max(0, top) });
+    });
+  };
   const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
   const segments = SEGMENTS.filter((s) => (report.timeBreakdown[s.key] ?? 0) > 0);
@@ -93,7 +117,7 @@ export function ReportSummary({ report, onAdopt, replay, records, active = true,
 
   return (
     <section className="card report">
-      {mode === "full" && <div className="report-content">
+      {mode === "full" && <div className="report-content" ref={content}>
       <div className="report-result">
       <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
         {report.status === "success" ? (
@@ -140,15 +164,26 @@ export function ReportSummary({ report, onAdopt, replay, records, active = true,
       <p className="report-footnote">按世界时间统计，思考时暂停计时。</p>
       </section>
 
-      {review && onAdopt && <FailureReview session={review} report={report} onAdopt={onAdopt} active={active} />}
-      {report.guidance && <details className="report-guidance"><summary>本局指导</summary><p className="quote">「{report.guidance}」</p></details>}
-
-      <div className="report-disclosures">
-      {replay && <details className="report-disclosure"><summary><span>轨迹回放<small>回看路线与当时的决策</small></span></summary><div className="report-disclosure-body">{replay}</div></details>}
-      <details className="report-disclosure"><summary><span>完整行程记录<small>事件、决策、模型用量与本局设置</small></span></summary><div className="report-disclosure-body">
-      {detailContent}
-      </div></details>
+      <div className="report-tabs" role="tablist" aria-label="行程复盘详情" ref={tablist}>
+        {REPORT_TABS.map((item, index) => <button key={item.id} id={`${tabsId}-tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls={`${tabsId}-panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onClick={() => switchTab(item.id)} onKeyDown={event => {
+          const next = event.key === "ArrowRight" ? (index + 1) % REPORT_TABS.length : event.key === "ArrowLeft" ? (index + REPORT_TABS.length - 1) % REPORT_TABS.length : event.key === "Home" ? 0 : event.key === "End" ? REPORT_TABS.length - 1 : null;
+          if (next !== null) {
+            event.preventDefault();
+            switchTab(REPORT_TABS[next].id);
+            document.getElementById(`${tabsId}-tab-${REPORT_TABS[next].id}`)?.focus();
+          }
+        }}>{item.label}</button>)}
       </div>
+      <section className="report-tab-panel" role="tabpanel" id={`${tabsId}-panel-next`} aria-labelledby={`${tabsId}-tab-next`} hidden={tab !== "next"} tabIndex={0}>
+        {review && (onAdopt || readOnly) ? <FailureReview session={review} report={report} onAdopt={onAdopt} active={active && tab === "next"} readOnly={readOnly} /> : <p className="muted">{report.status === "success" ? "本局已成功完成。可以回看轨迹与完整行程记录，或返回场景开始下一局。" : "这份报告没有已生成的策略建议。"}</p>}
+        {report.guidance && <details className="report-guidance"><summary>本局指导</summary><p className="quote">「{report.guidance}」</p></details>}
+      </section>
+      <section className="report-tab-panel" role="tabpanel" id={`${tabsId}-panel-replay`} aria-labelledby={`${tabsId}-tab-replay`} hidden={tab !== "replay"} tabIndex={0}>
+        {replay ?? <p className="muted">这份报告没有可用的轨迹回放。</p>}
+      </section>
+      <section className="report-tab-panel" role="tabpanel" id={`${tabsId}-panel-records`} aria-labelledby={`${tabsId}-tab-records`} hidden={tab !== "records"} tabIndex={0}>
+        {detailContent}
+      </section>
       </div>}
       {mode === "data" && detailContent}
     </section>

@@ -58,7 +58,7 @@ export default memo(function WorldPreview({world,reset,reducedMotion,quality,tur
   const [kit,setKit]=useState<StationKit|undefined>(),[state,setState]=useState<"loading"|"formal"|"local">("loading");
   useEffect(()=>{let active=true;loadStationKit().then(value=>{if(active){setKit(value);setState("formal");}}).catch(()=>{if(active)setState("local");});return()=>{active=false;};},[]);
   if(state==="loading")return <div style={{width:"100%",height:"100%",position:"relative"}}><WorldPlan world={world} floor="concourse"/><span style={{position:"absolute",bottom:20,left:20,fontSize:12,color:"#6d806e"}}>正在载入三维预览…</span></div>;
-  return <><Canvas key={quality} frameloop="demand" shadows={quality==="standard"} dpr={quality==="low"?1:[1,1.5]} camera={{fov:43,near:.1,far:700}} gl={{antialias:quality==="standard",toneMapping:ACESFilmicToneMapping,toneMappingExposure:1.02}} fallback={<span>无法显示三维预览</span>} aria-label={`${world.name}的三维地图预览`}>
+  return <><Canvas key={quality} frameloop="demand" shadows={quality==="standard"} dpr={quality==="low"?1:[1,1.5]} camera={{fov:43,near:.1,far:700}} gl={{antialias:quality==="standard",toneMapping:ACESFilmicToneMapping,toneMappingExposure:1.02}} fallback={<WorldPlan world={world} floor="concourse"/>} aria-label={`${world.name}的三维地图预览`}>
     <Contents world={world} kit={kit} reset={reset} turn={turn} reducedMotion={reducedMotion} onUnavailable={onUnavailable}/>
   </Canvas>{state==="local"&&<span style={{position:"absolute",bottom:14,left:18,fontSize:11,color:"#6d806e"}}>使用本地模型预览</span>}</>;
 });

@@ -8,13 +8,14 @@ interface Props {
   report: GameReport;
   hidden: boolean;
   onRetry: () => void;
+  onSameScenario: () => void;
   onReview: () => void;
   onEdit: () => void;
   onLobby: () => void;
 }
 
 /** End-of-run landing: the scene stays visible and every action is immediately available. */
-export const JourneyEnd = forwardRef<HTMLButtonElement, Props>(function JourneyEnd({ report, hidden, onRetry, onReview, onEdit, onLobby }, ref) {
+export const JourneyEnd = forwardRef<HTMLButtonElement, Props>(function JourneyEnd({ report, hidden, onRetry, onSameScenario, onReview, onEdit, onLobby }, ref) {
   const outcome = journeyEndOutcome(report);
   const success = report.status === "success";
   return <section className={styles.end} data-outcome={outcome.tone} aria-label="本局结果" hidden={hidden}>
@@ -33,7 +34,7 @@ export const JourneyEnd = forwardRef<HTMLButtonElement, Props>(function JourneyE
     {success && <div className={styles.confetti} aria-hidden="true">{Array.from({ length: 16 }, (_, i) => <i key={i} style={{ left: `${5 + i * 6}%`, animationDelay: `${(i % 5) * 0.12}s`, rotate: `${i * 37}deg` }} />)}</div>}
     <div className={styles.actions} aria-label="本局结束操作">
       <div className={styles.buttons}><button className="primary" onClick={onRetry}>再来一局</button><button ref={ref} aria-expanded={false} onClick={onReview}>查看复盘</button></div>
-      <button className={styles.edit} onClick={onEdit}>修改思路</button>
+      <div className={styles.secondaryActions}><button className={styles.edit} onClick={onSameScenario}>同世界重试</button><button className={styles.edit} onClick={onEdit}>修改思路</button></div>
     </div>
   </section>;
 });

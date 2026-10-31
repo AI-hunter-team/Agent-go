@@ -2,7 +2,7 @@ import { stationSwitch } from "../../sim/stationSwitch";
 import { EntrancePassages } from "./EntrancePassages";
 import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { BoxGeometry, Group, Mesh, type MeshStandardMaterial } from "three";
+import { BoxGeometry, Group, Mesh, type MeshStandardMaterial, type PointLight } from "three";
 import type { GameSession } from "../gameSession";
 import type { StationKit } from "./stationAssets";
 import { batchStation, disposeBatches } from "./stationAssets";
@@ -63,7 +63,7 @@ function GeneratedOutages({session}:{session:GameSession}) {
   return <group>{areas.map((area,i)=><mesh key={i} ref={mesh=>{refs.current[i]=mesh;}} geometry={box} position={[area.bounds.x+area.bounds.w/2,area.floorId==="platform"?-5.96:.04,area.bounds.y+area.bounds.h/2]} scale={[area.bounds.w,.02,area.bounds.h]}><meshBasicMaterial color="#121a22" transparent opacity={.65} depthWrite={false}/></mesh>)}</group>;
 }
 export function GeneratedStation({session,kit,overview}:{session:GameSession;kit?:StationKit;overview:boolean}) {
-  const d=session.engine.world.definition,l=d.layout,concourse=useRef<Group>(null),modelRoot=useRef<Group>(null);
+  const d=session.engine.world.definition,l=d.layout,concourse=useRef<Group>(null),modelRoot=useRef<Group>(null),platformLight=useRef<PointLight>(null);
   const palette = useMemo(() => createGeneratedPalette(kit),[kit]);
   useEffect(() => () => palette.dispose(),[palette]);
   const attractions = useMemo(() => l.ATTRACTIONS.filter(a=>a.body).map(a=>({id:a.id,family:a.kind === "seating" ? "platform" as const : "commercial" as const,variant:1,pos:a.pos,label:a.label,body:a.body,blocksSight:a.blocksSight,yaw:a.body!.h>a.body!.w?Math.PI/2:0})),[l]);
@@ -83,6 +83,7 @@ export function GeneratedStation({session,kit,overview}:{session:GameSession;kit
   useEffect(()=>()=>{if(colored){disposeBatches(colored.batch);colored.clones.forEach(m=>m.dispose());}},[colored]);
   useEffect(()=>()=>{Object.values(stateMaterials).forEach(m=>m.dispose());},[stateMaterials]);
   useFrame(()=>{
+    if(platformLight.current)platformLight.current.intensity=session.presentation.current.blackout.active?10:150;
     if(concourse.current)concourse.current.visible=!(session.engine.player.pos.floorId==="platform"||session.engine.player.pos.floorId?.startsWith("transit"));
     for(const root of devices){const f=session.engine.world.facility(root.name);if(f){if(root.userData.state!==f.status)setFacilityState(root,f.status,stateMaterials);if(f.def.kind==="gate")setGateProgress(root,f.serving?1:0);}}
   });
@@ -109,7 +110,7 @@ export function GeneratedStation({session,kit,overview}:{session:GameSession;kit
     <Platform d={d} p={palette}/>
     <group position={side?[center,-6,0]:[0,-6,center]} rotation={[0,side?-Math.PI/2:0,0]}>
       <Sign text={`${d.name} / 1号站台 ← → 2号站台`} position={[length/2,2.4,0]} width={7} facing="south"/>
-      <pointLight position={[length/2,3,0]} intensity={150} distance={length} color="#ffedce"/>
+      <pointLight ref={platformLight} position={[length/2,3,0]} intensity={150} distance={length} color="#ffedce"/>
     </group>
     <primitive object={lowerCeiling} visible={!overview} dispose={null}/>
     {d.details.filter(v=>v.pos.floorId==="platform").map(v=><Detail key={v.id} d={v}/>)}

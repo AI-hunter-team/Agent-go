@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Vector3 } from "three";
 import { VictoryCamera } from "../src/ui/scene/victoryCamera";
 import { Engine } from "../src/sim/engine";
+import { buildScenario } from "../src/sim/scenario";
 import { World } from "../src/sim/world";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { GameRunner } from "../src/agent/runner";
@@ -96,6 +97,14 @@ describe("generated station and mainline integration", () => {
     expect(engine.status).toBe("success");
     expect(engine.player.onTrain).toBe(true);
   }, 30000);
+
+  it("only starts a generated station blackout from an explicit switch action", () => {
+    for (const seed of [1, 2, 4, 19]) {
+      const world = generateWorld(seed), scenario = buildScenario(seed, {}, world.layout);
+      expect(scenario.events.some(event => event.type === "power")).toBe(false);
+      expect(scenario.events.filter(event => event.type === "recheck").every(event => world.layout.FACILITIES.some(f => f.id === event.facility))).toBe(true);
+    }
+  });
 
   it("does not allow a switch to be operated from another floor", () => {
     const world = generateWorld(2), station = stationSwitch(world), engine = new Engine(2, {}, emptyScenario(2), undefined, world);

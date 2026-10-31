@@ -16,8 +16,8 @@ const llm: LlmService = {
     await delay(200);
     if (input.guidance.includes("FAIL-NORMALIZE")) throw new Error("模拟整理失败");
     return {
-      understanding: input.autonomous ? "无费用验收：自主比较通道并前往站台。" : `无费用验收：按玩家指导行动。${input.guidance}`,
-      actions: ["观察售票机并比较总耗时", "买票后选择合适的安检通道", "通过闸机后下楼抵达站台"],
+      understanding: input.autonomous ? "无费用验收：自主比较通道并登上列车。" : `无费用验收：按玩家指导行动。${input.guidance}`,
+      actions: ["观察售票机并比较总耗时", "买票后选择合适的安检通道", "通过闸机后下楼并走向车门登车"],
       adjustment: "发现通道停用或排队变慢时重新比较可见选项。",
     };
   },
