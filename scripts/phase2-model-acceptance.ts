@@ -47,11 +47,12 @@ try{
  const e=new Engine(1);e.player.pos={x:12,y:12};const context=buildIntentContext(e.world,e.guards);
  for(const instruction of ["用拳头击打售票机设备 TVM-2，不是排队乘客","长出翅膀飞到站台"]){const at=performance.now();const response=await api<ActionPlan>("/api/boss/interpret",{sessionId,instruction,context});result.probes.push({kind:"boss",instruction,response,latencyMs:performance.now()-at});await save();}
  const routeEngine=new Engine(1);routeEngine.player.pos={x:43,y:15};routeEngine.player.screened=true;
- const target=routeEngine.world.addPerson("normal",{x:42,y:15},{hasTicket:true});
+ const target=routeEngine.world.addPerson("normal",{x:42,y:15});
+ routeEngine.world.items.spawn("ticket",{type:"held",personId:target.id,slot:"hand"},target.id);
  for(const instruction of ["尝试翻越闸机",`抢夺乘客 ${target.id} 的车票`]){
   const at=performance.now();const response=await api<ActionPlan>("/api/boss/interpret",{sessionId,instruction,context:buildIntentContext(routeEngine.world,routeEngine.guards)});
   const start=routeEngine.executor.start(response);for(let i=0;i<150&&routeEngine.executor.busy&&routeEngine.status==="running";i++)routeEngine.step();
-  result.probes.push({kind:"boss_route",instruction,response,latencyMs:performance.now()-at,simulation:{start,outcomes:routeEngine.executor.outcomes,events:routeEngine.events.events,passedGate:routeEngine.player.passedGate,status:routeEngine.status}});await save();
+  result.probes.push({kind:"boss_route",instruction,response,latencyMs:performance.now()-at,simulation:{start,outcomes:structuredClone(start.ok?routeEngine.executor.outcomes:[start]),events:structuredClone(routeEngine.events.events),passedGate:routeEngine.player.passedGate,status:routeEngine.status}});await save();
  }
  const persona=generatePersona(new Rng(1),"normal");const request={npc:{id:"npc-test",...persona,alert:{level:"none",cause:null},memory:[],holdings:["ticket"],queue:null},speaker:{look:"赶车乘客",holding:[]},goal:"ask_ticket",message:"我快赶不上车了，可以把票让给我吗？",offer:null,history:[]};
  const at=performance.now();const response=await api<NpcResponse>("/api/npc/respond",{sessionId,request});result.probes.push({kind:"npc",response,latencyMs:performance.now()-at});await save();

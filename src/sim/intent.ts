@@ -24,6 +24,7 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
       position: {
         ...n.pos
       },
+      holding: world.items.holdings(n.id).filter(i => world.items.slot(i) === "hand").map(i => i.kind),
       queue: world.queuePosition(n)?.facility.def.id ?? null
     })), ...guards.guards.filter(g => playerCanSee(p.pos, g.pos, world.lightAt)).map(g => ({
       id: g.def.id,

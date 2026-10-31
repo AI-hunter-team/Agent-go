@@ -18,24 +18,23 @@ const obj = (properties: Record<string, unknown>) => ({ type: "object", properti
 const nullable = (value: unknown) => ({ anyOf: [value, { type: "null" }] });
 const ref = obj({ kind: en("person", "item", "facility", "node", "spot"), id: str });
 const kinds = ["ticket", "coins", "umbrella", "water_bottle", "newspaper", "snack", "backpack"];
-export const BOSS_SCHEMA = obj({ status: en("plan", "unsupported", "needs_precondition"), steps: { type: "array", items: { anyOf: [
-  obj({ op: en("approach"), target: ref }), obj({ op: en("take"), itemId: str }),
-  obj({ op: en("give"), itemId: str, toId: str }), obj({ op: en("drop"), itemId: str, mode: en("place", "drop", "throw"), at: nullable(ref) }),
-  obj({ op: en("talk"), npcId: str, message: str, goal: en("chat", "ask_ticket", "trade", "yield", "persuade", "threaten", "bribe"), offerItemId: nullable(str) }),
-  obj({ op: en("snatch"), npcId: str, itemKind: en(...kinds) }), obj({ op: en("push", "force_cut_in"), npcId: str }),
-  obj({ op: en("strike"), npcId: str, itemId: nullable(str), aim: en("knockout", "hurt") }),
-  obj({ op: en("strike"), facilityId: str, itemId: nullable(str), aim: en("hurt") }),
-  obj({ op: en("vault"), obstacle: en("gate", "railing", "escalator_side") }), obj({ op: en("slide_handrail") }),
-  obj({ op: en("make_noise"), level: en("low", "mid", "high") }), obj({ op: en("wait"), seconds: { type: "number" } }),
-] } }, summary: str, reason: str });
-export const BOSS_SYSTEM = `${SAFETY_SYSTEM_PROMPT}\n你是中立的游戏行动解释器。把 instruction 翻译为 schema 的闭合原语，最多四步。只使用 context 中可见的实体 id 和公开导航节点。不能创造物品、替人物决定同意、保证成功或改写世界。指代不明返回 needs_precondition；机制不支持返回 unsupported，两者 steps 为空。可执行返回 plan，1–4 步。reason 与 summary 简短中文，不输出结算结果。设施使用 strike 的 facilityId 分支（aim=hurt），人物使用 npcId 分支；两者互斥。公开导航节点：${JSON.stringify(NAV_NODES)}。公开取物点：${JSON.stringify(ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})))}。翻闸直接使用 vault(obstacle=gate)，不需要创造闸机内侧的目标节点；接近使用现有 facility/node。距离、碰撞、被发现与行动成败均由模拟器校验，不因无法保证成功而拒绝翻译一次尝试。可选字段无值填 null。翻闸示例 steps=[{"op":"vault","obstacle":"gate"}]；不要用重复 approach 代替跨越，也不要声称没有 vault 原语。下面再次提供完整输出结构，字段须原样使用：${JSON.stringify(BOSS_SCHEMA)}`;
+// A flat wire object avoids nested-anyOf branch selection bugs in compatible APIs.
+// Null fields are removed before the existing closed primitive validation.
+export const BOSS_SCHEMA = obj({status:en("plan","unsupported","needs_precondition"),steps:{type:"array",items:obj({
+ op:en("approach","take","give","drop","talk","snatch","push","force_cut_in","strike","vault","slide_handrail","make_noise","wait"),
+ target:nullable(ref),itemId:nullable(str),toId:nullable(str),mode:nullable(en("place","drop","throw")),at:nullable(ref),
+ npcId:nullable(str),message:nullable(str),goal:nullable(en("chat","ask_ticket","trade","yield","persuade","threaten","bribe")),offerItemId:nullable(str),
+ itemKind:nullable(en(...kinds)),facilityId:nullable(str),aim:nullable(en("knockout","hurt")),obstacle:nullable(en("gate","railing","escalator_side")),
+ level:nullable(en("low","mid","high")),seconds:nullable({type:"number"}),
+})},summary:str,reason:str});
+export const BOSS_SYSTEM = `${SAFETY_SYSTEM_PROMPT}\n你是中立的游戏行动解释器。把 instruction 翻译为 schema 的闭合原语，最多四步。只使用 context 中可见的实体 id 和公开导航节点。不能创造物品、替人物决定同意、保证成功或改写世界。指代不明返回 needs_precondition；机制不支持返回 unsupported，两者 steps 为空。可执行返回 plan，1–4 步。reason 与 summary 简短中文，不输出结算结果。设施使用 strike 的 facilityId 分支（aim=hurt），人物使用 npcId 分支；两者互斥。公开导航节点：${JSON.stringify(NAV_NODES)}。公开取物点：${JSON.stringify(ITEM_SPOTS.map(({id,label,pos})=>({id,label,pos})))}。翻闸直接使用 vault(obstacle=gate)，不需要创造闸机内侧的目标节点；接近使用现有 facility/node。距离、碰撞、被发现与行动成败均由模拟器校验，不因无法保证成功而拒绝翻译一次尝试。每步仅 op 和该原语所需字段有值，其余字段一律 null；target/at 对象有值时必须完整提供 kind/id。snatch 使用可见人物 npcId 和 itemKind，不要求提供物品 itemId；持物不明确可请求前置观察。翻闸示例 steps=[{"op":"vault","obstacle":"gate"}]；不要用重复 approach 代替跨越，也不要声称没有 vault 原语。下面再次提供完整输出结构，字段须原样使用：${JSON.stringify(BOSS_SCHEMA)}`;
 export function bossContextValid(value: unknown): value is BossContext {
   if (!value || typeof value !== "object") return false;
   const c = value as BossContext;
   const pos = (v: unknown) => Boolean(v && typeof v === "object" && Number.isFinite((v as {x:number}).x) && Number.isFinite((v as {y:number}).y));
   const list = (v: unknown, check: (v: any) => boolean) => Array.isArray(v) && v.length <= 200 && v.every(x => x && typeof x.id === "string" && x.id.length <= 80 && check(x));
   return !!c.self && pos(c.self.position) && list(c.self.inventory, i => kinds.includes(i.kind))
-    && list(c.people, p => typeof p.look === "string" && p.look.length <= 500 && pos(p.position) && (p.queue === null || typeof p.queue === "string"))
+    && list(c.people, p => typeof p.look === "string" && p.look.length <= 500 && pos(p.position) && (p.queue === null || typeof p.queue === "string") && (p.holding === undefined || Array.isArray(p.holding) && p.holding.length <= 7 && p.holding.every((kind: unknown) => typeof kind === "string" && kinds.includes(kind))))
     && list(c.items, i => kinds.includes(i.kind) && pos(i.position)) && list(c.facilities, f => typeof f.label === "string");
 }
 export function validatePlan(value: unknown, context: BossContext): ActionPlan | null {

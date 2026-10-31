@@ -237,11 +237,11 @@ src/agent/
   heuristicAgent.ts  离线策略保持可通关
   remoteAgent.ts     + /api/boss/interpret、/api/npc/respond 客户端
 server/
-  tools.ts           新工具；旧 request_cut_in / attempt_creative 作为兼容别名
+  tools.ts           新工具；IV2-19 已移除旧公开别名
   prompts.ts         固定知识：物品、取物点、背包、警戒语义（不枚举原语）
   boss.ts            interpretAction（结构化输出）
   npcDialogue.ts     npcRespond（结构化输出）
-  app.ts             新路由；旧路由保留一个里程碑
+  app.ts             新路由；IV2-19 已移除旧路由
 src/ui/
   presentation.ts    快照 + alerts、items、speech
   scene/AlertBadge.tsx、scene/Items.tsx、scene/SpeechBubble.tsx
@@ -269,7 +269,7 @@ t += DT
 ### B5. 迁移注意（避免破坏现有行为）
 
 - **`hasTicket`**：消费者有 `world.ts`、`observation.ts`、`npc.ts`、`runner.ts`、`heuristicAgent.ts`、`JourneyProgress.tsx`、`shared/types.ts`（`SelfObservation.hasTicket` 保留为推导值）以及相关测试。先加 `ItemSystem.hasValidTicket(personId)`，`Person.hasTicket` 改为 getter，再逐个替换。
-- **`attempt_creative` / `request_cut_in`**：`parseToolUse` 一个里程碑内把它们映射到 `act` / `talk(goal: "yield")`；旧报告中的 `CreativeMechanic` 类型保留只读兼容。
+- **`attempt_creative` / `request_cut_in`**：过渡期曾映射到 `act` / `talk(goal: "yield")`，IV2-19 已停止公开和解析旧工具；旧报告中的 `CreativeMechanic` 类型保留只读兼容。
 - **翻闸判负**：现有“保安看到翻闸即判负”改由 `vault` 原语 + `violation` 严重度 + 保安红色实现，行为等价，`tests/creative.test.ts`、`tests/gateWindow.test.ts` 应在改造后继续通过（期望文本可调整，判定不可变）。
 - **固定对局设置**：`/api/session` 当前拒绝非默认设置；新增的赛前选择（背包）走独立字段 `loadout`，不复用 `settings`。
 - **报告兼容**：`GameReport` 新字段全部可选；`ReportView` / 回放对缺字段的旧报告照常显示。
@@ -554,3 +554,7 @@ C5 `strike` 增加设施分支 `{ op: "strike", facilityId: string, itemId?: str
 C9 增量：报告还保存 `loadout`、`interactionDialogues`、`calls` 与 `operationUsage`。后者按 decision/retry/interpret/npc_respond 等操作累计调用、输入/输出 token、现实耗时及 unknownUsage，供应商未返回用量时不伪装为完整零费用。具体类型见 shared/types。
 
 IV2-18 实测修复：`observe` 按 C7 消耗 1 秒并唤醒下一次决策，继续保持排队/移动状态；仅返回手持可见物品。Boss 提示重复给出闭合输出结构和 vault 示例，避免将翻闸误译为重复 approach。
+
+IV2-18 兼容修复（先记录契约）：现有 OpenAI 兼容端对 Boss 的嵌套 anyOf 多分支原语持续只生成首个 approach 分支，显式 vault/strike 请求亦如此。传输 schema 改为单一闭合 step 对象（op 枚举、其余字段 nullable），解码后去除 null，仍用原 isPlanStep/引用校验执行。不改变运行时 ActionPlan；人物/设施 strike 互斥校验保持。授权依据为本任务真实验收发现缺陷的修复范围。
+
+BossContext.people 补充可选 `holding: ItemKind[]`，只列手中可见物品，旧调用省略仍兼容。用于落实 C10 可见持物，不暴露口袋/背包内容；对应真实抢票 probe 仅安排公开手持车票。

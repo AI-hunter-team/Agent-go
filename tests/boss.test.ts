@@ -41,3 +41,14 @@ test("paid usage survives truncated Boss and NPC output",async()=>{
  const {dialogueFixture}=await import("./fixtures/dialogue");
  expect(await llm.respond(dialogueFixture())).toMatchObject({source:"error",decision:"refuse",usage:{inputTokens:13,outputTokens:7}});
 });
+
+test("flat nullable wire steps decode all branches without changing primitives",()=>{
+ expect(validatePlan({...plan,steps:[{op:"vault",obstacle:"gate",target:null,npcId:null,facilityId:null,seconds:null}]},context)?.steps).toEqual([{op:"vault",obstacle:"gate"}]);
+ expect(validatePlan({...plan,steps:[{op:"strike",facilityId:"TVM-2",npcId:null,itemId:null,aim:"hurt"}]},{...context,facilities:[{id:"TVM-2",label:"售票机"}]} )?.steps).toEqual([{op:"strike",facilityId:"TVM-2",aim:"hurt"}]);
+});
+
+test("Boss context exposes held items while keeping pocket contents hidden",()=>{
+ const engine=createFixtureEngine();const p=engine.world.addPerson("normal",{x:3,y:15},{hasTicket:true});
+ engine.world.items.spawn("umbrella",{type:"held",personId:p.id,slot:"hand"},p.id);
+ expect(buildIntentContext(engine.world,engine.guards).people.find(n=>n.id===p.id)?.holding).toEqual(["umbrella"]);
+});

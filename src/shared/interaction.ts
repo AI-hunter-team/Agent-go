@@ -233,6 +233,7 @@ export interface BossContext {
     look: string;
     position: Vec;
     queue: string | null;
+    holding?: ItemKind[];
   }[];
   items: {
     id: string;
