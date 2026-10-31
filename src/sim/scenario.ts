@@ -177,7 +177,6 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}): 
         note: "临时停用",
         broadcast: "广播：1号安检通道临时停用，请排队乘客改走其他安检通道。",
       },
-      { t: 65, type: "power", zone: "concourse", duration: 12 },
       { t: 55, type: "recheck", facility: "S2", extra: [10, 15] },
     ],
   };
