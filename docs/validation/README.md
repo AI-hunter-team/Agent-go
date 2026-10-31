@@ -20,6 +20,7 @@
 | [CONTROLROOM-003](CONTROLROOM-003.md) | 移除控制室桌面/侧墙屏幕，18项专项、构建与生产浏览器检查 |
 | [CONTROLROOM-002](CONTROLROOM-002.md) | 控制室角色过曝修正及照明平滑衔接；741测试、双角色与低画质/入场浏览器检查 |
 | [CONTROLROOM-001](CONTROLROOM-001.md) | 控制室、本机世界列表、沙盘、连续入场、740测试及新旧启动50种子对照；本地验证 |
+| [FACILITY-RANDOM-002](FACILITY-RANDOM-002.md) | 安检停用随机目标、广播/复检与新局种子生命周期；200 种子及离线浏览器回归，本地修复 |
 | [DOCS-SYNC-001](DOCS-SYNC-001.md) | 2026-11-01 文档与主线状态同步：仓库滞后核对、合入对照、源码一致性修正与全量链接审计；纯文档 |
 | [GUIDANCE-DIALOGUE-PR-001](GUIDANCE-DIALOGUE-PR-001.md) | 指导重试与多 NPC 对话整合最新 main，最终781项/类型/构建通过；窄屏报告按钮遮挡修复与无费用浏览器复验，PR #61交付证据 |
 | [DOUBAO-IDLE-001](DOUBAO-IDLE-001.md) | 豆包静止Idle与默认自然站姿，原行走数据保持；17项/类型/构建/真实选角站姿通过，本地未提交 |
