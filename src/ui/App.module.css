@@ -64,20 +64,15 @@
 .launch strong { font-size: 32px; font-weight: 900; }
 .launch span { font-size: 14px; }
 .action { position: absolute; z-index: 30; left: 24px; top: 28px; width: min(310px, 24vw); padding: 22px; max-height: calc(100dvh - 160px); overflow: auto; animation: panel-in .55s cubic-bezier(.22,.8,.26,1) both; }
-.actionCollapsed { width: auto; max-width: calc(100% - 244px); padding: 6px; }
-.actionInfo { display: flex; margin-bottom: 10px; }
-.actionInfo > * { flex: 1; }
-.actionInfo button { width: 100%; text-align: left; }
+.actionCollapsed { width: min(280px, 24vw); max-width: calc(100% - 244px); padding: 16px; }
+.currentAction { overflow-wrap: anywhere; }
 .recordToggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; margin-bottom: 12px; text-align: left; font-weight: 700; }
 .recordToggle svg { width: 18px; height: 18px; flex-shrink: 0; }
 .recordToggle[aria-expanded=true] svg { transform: rotate(180deg); }
 .actionCollapsed .recordToggle { margin-bottom: 0; }
-.actionCollapsed .actionInfo { margin-bottom: 0; }
-.actionCollapsed .actionInfo button { min-height: 40px; padding: 8px 10px; font-size: 12px; }
-.action h2 { font-size: 21px; margin: 8px 0; }
+.action h2 { font-size: 16px; margin: 8px 0; }
 .action h3 { margin: 16px 0 4px; }
 .action p { font-size: 13px; }
-.phase { font-weight: 700; border-block: 1px solid #edf0f4; padding: 12px 0; }
 .broadcast { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); width: min(460px, 36vw); background: #fffffff5; border-radius: 18px; padding: 14px 22px; box-shadow: 10px 0 0 #ffffff50, 18px 0 0 #ffffff22, 0 8px 30px #14203314; font-weight: 700; font-size: 13px; animation: broadcast-in .48s cubic-bezier(.22,.8,.26,1) both; }
 .timer { position: absolute; top: 28px; right: 24px; width: 196px; padding: 16px 22px; display: grid; text-align: center; gap: 8px; }
 .timer .eyebrow { justify-self: center; border-radius: 20px; background: #ffd000; padding: 3px 14px; color: #142033; }
@@ -92,7 +87,6 @@
 .controls button { min-height: 46px; border-radius: 14px; }
 .controls button[aria-pressed=true] { background: #ffd000; }
 .runInfo { grid-area: info; display: flex; flex-wrap: wrap; gap: 8px; }
-.previousReport { position: absolute; bottom: 84px; left: 24px; z-index: 35; font-size: 12px; background: #fffffff2; }
 .review { position: absolute; z-index: 40; inset: 24px max(5%, calc((100% - 960px) / 2)) 24px; display: flex; flex-direction: column; padding: 0 36px 16px; overflow: hidden; }
 .review[hidden] { display: none; }
 .reviewHeading { z-index: 2; display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 24px 0 18px; border-bottom: 1px solid var(--line); background: #fff; }
@@ -126,13 +120,14 @@
 @keyframes scene-layer-in { from { opacity: .35; transform: scale(1.025) translateY(10px); filter: blur(2px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
 @keyframes panel-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes broadcast-in { from { opacity: 0; transform: translate(-50%, -14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes broadcast-in-side { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes caption-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes review-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 900px) {
   .preparation { right: 24px; width: 45vw; padding: 24px; }
   .action { width: 250px; padding: 16px; }
-  .broadcast { top: 235px; left: auto; right: 24px; transform: none; width: 220px; }
-  .actionCollapsed { width: auto; padding: 6px; }
+  .broadcast { top: 235px; left: auto; right: 24px; transform: none; width: 220px; animation-name: broadcast-in-side; }
+  .actionCollapsed { width: 250px; padding: 16px; }
   .review { inset: 16px; }
   .reviewGrid { grid-template-columns: 1fr; }
 }
@@ -168,21 +163,17 @@
   .sceneCardLabel strong { font-size: 11px; }
   .sceneCardLabel small { font-size: 8px; }
   .action { top: 16px; left: 12px; right: auto; bottom: auto; width: calc(100% - 180px); padding: 12px; max-height: 40dvh; }
-  .actionCollapsed { width: auto; max-width: calc(100% - 180px); padding: 6px; }
+  .actionCollapsed { width: calc(100% - 180px); max-width: calc(100% - 180px); padding: 12px; }
   .recordToggle { gap: 6px; padding: 8px; font-size: 12px; }
-  .actionInfo { margin-bottom: 4px; }
-  .actionInfo button { min-height: 40px; padding: 8px; font-size: 12px; }
-  .action h2 { font-size: 17px; margin: 4px 0; }
+  .action h2 { font-size: 14px; margin: 4px 0; }
   .action h3 { margin-top: 6px; }
-  .action .phase { padding: 4px 0; margin: 4px 0; }
   .timer { top: 16px; right: 12px; width: 144px; padding: 12px; gap: 4px; border-radius: 22px; }
   .timer strong { font-size: 30px; }
-  .broadcast { top: 165px; right: 12px; left: 12px; width: auto; font-size: 12px; padding: 12px; }
+  .broadcast { top: 165px; right: 12px; left: auto; width: 144px; font-size: 12px; padding: 12px; }
   .runDock { bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; right: 12px; grid-template-areas: "dialogue" "info" "controls"; grid-template-columns: minmax(0, 1fr); }
   .controls { flex-wrap: wrap; justify-content: center; gap: 4px; padding: 6px; }
   .controls button { padding: 8px 10px; min-height: 40px; font-size: 12px; }
   .runInfo { justify-self: start; }
-  .previousReport { bottom: 126px; left: 12px; font-size: 11px; }
   .recordToggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .review { inset: 8px; padding: 0 18px 18px; border-radius: 22px; }
   .victoryControls { top: 12px; bottom: auto; right: 12px; }

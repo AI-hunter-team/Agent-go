@@ -4,7 +4,6 @@ import {
   lazy,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -123,10 +122,6 @@ export function App() {
   const loadedModelUrls = useRef(new Set<string>());
   const [reviewState, setReviewState] = useState<{ generation: number; expanded: boolean } | null>(null);
   const [recordState, setRecordState] = useState<{ generation: number; expanded: boolean } | null>(null);
-  const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 600px)").matches);
-  const [previousOpen, setPreviousOpen] = useState(false);
-  const previousReport = useMemo(() => j.previousRun?.runner.report() ?? null, [j.previousRun, previousOpen]);
-  const historyPause = useRef<{ generation: number; resume: boolean } | null>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [renderer, setRenderer] = useState<"3d" | "2d">("3d");
@@ -227,23 +222,6 @@ export function App() {
   const closeReview = () => {
     setReviewState({ generation: session.generation, expanded: false });
     requestAnimationFrame(() => reviewTrigger.current?.focus());
-  };
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 600px)");
-    const update = () => setMobile(query.matches);
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  const openPrevious = () => {
-    historyPause.current = { generation: session.generation, resume: watching && !session.paused };
-    if (watching) session.setPaused(true);
-    setReviewState({ generation: session.generation, expanded: false });
-    setPreviousOpen(true);
-  };
-  const closePrevious = () => {
-    setPreviousOpen(false);
-    if (historyPause.current?.generation === session.generation && historyPause.current.resume) session.setPaused(false);
-    historyPause.current = null;
   };
   // 胜利展示始终从透视镜头开始；用户之后可自行切换镜头。
   useEffect(() => {
@@ -781,36 +759,16 @@ export function App() {
               </div>
             )}
             <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录" data-scene-obstacle>
-              <div className={styles.actionInfo}>
-                <Modal
-                  title="本局信息"
-                  description="本局模型已固定，更换模型需结束本局并返回大厅。"
-                  trigger={<button>ⓘ 本局信息</button>}
-                >
-                  <p>场景：地铁末班车</p>
-                  <p>角色：{runner.journey?.characterName}</p>
-                  <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
-                  <p>情景种子：{seed}</p>
-                  <p>时限：{settings.timeLimitSeconds} 秒</p>
-                </Modal>
+              <div className={styles.currentAction}>
+                <span className={styles.eyebrow}>当前行动</span>
+                <h2>{describeActivity(session.engine.world, session.engine.player)}</h2>
               </div>
               <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
                 onClick={() => setRecordState({ generation: session.generation, expanded: !recordExpanded })}>
-                <span>{recordExpanded ? "收起行程记录" : mobile ? describeActivity(session.engine.world, session.engine.player) : "展开行程记录"}</span>
+                <span>{recordExpanded ? "收起行程记录" : "展开行程记录"}</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
               </button>
               <div id="journey-record-content" hidden={!recordExpanded}>
-              <span className={styles.eyebrow}>当前行动</span>
-              <h2>
-                {describeActivity(session.engine.world, session.engine.player)}
-              </h2>
-              <p className={styles.phase}>
-                {runner.phase === "thinking"
-                  ? "● ● ●　思考中 · 世界暂停"
-                  : session.paused
-                    ? "已暂停"
-                    : "角色自主行动中"}
-              </p>
               {latest && (
                 <>
                   <h3>最近决策</h3>
@@ -899,7 +857,17 @@ export function App() {
               <button onClick={() => session.stop()}>结束</button>
             </div>
             <div className={styles.runInfo}>
-              {j.previousRun && <button onClick={openPrevious}>上一局报告</button>}
+              <Modal
+                title="本局信息"
+                description="本局模型已固定，更换模型需结束本局并返回大厅。"
+                trigger={<button>ⓘ 本局信息</button>}
+              >
+                <p>场景：地铁末班车</p>
+                <p>角色：{runner.journey?.characterName}</p>
+                <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
+                <p>情景种子：{seed}</p>
+                <p>时限：{settings.timeLimitSeconds} 秒</p>
+              </Modal>
             </div>
             </div>
           </>
@@ -919,13 +887,9 @@ export function App() {
             onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
             onSameScenario={() => j.retry({ sameScenario: true, twoDimensional: renderer === "2d" })}
             onEdit={text => { j.edit(text); if (kind === "offline" && text === undefined) j.setDrawer(true); }}
-            onConfigureModel={() => j.setDrawer(true)} onLobby={j.returnLobby} onPrevious={j.previousRun ? openPrevious : undefined} />
+            onConfigureModel={() => j.setDrawer(true)} onLobby={j.returnLobby} />
           </>
         )}
-        {j.previousRun && previousReport && <>
-          {!j.working && !watching && <button className={styles.previousReport} onClick={openPrevious}>上一局报告</button>}
-          <JourneyReview key={`previous-${j.previousRun.generation}`} report={previousReport} engine={j.previousRun.engine} review={j.previousRun.review} open={previousOpen} onClose={closePrevious} previous />
-        </>}
         {debug && (
           <details className={styles.debug}>
             <summary>开发调试</summary>
