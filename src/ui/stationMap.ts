@@ -36,7 +36,10 @@ export function stationAtlas(world:WorldDefinition):StationAtlas {
   const addMarker=(marker:MapMarker)=>{const f=get(marker.floorId);if(f)f.markers=[...f.markers,marker];};
   const connections:MapConnection[]=[];
   for(const f of floors){const areas=world.architecture?.areas.filter(a=>a.floorId===f.id);if(areas)for(const a of areas)addShape(f.id,{id:a.id,kind:"floor",bounds:a.bounds});else addShape(f.id,{id:`envelope:${f.id}`,kind:"floor",bounds:f.bounds});}
-  for(const [i,r] of world.regions.entries())addShape(r.floorId,{id:`region:${i}`,bounds:r.bounds,kind:r.kind==="landing"?"paid":"floor"});
+  for(const [i,r] of world.regions.entries()){
+   const areas=world.architecture?.layoutType?world.architecture.areas.filter(a=>a.floorId===r.floorId).map(a=>a.bounds):[r.bounds];
+   for(const [j,a] of areas.entries()){const x=Math.max(a.x,r.bounds.x),y=Math.max(a.y,r.bounds.y),w=Math.min(a.x+a.w,r.bounds.x+r.bounds.w)-x,h=Math.min(a.y+a.h,r.bounds.y+r.bounds.h)-y;if(w>0&&h>0)addShape(r.floorId,{id:`region:${i}:${j}`,bounds:{x,y,w,h},kind:r.kind==="landing"?"paid":"floor"});}
+  }
   const upper=get("concourse")??floors[0];
   if(upper){
     for(const [i,bounds] of [...l.SECURITY_BARRIERS,...l.GATE_BARRIERS].entries())addShape(upper.id,{id:`boundary:${i}`,kind:"wall",bounds});

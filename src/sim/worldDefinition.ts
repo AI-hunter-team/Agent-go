@@ -1,3 +1,4 @@
+import { createWorldV3Proportions } from "./worldV3Proportions";
 import { populateStationProps } from "./stationPropPlacement";
 import { createWorldV3Prototype } from "./worldV3Prototype";
 import { createWorldV3 } from "./worldV3";
@@ -204,7 +205,7 @@ export function restoreWorld(seed:number, expected:WorldDescriptor):WorldDefinit
  if(!expected||!['legacy-v0','metro-v1','metro-v2','metro-v3'].includes(expected.generatorVersion))return null;
  const d=generateWorld(seed,{version:expected.generatorVersion});
  if(d.layoutHash===expected.layoutHash)return d;
- if(expected.generatorVersion==="metro-v3"){const old=createWorldV3Prototype(seed);return old.layoutHash===expected.layoutHash?old:null;}
+ if(expected.generatorVersion==="metro-v3"){const proportions=createWorldV3Proportions(seed);if(proportions.layoutHash===expected.layoutHash)return proportions;const old=createWorldV3Prototype(seed);return old.layoutHash===expected.layoutHash?old:null;}
  if(expected.generatorVersion==="metro-v2"){
   const architectural=createWorldV2(seed);
   return architectural.layoutHash===expected.layoutHash?architectural:null;

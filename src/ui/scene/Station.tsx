@@ -128,7 +128,7 @@ export const Station = memo(function Station({ session, overview, standard, redu
     });
     return () => { active = false; };
   }, [onAssetError]);
-  if(session.engine.world.definition.generatorVersion!=="legacy-v0")return loadState==="loading"?<group name="station-kit-loading"/>:<GeneratedStation session={session} kit={kit??undefined} overview={overview}/>;
+  if(session.engine.world.definition.generatorVersion!=="legacy-v0")return loadState==="loading"?<group name="station-kit-loading"/>:<GeneratedStation session={session} kit={kit??undefined} overview={overview} standard={standard}/>;
   // 正式素材加载期间保持空场景，避免旧几何先闪现；只有加载失败才进入几何回退。
   return <><OutageOverlay session={session} />{loadState === "ready" && kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : loadState === "error" ? <StationFallback session={session} reducedMotion={reducedMotion} /> : <group name="station-kit-loading" />}</>;
 });

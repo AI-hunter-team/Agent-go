@@ -1,4 +1,4 @@
-import { Group, Mesh, MeshStandardMaterial, Vector3, type Object3D } from 'three';
+import { Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Vector3, type Object3D } from 'three';
 import type { WorldDefinition } from '../../shared/world';
 import { propDefinition } from '../../shared/stationProps';
 import { createDetailAsset, detailMaterials } from '../../assets/station-detail/models';
@@ -11,13 +11,18 @@ import type { StationKit } from './stationAssets';
 export function openScreenDoor(model:Object3D){
  for(const side of [-1,1]){const leaf=model.getObjectByName(`screen_sliding_leaf_${side}`);if(leaf)leaf.position.x+=side*.8;}
 }
-export function stationDetailScene(d:WorldDefinition,p:GeneratedPalette,kit?:StationKit){
- const root=new Group(),upper=new Group(),lower=new Group(),extra=detailMaterials(p),cleanup:(()=>void)[]=[],builders={concourse:new SurfaceBuilder(),platform:new SurfaceBuilder()};
+export function stationDetailScene(d:WorldDefinition,p:GeneratedPalette,kit?:StationKit,standard=true){
+ const root=new Group(),upper=new Group(),lower=new Group(),extra=detailMaterials(p),cleanup:(()=>void)[]=[],builders={concourse:new SurfaceBuilder(),platform:new SurfaceBuilder(),leaves:new SurfaceBuilder()};
  root.name='station-detail-scene';upper.name='detail-concourse';lower.name='detail-platform';root.add(upper,lower);
  const add=(id:string,variant:number,at:[number,number,number],yaw:number,floor:'concourse'|'platform',label?:string)=>{
    const source=kit?.models.get('detail-'+id+'-'+variant);const model=source?source.clone(true):createDetailAsset(id,variant,p,extra,true);
    if(id==='screen-door')openScreenDoor(model);
-   model.position.set(...at);model.rotation.y=yaw;model.updateMatrixWorld(true);model.traverse(n=>{if(n instanceof Mesh&&n.material instanceof MeshStandardMaterial)builders[floor].add(n.material,n.geometry.clone(),n.matrixWorld);});
+   model.position.set(...at);model.rotation.y=yaw;model.updateMatrixWorld(true);model.traverse(n=>{if(n instanceof Mesh&&n.material instanceof MeshStandardMaterial){
+    let parent:Object3D|null=n,leaf=0;while(parent&&parent!==model){if(parent.name.startsWith("screen_sliding_leaf_")){leaf=Number(parent.name.split("_").at(-1));break;}parent=parent.parent;}
+    const geometry=n.geometry.clone();
+    if(id==="screen-door"&&leaf){const travel=Array.from({length:geometry.getAttribute("position").count},()=>[Math.cos(yaw)*leaf*.8,0,-Math.sin(yaw)*leaf*.8]).flat();geometry.setAttribute("doorTravel",new Float32BufferAttribute(travel,3));builders.leaves.add(n.material,geometry,n.matrixWorld);}
+    else builders[floor].add(n.material,geometry,n.matrixWorld);
+   }});
    if(!source)disposeSurfaceGeometry(model);
    const graphic=propGraphic(id,variant,d,label);if(graphic){const a=propDefinition(id),panel=graphic.mesh;let y=a.size[1]*.75,w=Math.min(a.size[0]*.85,1.4);
      if(id==='screen-door'){w=.38;y=2.86;}
@@ -26,6 +31,7 @@ export function stationDetailScene(d:WorldDefinition,p:GeneratedPalette,kit?:Sta
    }
  };
  for(const a of d.props??[]){
+  if(!standard&&["cctv","smoke-detector","speaker","mop-bucket","wet-sign","access-panel","drain"].includes(a.assetId))continue;
   const floor=a.pos.floorId==='platform'?'platform':'concourse';
   add(a.assetId,a.variant,[a.pos.x,(floor==='platform'?-6:0)+a.elevation,a.pos.y],a.yaw,floor);
   if(d.architecture&&propDefinition(a.assetId).mount==='ceiling'){
@@ -46,6 +52,7 @@ export function stationDetailScene(d:WorldDefinition,p:GeneratedPalette,kit?:Sta
      b.box(p.steel,[l.WIDTH,.2,.15],[l.WIDTH/2,-3.1,z]);
    }
  }
- const a=builders.concourse.finish('detail-static-concourse'),b=builders.platform.finish('detail-static-platform');upper.add(a);lower.add(b);a.traverse(n=>{if(n instanceof Mesh)n.castShadow=false;});b.traverse(n=>{if(n instanceof Mesh)n.castShadow=false;});
- return {root,upper,lower,dispose(){disposeSurfaceGeometry(a);disposeSurfaceGeometry(b);cleanup.forEach(fn=>fn());Object.values(extra).forEach(m=>m.dispose());}};
+ const a=builders.concourse.finish('detail-static-concourse'),b=builders.platform.finish('detail-static-platform'),leaves=builders.leaves.finish('screen-door-leaves');upper.add(a);lower.add(b,leaves);a.traverse(n=>{if(n instanceof Mesh)n.castShadow=false;});b.traverse(n=>{if(n instanceof Mesh)n.castShadow=false;});
+ const closed=new Map<Mesh,Float32Array>();leaves.traverse(n=>{if(n instanceof Mesh){const pos=n.geometry.getAttribute("position"),travel=n.geometry.getAttribute("doorTravel"),base=new Float32Array(pos.array);for(let i=0;i<pos.count;i++){base[i*3]-=travel.getX(i);base[i*3+2]-=travel.getZ(i);}closed.set(n,base);}});
+ return {root,upper,lower,leaves,setDoorProgress(value:number){const progress=Math.max(0,Math.min(1,value));for(const [mesh,base] of closed){const pos=mesh.geometry.getAttribute("position"),travel=mesh.geometry.getAttribute("doorTravel");for(let i=0;i<pos.count;i++)pos.setXYZ(i,base[i*3]+travel.getX(i)*progress,base[i*3+1],base[i*3+2]+travel.getZ(i)*progress);pos.needsUpdate=true;}},dispose(){closed.clear();disposeSurfaceGeometry(leaves);disposeSurfaceGeometry(a);disposeSurfaceGeometry(b);cleanup.forEach(fn=>fn());Object.values(extra).forEach(m=>m.dispose());}};
 }

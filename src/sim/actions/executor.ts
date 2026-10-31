@@ -199,7 +199,7 @@ export class ActionExecutor {
         } else a.remaining += DT;
         return;
       }
-      p.pos = world.definition.generatorVersion!=="legacy-v0"&&a.step.op==="slide_handrail"?{...next,floorId:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
+      p.pos = world.definition.generatorVersion!=="legacy-v0"&&a.step.op==="slide_handrail"?{...next,floorId:p.transitConnectorId?`transit:${p.transitConnectorId}`:"transit:stairs",elevation:-6*(1-a.remaining/a.duration)}:next;
     }
     if (a.step.op === "force_cut_in") {
       const npc = world.persons.get(a.step.npcId)!,

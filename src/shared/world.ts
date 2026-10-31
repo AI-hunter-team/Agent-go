@@ -27,10 +27,15 @@ export interface StationConnector {
  /** Number of straight queue intervals before turning away from the stairs. */
  queueTurnAfter?:number;
 }
+export type StationLayoutType="dual-ended"|"offset-entry"|"open-hall";
+export interface StationWall {id:string;floorId:FloorId;from:Vec;to:Vec;side:"north"|"south"|"west"|"east";height:number}
 export interface StationArchitecture {
+ layoutType?:StationLayoutType;
+ columnGrid?:{spacing:number;offset:number};
+ walls?:StationWall[];
  areas:{id:string;floorId:FloorId;bounds:Rect}[];
  volumes:{id:string;floorId:FloorId;bounds:Rect;height:number;kind:"room"|"column"}[];
- groups:{id:string;kind:"tickets"|"security"|"gates"|"connections"|"platform";members:string[]}[];
+ groups:{id:string;kind:"tickets"|"security"|"gates"|"connections"|"platform"|"amenities";members:string[]}[];
  views:{id:string;eye:[number,number,number];target:[number,number,number]}[];
 }
 export interface WorldDefinition extends WorldDescriptor {
@@ -48,7 +53,7 @@ export interface WorldDefinition extends WorldDescriptor {
   layout: StationLayout;
   guards: GuardDef[];
   details: DetailPlacement[];
-  generation: { attempts: number; fallback: boolean; reasons: string[]; emptyRouteSeconds: number; entryBudgets?:Record<string,number> };
+  generation: { attempts: number; fallback: boolean; reasons: string[]; emptyRouteSeconds: number; entryBudgets?:Record<string,number>;requestedLayout?:StationLayoutType;actualLayout?:StationLayoutType };
 }
 export interface PublicStationMap extends WorldDescriptor {
   train?:WorldDefinition["train"];

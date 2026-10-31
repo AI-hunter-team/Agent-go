@@ -1,3 +1,4 @@
+import { fitStationOverview } from "./overviewFit";
 import type { DepartureAudio } from "../departureAudio";
 import { CONTROL_ROOM_LIGHTING, stationLightBlend } from "./controlRoomLighting";
 import type { AmbientLight, DirectionalLight, HemisphereLight, PointLight } from "three";
@@ -30,6 +31,8 @@ import { VictoryCamera } from "./victoryCamera";
 import { constrainCabinCamera } from "./trainCabin";
 import type { HeadMessageMode } from "../headMessages";
 
+function performanceThisMemory(){return (window.performance as Performance&{memory?:{usedJSHeapSize:number}}).memory?.usedJSHeapSize??0;}
+function sceneGeometryBytes(scene:Object3D){const geometries=new Set<import("three").BufferGeometry>();scene.traverse(n=>{if("geometry" in n)geometries.add((n as Mesh).geometry);});let bytes=0;for(const g of geometries){for(const a of Object.values(g.attributes))bytes+=a.array.byteLength;if(g.index)bytes+=g.index.array.byteLength;}return bytes;}
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
 export interface SceneProps {
   session: GameSession;
@@ -247,7 +250,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady, s
     const study=session.engine.world.definition.architecture?session.engine.world.definition.architecture?.views.find(v=>v.id===studyId):undefined;
     if(study){state.camera.position.set(...study.eye);state.camera.lookAt(worldTarget.set(...study.target).applyMatrix4(dock.matrix));return;}
     if (settings.mode === "overview") {
-      state.camera.position.set(centerX - WIDTH*.38, Math.max(62,WIDTH*.65), viewBounds.y + HEIGHT + 28); state.camera.lookAt(worldTarget.set(centerX,-.5,centerY).applyMatrix4(dock.matrix)); return;
+      state.camera.position.set(centerX - WIDTH*.38, Math.max(62,WIDTH*.65), viewBounds.y + HEIGHT + 28); state.camera.lookAt(worldTarget.set(centerX,-.5,centerY).applyMatrix4(dock.matrix)); if(state.camera instanceof OrthographicCamera)fitStationOverview(state.camera,viewBounds,dock.matrix,size.width/Math.max(1,size.height));return;
     }
     // 大厅展示车站全景；选角时重新初始化角色镜头，避免从远处穿越设施。
     if (settings.shot === "lobby") {
@@ -444,7 +447,7 @@ function Contents(props: SceneProps) {
       return { generation: session.generation, t: session.engine.t, status: session.engine.status, displayTime: performance.time,
         visible: performance.visible, dance: performance.dance, danceTime: performance.danceTime, previousDance: performance.previousDance, victoryTime: performance.victoryTime, greetingTime: performance.greetingTime,
         lighting:{stationBlend:stationLightBlend(controlRoomState(session)),environment:scene.environmentIntensity,exposure:gl.toneMappingExposure,roomKey:(scene.getObjectByName("control-room-key") as DirectionalLight|undefined)?.intensity},cinematic: performance.cinematic, cameraResumeIn: performance.cameraResumeIn, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
-        lounge:{brand:brandBox?{min:project(brandBox.min.clone()),max:project(brandBox.max.clone())}:null,roomMeshes:scene.getObjectByName("departure-control-room")?.children.length},resources:{geometries:gl.info.memory.geometries,textures:gl.info.memory.textures,drawCalls:gl.info.render.calls},actorUuid:root?.uuid,cameraUuid:camera.uuid,quaternion:camera.quaternion.toArray(),position: root?.position.toArray(), scenePosition:root?.getWorldPosition(new Vector3()).toArray(), cameraWorld:camera.getWorldPosition(new Vector3()).toArray(), entry:{stage:props.stage,elapsed:controlRoomState(session).elapsed,door:controlRoomState(session).door,hash:session.engine.world.definition.layoutHash}, bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
+        lounge:{brand:brandBox?{min:project(brandBox.min.clone()),max:project(brandBox.max.clone())}:null,roomMeshes:scene.getObjectByName("departure-control-room")?.children.length},resources:{geometries:gl.info.memory.geometries,textures:gl.info.memory.textures,drawCalls:gl.info.render.calls,heapBytes:(performanceThisMemory()),geometryBytes:sceneGeometryBytes(scene)},actorUuid:root?.uuid,cameraUuid:camera.uuid,quaternion:camera.quaternion.toArray(),position: root?.position.toArray(), scenePosition:root?.getWorldPosition(new Vector3()).toArray(), cameraWorld:camera.getWorldPosition(new Vector3()).toArray(), entry:{stage:props.stage,elapsed:controlRoomState(session).elapsed,door:controlRoomState(session).door,hash:session.engine.world.definition.layoutHash}, bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
     };
     const target = window as typeof window & { victoryInspect?: typeof inspect }; target.victoryInspect = inspect;
     return () => { if (target.victoryInspect === inspect) delete target.victoryInspect; };
@@ -466,6 +469,7 @@ function Contents(props: SceneProps) {
     metrics.environment.simpleCrowd = Number(props.simpleCrowd);
     metrics.environment.drawCalls = gl.info.render.calls;
     metrics.environment.triangles = gl.info.render.triangles;
+    metrics.environment.heapBytes=performanceThisMemory();
     metrics.environment.geometries = gl.info.memory.geometries; metrics.environment.textures = gl.info.memory.textures;
     metrics.environment.renderedFrames = Number(metrics.environment.renderedFrames ?? 0) + 1;
     const sampling = metrics.active;

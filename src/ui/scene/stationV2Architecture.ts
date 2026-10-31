@@ -13,7 +13,7 @@ function subtract(r:Rect,h:Rect):Rect[]{
  return[{x:r.x,y:r.y,w:x0-r.x,h:r.h},{x:x1,y:r.y,w:r.x+r.w-x1,h:r.h},{x:x0,y:r.y,w:x1-x0,h:y0-r.y},{x:x0,y:y1,w:x1-x0,h:r.y+r.h-y1}].filter(v=>v.w>.001&&v.h>.001);
 }
 /** Shared specimen geometry; opaque slabs, openings and guardrails follow the simulated connectors. */
-export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette){
+export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette,standard=true){
  const width=d.layout.WIDTH,height=d.layout.HEIGHT,centre=height/2;
  const root=new Group(),slabs=new SurfaceBuilder(),walls=new SurfaceBuilder(),roof=new SurfaceBuilder(),edge=new SurfaceBuilder(),trim=new SurfaceBuilder();
  root.name="station-v2-architecture";
@@ -25,7 +25,7 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
   }
  }
  // Segmented facade: entrance apertures have the same positions as the navigation envelope.
- for(const horizontal of [true,false])for(const at of horizontal?[0,height]:[0,width]){
+ for(const horizontal of d.architecture!.walls?[]:[true,false])for(const at of horizontal?[0,height]:[0,width]){
   const length=horizontal?width:height;
   const doors=(d.entrances??[]).filter(e=>Math.abs((horizontal?e.foot.y:e.foot.x)-at)<.01).map(e=>({a:(horizontal?e.foot.x:e.foot.y)-e.width/2,b:(horizontal?e.foot.x:e.foot.y)+e.width/2})).sort((a,b)=>a.a-b.a);
   let begin=0;const spans:{a:number;b:number}[]=[];for(const door of doors){spans.push({a:begin,b:door.a});begin=door.b;}spans.push({a:begin,b:length});
@@ -35,6 +35,13 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
    trim.box(p.dark,horizontal?[len,.13,.28]:[.28,.13,len],[x,.065,z]);
    for(let h=.8;h<3.6;h+=.8)trim.box(p.steel,horizontal?[len,.012,.265]:[.265,.012,len],[x,h,z]);
   }
+ }
+ for(const w of d.architecture!.walls??[]){
+  const horizontal=w.from.y===w.to.y,len=Math.hypot(w.to.x-w.from.x,w.to.y-w.from.y),x=(w.from.x+w.to.x)/2,z=(w.from.y+w.to.y)/2;
+  walls.box(p.wall,horizontal?[len,w.height,.25]:[.25,w.height,len],[x,w.height/2,z]);
+  walls.box(p.sage,horizontal?[len,.7,.27]:[.27,.7,len],[x,.48,z]);
+  trim.box(p.dark,horizontal?[len,.13,.28]:[.28,.13,len],[x,.065,z]);
+  if(standard)for(let h=.8;h<w.height;h+=.8)trim.box(p.steel,horizontal?[len,.012,.265]:[.265,.012,len],[x,h,z]);
  }
  for(const v of d.architecture!.volumes){const r=v.bounds,base=v.floorId==="platform"?-6:0;
   walls.box(v.kind==="column"?p.paint:p.wall,[r.w,v.height,r.h],[r.x+r.w/2,base+v.height/2,r.y+r.h/2]);
@@ -55,6 +62,7 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
  }
  const power=stationSwitch(d).position;trim.box(p.dark,[.45,1.2,.2],[power.x,1.1,power.y]);trim.box(p.red,[.12,.26,.23],[power.x-.2,1.15,power.y]);
  // Column-aligned beams, slatted ceiling and inset linear lighting.
+ if(!d.architecture!.layoutType){
  for(let x=0;x<width;x+=6){
   roof.box(p.paint,[.4,.22,height],[x,3.48,centre]);
   for(const z of [5,15,25])roof.box(p.light,[4.6,.04,.24],[x+3,3.48,z]);
@@ -62,6 +70,15 @@ export function createStationV2Architecture(d:WorldDefinition,p:GeneratedPalette
  }
  for(let z=.15;z<height;z+=.32)roof.box(p.paint,[width,.09,.08],[width/2,3.59,z]);
  roof.box(p.dark,[width,.08,height],[width/2,3.69,centre]);
+ }else for(const {bounds:r} of d.architecture!.areas.filter(a=>a.floorId==="concourse")){
+  roof.box(p.dark,[r.w,.08,r.h],[r.x+r.w/2,3.69,r.y+r.h/2]);
+  const grid=d.architecture!.columnGrid!,step=grid.spacing/2;
+  for(let x=Math.ceil((r.x-grid.offset)/step)*step+grid.offset;x<r.x+r.w;x+=step){
+   roof.box(p.paint,[.35,.22,r.h],[x,3.48,r.y+r.h/2]);
+   for(let z=r.y+2;z<r.y+r.h-1;z+=6){const lamp=Math.min(4.6,r.x+r.w-x-.3);if(lamp>.3)roof.box(p.light,[lamp,.04,.24],[x+lamp/2,3.48,z]);}
+  }
+  for(let z=r.y+.15;z<r.y+r.h;z+=standard?.32:.96)roof.box(p.paint,[r.w,.09,.08],[r.x+r.w/2,3.59,z]);
+ }
  for(const r of [...d.layout.SECURITY_BARRIERS,...d.layout.GATE_BARRIERS]){
   const x=r.x+r.w/2;
   edge.bar(p.steel,[x,1.05,r.y],[x,1.05,r.y+r.h],.035);

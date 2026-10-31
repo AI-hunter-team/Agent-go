@@ -11,12 +11,12 @@ import { createGeneratedPalette } from "./scene/generatedSurfaces";
 import { WorldPlan } from "./WorldPlan";
 
 interface Props {world:WorldDefinition;reset:number;reducedMotion:boolean;quality:"standard"|"low";turn:number;onUnavailable:(reason:string)=>void;}
-function Contents({world,kit,reset,turn,reducedMotion,onUnavailable}:{world:WorldDefinition;kit?:StationKit;reset:number;turn:number;reducedMotion:boolean;onUnavailable:Props["onUnavailable"]}){
+function Contents({world,kit,reset,turn,reducedMotion,onUnavailable,quality}:{world:WorldDefinition;kit?:StationKit;reset:number;turn:number;reducedMotion:boolean;onUnavailable:Props["onUnavailable"];quality:Props["quality"]}){
   const {camera,size,gl,scene,invalidate}=useThree(),controls=useRef<OrbitControlsImpl>(null);
   const previousTurn=useRef(turn);
   const palette=useMemo(()=>createGeneratedPalette(kit),[kit]);
   const fallback=useMemo(()=>kit?null:localStationKit(palette),[kit,palette]);
-  const model=useMemo(()=>{const value=assembledRoom(kit??fallback!,palette,world);value.setView("overview",false,true);return value;},[world,kit,fallback,palette]);
+  const model=useMemo(()=>{const value=assembledRoom(kit??fallback!,palette,world,quality==="standard");value.setView("overview",false,true);return value;},[world,kit,fallback,palette,quality]);
   const pose=useMemo(()=>{model.root.updateMatrixWorld(true);return framedPose(new Box3().setFromObject(model.root),size.width/Math.max(1,size.height),43,new Vector3(.6,.85,1.25));},[model,size.width,size.height]);
   useEffect(()=>()=>model.dispose(),[model]);
   useEffect(()=>()=>fallback?.dispose(),[fallback]);
@@ -49,7 +49,7 @@ function Contents({world,kit,reset,turn,reducedMotion,onUnavailable}:{world:Worl
     <hemisphereLight args={["#fff6df","#819488",.8]}/>
     <directionalLight color="#fff2d9" intensity={1.3} position={[-12,55,42]} castShadow shadow-mapSize={[1024,1024]} shadow-camera-left={-80} shadow-camera-right={80} shadow-camera-top={80} shadow-camera-bottom={-80} shadow-camera-far={180} shadow-normalBias={.035}/>
     <directionalLight color="#e2edf0" intensity={.4} position={[70,28,-20]}/>
-    <mesh position={[world.layout.WIDTH/2,-7.66,world.layout.HEIGHT/2]} receiveShadow><boxGeometry args={[140,.1,120]}/><meshStandardMaterial color="#eeede4" roughness={.96}/></mesh>
+    <mesh position={[world.layout.WIDTH/2,-7.66,world.layout.HEIGHT/2]} receiveShadow><boxGeometry args={[world.layout.WIDTH+68,.1,120]}/><meshStandardMaterial color="#eeede4" roughness={.96}/></mesh>
     <primitive object={model.root} dispose={null}/>
     <OrbitControls ref={controls} makeDefault target={pose.target} enableDamping={!reducedMotion} dampingFactor={.09} minDistance={2} maxDistance={230} maxPolarAngle={Math.PI*.49}/>
   </>;
@@ -59,6 +59,6 @@ export default memo(function WorldPreview({world,reset,reducedMotion,quality,tur
   useEffect(()=>{let active=true;loadStationKit().then(value=>{if(active){setKit(value);setState("formal");}}).catch(()=>{if(active)setState("local");});return()=>{active=false;};},[]);
   if(state==="loading")return <div style={{width:"100%",height:"100%",position:"relative"}}><WorldPlan world={world} floor="concourse"/><span style={{position:"absolute",bottom:20,left:20,fontSize:12,color:"#6d806e"}}>正在载入三维预览…</span></div>;
   return <><Canvas key={quality} frameloop="demand" shadows={quality==="standard"} dpr={quality==="low"?1:[1,1.5]} camera={{fov:43,near:.1,far:700}} gl={{antialias:quality==="standard",toneMapping:ACESFilmicToneMapping,toneMappingExposure:1.02}} fallback={<WorldPlan world={world} floor="concourse"/>} aria-label={`${world.name}的三维地图预览`}>
-    <Contents world={world} kit={kit} reset={reset} turn={turn} reducedMotion={reducedMotion} onUnavailable={onUnavailable}/>
+    <Contents world={world} kit={kit} reset={reset} turn={turn} reducedMotion={reducedMotion} quality={quality} onUnavailable={onUnavailable}/>
   </Canvas>{state==="local"&&<span style={{position:"absolute",bottom:14,left:18,fontSize:11,color:"#6d806e"}}>使用本地模型预览</span>}</>;
 });

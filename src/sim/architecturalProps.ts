@@ -1,3 +1,4 @@
+import { coversRect } from "../shared/stationFootprint";
 import type { WorldDefinition, FloorId } from "../shared/world";
 import { propDefinition, type PropPlacement, type PropCluster } from "../shared/stationProps";
 import type { Rect } from "./geometry";
@@ -21,6 +22,12 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
   for(let i=0;i<ESCALATOR_CAPACITY;i++)reserved.push({x:c.from.x-dx*Math.min(i,bend)*space-.65,y:c.from.y+dx*Math.max(0,i-bend)*space-.65,w:1.3,h:1.3,floorId:"concourse"});
  }
  const publicPoint=(x:number,y:number,floor:FloorId)=>d.architecture!.areas.some(a=>a.floorId===floor&&x>=a.bounds.x&&x<=a.bounds.x+a.bounds.w&&y>=a.bounds.y&&y<=a.bounds.y+a.bounds.h);
+ const wallSpot=(x:number,north:boolean)=>{
+  if(!d.architecture?.walls)return {x,z:north?.2:l.HEIGHT-.2};
+  const rows=d.architecture.walls.filter(w=>w.side===(north?"north":"south")&&w.to.x-w.from.x>2.5);
+  const row=rows.sort((a,b)=>Math.abs(x-Math.max(a.from.x+1,Math.min(a.to.x-1,x)))-Math.abs(x-Math.max(b.from.x+1,Math.min(b.to.x-1,x))))[0];
+  return row?{x:Math.max(row.from.x+1,Math.min(row.to.x-1,x)),z:row.from.y+(north?.2:-.2)}:{x,z:north?.2:l.HEIGHT-.2};
+ };
  const add=(assetId:string,x:number,z:number,yaw=0,cluster:PropCluster="entrance",floor:FloorId="concourse",elevation=0)=>{
   const a=propDefinition(assetId),storey=d.floors.find(f=>f.id===floor)!,clearance=storey.ceiling-storey.elevation;
   if(elevation<0||elevation+a.size[1]>clearance-.02)return false;
@@ -28,6 +35,7 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
   const rect:Rect={x:x-w/2,y:z-h/2,w,h,floorId:floor};
   const useSpace=a.solid?{x:rect.x+Math.min(0,front.x*a.useDepth),y:rect.y+Math.min(0,front.y*a.useDepth),w:w+Math.abs(front.x)*a.useDepth,h:h+Math.abs(front.y)*a.useDepth,floorId:floor}:null;
   if(!publicPoint(x,z,floor))return false;
+  if(d.architecture?.layoutType&&a.solid&&!coversRect(useSpace??rect,d.architecture.areas.filter(v=>v.floorId===floor).map(v=>v.bounds)))return false;
   if(a.solid){
    if(![[rect.x,rect.y],[rect.x+w,rect.y],[rect.x,rect.y+h],[rect.x+w,rect.y+h]].every(([cx,cy])=>publicPoint(cx,cy,floor)))return false;
    if([...occupied,...reserved].some(r=>sameFloor(r,floor)&&overlap(useSpace??rect,r,.25)))return false;
@@ -37,7 +45,7 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
   return true;
  };
  const wall=(id:string,x:number,north:boolean,cluster:PropCluster="maintenance",elevation=0)=>{
-  const z=north?.2:l.HEIGHT-.2,a=propDefinition(id);
+  const spot=wallSpot(x,north),z=spot.z,a=propDefinition(id);x=spot.x;
   if((d.entrances??[]).some(e=>Math.abs(e.foot.y-z)<2&&Math.abs(e.foot.x-x)<e.width/2+a.size[0]/2+.3))return false;
   return add(id,x,z,north?0:Math.PI,cluster,"concourse",elevation);
  };
@@ -46,8 +54,8 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
   for(let x=3;x<l.WIDTH-3;x+=2.5)for(const north of [true,false])points.push({x,north});
   const centre=cluster==="entrance"?10:cluster==="convenience"?18:cluster==="rest"?44:60;
   points.sort((a,b)=>Math.abs(a.x-centre)-Math.abs(b.x-centre)||(a.north===b.north?0:a.north?-1:1));
-  for(const c of points){const z=c.north?.4+a.size[2]/2:l.HEIGHT-.4-a.size[2]/2;
-   if(add(id,c.x,z,c.north?0:Math.PI,cluster)&&++placed>=count)break;
+  for(const c of points){const spot=wallSpot(c.x,c.north),z=d.architecture?.layoutType?spot.z+(c.north?1:-1)*(.2+a.size[2]/2):c.north?.4+a.size[2]/2:l.HEIGHT-.4-a.size[2]/2;
+   if(add(id,spot.x,z,c.north?0:Math.PI,cluster)&&++placed>=count)break;
   }
  };
  edge("bin-double",2,"entrance");edge(layout.pick(["plant-round","plant-square","plant-box"]),2,"rest");
@@ -59,6 +67,10 @@ export function populateArchitecturalProps(d:WorldDefinition,appearanceSeed=d.se
  for(const v of d.architecture!.volumes.filter(v=>v.kind==="room")){
   const east=v.bounds.x===0,x=east?v.bounds.x+v.bounds.w+.08:v.bounds.x-.08;
   add("equipment-door",x,v.bounds.y+v.bounds.h/2,east?Math.PI/2:-Math.PI/2,"maintenance");
+ }
+ if(d.architecture?.layoutType){
+  const scale=1+Math.floor((l.WIDTH-78)/48);
+  edge("bench-sage",scale,"rest");edge("charging",scale,"convenience");edge("bin-double",scale,"rest");
  }
  const upper=d.floors.find(f=>f.id==="concourse")!,height=upper.ceiling-upper.elevation;
  for(let x=12;x<l.WIDTH-3;x+=12){

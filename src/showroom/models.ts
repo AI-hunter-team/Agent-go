@@ -111,16 +111,16 @@ function roomSign(text:string,position:XYZ,width=4,yaw=0){
   return {mesh,dispose:()=>{mesh.geometry.dispose();material.dispose();map.dispose();}};
 }
 
-export function assembledRoom(kit:StationKit,p:GeneratedPalette,d:WorldDefinition=generateWorld(1,{version:previewWorldVersion()})){
+export function assembledRoom(kit:StationKit,p:GeneratedPalette,d:WorldDefinition=generateWorld(1,{version:previewWorldVersion()}),standard=true){
   if(d.architecture){
-    const model=createStationV2Architecture(d,p),devices:Group[]=[],owned:Group[]=[],signs:ReturnType<typeof roomSign>[]=[];
+    const model=createStationV2Architecture(d,p,standard),devices:Group[]=[],owned:Group[]=[],signs:ReturnType<typeof roomSign>[]=[];
     for(const f of d.layout.FACILITIES){const device=kit.models.get(f.kind==="tvm"?"ticket-machine":f.kind==="security"?"security-arch":"fare-gate")!.clone(true);device.position.set(...devicePosition(f.kind,f.pos.x,f.pos.y,f.queueDirection));device.rotation.y=Math.atan2(f.queueDirection?.x??-1,f.queueDirection?.y??0);model.root.add(device);devices.push(device);}
     for(const detail of d.details){const root=createGeneratedProp(detail,p);root.position.set(detail.pos.x,detail.pos.floorId==="platform"?-6:0,detail.pos.y);model.root.add(root);owned.push(root);}
     const addSign=(text:string,position:XYZ,width:number,yaw=0)=>{const s=roomSign(text,position,width,yaw);signs.push(s);model.root.add(s.mesh);};
     for(const s of serviceBankSigns(d))addSign(s.text,[s.x,2.8,15],4,s.west?-Math.PI/2:Math.PI/2);
     for(const c of d.connectors!)addSign(`${c.groupId} ${c.kind==="stairs"?"楼梯":"扶梯"} ↓ 站台`,[c.from.x,2.7,c.from.y],2.8,c.to.x>c.from.x?-Math.PI/2:Math.PI/2);
     for(const x of stationNamePositions(d))for(const side of [-1,1])addSign("青禾站 / QINGHE",[x,-3.27,15+side*6.65],4,side>0?Math.PI:0);
-    const detailScene=d.props?stationDetailScene(d,p,kit):null;
+    const detailScene=d.props?stationDetailScene(d,p,kit,standard):null;
     if(detailScene)model.root.add(detailScene.root);
     const view=(id:string)=>{const v=d.architecture!.views.find(v=>v.id===id)!;return {eye:v.eye,target:v.target};};
     const views:Record<RoomView,CameraPose>={overview:{eye:[d.layout.WIDTH*.86,Math.max(45,d.layout.WIDTH*.6),65],target:[d.layout.WIDTH/2,-2,15]},hall:view("gate"),entrance:view("gate"),connections:view("descent"),platform:view("platform"),services:view("gate")};
