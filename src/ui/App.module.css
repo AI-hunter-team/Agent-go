@@ -64,6 +64,9 @@
 .endCaption { position: absolute; bottom: 24px; left: 24px; padding: 20px 24px; background: #f8f4e8f2; max-width: calc(100% - 48px); }
 .endCaption h2 { font-size: 24px; font-weight: 500; margin: 0 0 8px; }
 .endCaption p { font-size: 13px; color: var(--muted); margin: 0; }
+.endCaption.victoryCaption { bottom: 16px; left: 16px; padding: 10px 14px; pointer-events: none; }
+.victoryCaption h2 { font-size: 16px; margin: 0; }
+.scene canvas:focus-visible { outline: 2px solid var(--ochre); outline-offset: -3px; }
 .sceneError, .loading { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 120px 32px; text-align: center; gap: 12px; background: #e8e5d9; }
 .sceneError { z-index: 2; }
 .sceneError p { max-width: 400px; font-size: 14px; line-height: 1.8; }
