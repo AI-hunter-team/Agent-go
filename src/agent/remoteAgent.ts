@@ -17,13 +17,22 @@ let activeModelToken: string | null = null;
 
 async function api<T>(path: string, init: { method?: string; body?: unknown; configToken?: string | null } = {}): Promise<T> {
   const token = init.configToken === undefined ? activeModelToken : init.configToken;
-  const res = await fetch(path, {
-    signal: AbortSignal.timeout(30_000),
-    method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-    headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}) },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(path, {
+      signal: AbortSignal.timeout(30_000),
+      method: init.method ?? (init.body === undefined ? "GET" : "POST"),
+      headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}) },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+    text = await res.text();
+  } catch (error) {
+    if (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)) {
+      throw new Error("本地服务或模型响应超时，请稍后重试");
+    }
+    throw new Error("无法连接本地 API 服务，请确认前后端服务正在运行后重试");
+  }
   let data;
   try { data = text ? JSON.parse(text) : null; }
   catch { throw new Error("API 服务返回格式异常，请检查服务是否已启动"); }

@@ -48,6 +48,17 @@ describe("OpenAI-compatible model", () => {
     expect(requests[0].init.redirect).toBe("error");
   });
 
+  test("lets DeepSeek choose whether to call a tool while keeping normal thinking", async () => {
+    const deepseekConfig = { ...cfg, model: "deepseek-v4-pro", reasoningEffort: "low" as const };
+    const fetcher = (async (_url: string | URL | Request, init: RequestInit) => {
+      const body = JSON.parse(init.body as string);
+      expect(body).toMatchObject({ model: "deepseek-v4-pro", reasoning_effort: "low", tool_choice: "auto" });
+      return Response.json({ ...completion(), model: "deepseek-v4-pro" });
+    }) as typeof fetch;
+    const service = new OpenAILlmService(new OpenAIClient("https://api.deepseek.com/v1", "test-secret", fetcher), deepseekConfig);
+    expect((await service.decide(new SessionStore().create("", null), turn())).action).toEqual({ type: "join_queue", facility: "TVM-1", reason: "先买票" });
+  });
+
   test("carries tool results, observations and player guidance between turns and clears sessions", async () => {
     const { service, requests } = fake([completion(), completion([call(undefined, "call2")])]);
     const store = new SessionStore();
