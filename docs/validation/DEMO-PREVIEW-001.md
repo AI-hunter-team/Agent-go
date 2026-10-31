@@ -2,6 +2,8 @@
 
 身份：2026-10-31 本地启动与页面显示核对，不代表真实模型整局或用户验收通过。范围见[任务简报](../tasks/DEMO-PREVIEW-001.md)。
 
+后续：5173 已由 [FINAL-LOCAL-001](FINAL-LOCAL-001.md) 切换到原目录完整合并构建，以下隔离副本/PID 为本轮历史记录，不再描述当前服务。
+
 - 执行人：本聊天 Codex。
 - 基线：原目录 HEAD `b1ef12e2ba571573906f12b49bb5f23bf7c8a303`，开始时干净；fetch 后主线为 `186682486f46615f86e915088067c53ab02b95d9`，包含 PR #22 与 #23。
 - 运行副本：`.codex/demo-preview-001/source/`，由该提交的 `git archive` 导出，不包含未提交的集成工作区。现有依赖通过本地 node_modules junction 复用；package 与 lock 相对原目录只有包名差异，无依赖版本差异。
