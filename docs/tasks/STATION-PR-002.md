@@ -1,6 +1,6 @@
 # STATION-PR-002：站厅显示与地铁栏杆 PR 交付
 
-状态：本地集成验证通过，PR 已创建，远端 CI 待核实，2026-10-31（Asia/Shanghai）。流程见 [DEVELOPMENT](../DEVELOPMENT.md)。
+状态：最新 main 集成及本地复验通过，待最终 CI 后合入 PR #27，2026-10-31（Asia/Shanghai）。流程见 [DEVELOPMENT](../DEVELOPMENT.md)。
 
 ## 目标与分工
 
@@ -41,3 +41,10 @@
 - 路径继续沿用原简报；直接继承 main 的 movement/world、App/ControlPanel、API、现有测试及 CI 配置，不重做其规则。当前 GitHub 无人工/AI 审查条目。
 - 上游 CHARACTER-JITTER-001 已记录移动修复后 seed28 合法超时、seed27 在115.5秒到站台；原99.1秒证据仅代表旧移动版本。允许既有 `scripts/metro-railings/game-check.mjs` 接受显式seed，默认用上游已验证的27，保留原成功标志断言；无需更改玩法或业务测试。
 - 新组合使用 main 已确认的 `npm test -- --maxWorkers=2 --testTimeout=15000`，执行类型、构建与必要浏览器复验。通过最终头的远端 CI/Compose 后合并，结果追加同一验证报告及PR；不把旧快照成绩用于新组合。
+
+### 最新组合结果
+
+- 中央记录唯一冲突已保留双方任务；main 的移动修复、时限选择、API、CI及现有测试与上游相同。验收脚本显式seed27/默认27，不更改对局成功断言。
+- 类型、56文件/478测试、主程序及两个预览构建、184个Markdown相对文件链接和差异检查通过。Windows本地使用 `npm.cmd test -- --maxWorkers=2 --testTimeout=15000` 保留参数。
+- 新组合生产浏览器seed27在默认120秒时限下115.5秒到站台；栏杆/楼梯/反射、视角资源稳定与失败重试通过，控制台error0。旧seed28/99.1秒仅为前一版本证据。
+- 最终提交推送后核实 CI/Compose 并合并；远端状态及合入证据由 [PR #27](https://github.com/AI-hunter-team/Agent-go/pull/27) 承载。未运行真实模型或部署。

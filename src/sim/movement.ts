@@ -53,7 +53,7 @@ export function clearOfScenery(from: Vec, to: Vec, radius: number): boolean {
   });
 }
 
-/** Local steering uses look-ahead to choose a clear route, then sweeps the actual stride. */
+/** Choose a swept, collision-safe stride; wait when an occupied nearby waypoint cannot be reached. */
 export function steer(from: Vec, target: Vec, stride: number, radius: number, others: readonly MovingBody[], allowDetour = true): Vec {
   const distance = dist(from, target);
   if (distance < 1e-8) return { ...from };
@@ -62,6 +62,8 @@ export function steer(from: Vec, target: Vec, stride: number, radius: number, ot
   const direct = moveToward(from, target, step);
   const horizon = Math.min(distance, Math.max(step, 1.15));
   if (safe(moveToward(from, target, horizon)) && safe(direct)) return direct;
+  // Circling a blocked point within one stride causes tiny back-and-forth steps and 180° turns.
+  if (distance <= stride) return { ...from };
   if (!allowDetour) return safe(direct) ? direct : { ...from };
   const heading = Math.atan2(target.y - from.y, target.x - from.x);
   // Both oncoming walkers prefer their own right, so their passing sides agree.
@@ -77,21 +79,50 @@ export function steer(from: Vec, target: Vec, stride: number, radius: number, ot
   return best ?? { ...from };
 }
 
-/** Route around a whole waiting line, so local steering does not oscillate between its passengers. */
-export function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect[]): Vec {
+/** Route around queues and solid fixtures together, so a queue detour cannot lead into a machine. */
+export function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect[], radius = personRadius("normal")): Vec {
   const blockers = queues.filter((r) => !contains(r, from) && !contains(r, target));
-  const visible = (a: Vec, b: Vec) => blockers.every((r) => !segmentIntersectsRect(a, b, r));
+  // Keep the cheap queue-only route when it is already safe; build a combined graph only at fixtures.
+  const queueWaypoint = queueDetour(from, target, blockers);
+  if (clearOfScenery(from, queueWaypoint, radius)) return queueWaypoint;
+  return queueDetour(from, target, blockers, radius);
+}
+
+const detourGraphs = new Map<number, { points: Vec[]; clear: boolean[][] }>();
+
+/** Cache the fixed station geometry by body radius; moving queues are checked separately each tick. */
+function detourSceneryGraph(radius: number) {
+  const cached = detourGraphs.get(radius);
+  if (cached) return cached;
+  const margin = radius + 0.03;
+  const points = SCENERY_OBSTACLES.flatMap((r) => [
+    { x: r.x - margin, y: r.y - margin }, { x: r.x + r.w + margin, y: r.y - margin },
+    { x: r.x - margin, y: r.y + r.h + margin }, { x: r.x + r.w + margin, y: r.y + r.h + margin },
+  ]).filter((point) => clearOfScenery(point, point, radius));
+  const graph = { points, clear: points.map((a) => points.map((b) => clearOfScenery(a, b, radius))) };
+  detourGraphs.set(radius, graph);
+  return graph;
+}
+
+/** Find the next visible corner; optionally include body-inflated fixture corners and edges. */
+function queueDetour(from: Vec, target: Vec, blockers: readonly Rect[], radius?: number): Vec {
+  // Every candidate edge must be safe for this passenger's body, not just clear of the queue.
+  const visible = (a: Vec, b: Vec) => (radius === undefined || clearOfScenery(a, b, radius)) && blockers.every((r) => !segmentIntersectsRect(a, b, r));
   if (visible(from, target)) return target;
-  const points = [from, target, ...blockers.flatMap((r) => [
+  const corners = blockers.flatMap((r) => [
     { x: r.x - 0.03, y: r.y - 0.03 }, { x: r.x + r.w + 0.03, y: r.y - 0.03 },
     { x: r.x - 0.03, y: r.y + r.h + 0.03 }, { x: r.x + r.w + 0.03, y: r.y + r.h + 0.03 },
-  ])];
+  ]).filter((point) => visible(point, point));
+  const graph = radius === undefined ? undefined : detourSceneryGraph(radius);
+  const staticStart = 2 + corners.length;
+  const points = [from, target, ...corners, ...(graph?.points ?? [])];
   const costs = points.map(() => Infinity), previous = points.map(() => -1), done = new Set<number>();
   costs[0] = 0;
   for (;;) {
     let u = -1;
     for (let i = 0; i < points.length; i++) if (!done.has(i) && Number.isFinite(costs[i]) && (u < 0 || costs[i] < costs[u])) u = i;
-    if (u < 0) return target;
+    // Wait for a blocked route to clear instead of feeding an impossible target to local steering.
+    if (u < 0) return radius === undefined ? target : from;
     if (u === 1) {
       while (previous[u] > 0) u = previous[u];
       return points[u];
@@ -99,7 +130,11 @@ export function detourAroundQueues(from: Vec, target: Vec, queues: readonly Rect
     done.add(u);
     for (let v = 1; v < points.length; v++) {
       const cost = costs[u] + dist(points[u], points[v]);
-      if (!done.has(v) && cost < costs[v] && visible(points[u], points[v])) { costs[v] = cost; previous[v] = u; }
+      if (done.has(v) || cost >= costs[v]) continue;
+      const clear = graph && u >= staticStart && v >= staticStart
+        ? graph.clear[u - staticStart][v - staticStart] && blockers.every((r) => !segmentIntersectsRect(points[u], points[v], r))
+        : visible(points[u], points[v]);
+      if (clear) { costs[v] = cost; previous[v] = u; }
     }
   }
 }

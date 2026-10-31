@@ -172,6 +172,7 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
     }),
   );
 
+  // 校验可选时限与固定客流，并将本局设置冻结到模型会话。
   app.post("/api/session", wrap((req, res) => {
     const { guidance = "", normalized = null, settings } = req.body ?? {};
     const err = guidanceError(guidance);
@@ -180,11 +181,11 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
     validateNormalized(normalized);
     const settingsError = gameSettingsError(settings);
     if (settingsError) return void res.status(400).json({ error: settingsError });
-    if (settings && (settings.timeLimitSeconds !== DEFAULT_GAME_SETTINGS.timeLimitSeconds || settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople)) {
-      return void res.status(400).json({ error: `对局规则固定为 ${DEFAULT_GAME_SETTINGS.timeLimitSeconds} 秒、每条初始开放队列额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
+    if (settings && settings.extraQueuePeople !== DEFAULT_GAME_SETTINGS.extraQueuePeople) {
+      return void res.status(400).json({ error: `每条初始开放队列固定额外 ${DEFAULT_GAME_SETTINGS.extraQueuePeople} 人，请刷新页面后重新开局` });
     }
     const binding = runtime(req);
-    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined);
+    const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
     void debugLogger.write({ event: "session_start", runId: s.runId, sessionId: s.id, settings: s.settings, model: llm?.model ?? null, modelParameters, guidance, normalized });

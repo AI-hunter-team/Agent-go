@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
 import { World } from "../src/sim/world";
-import { clearOfScenery, personRadius, steer, sweptDistance } from "../src/sim/movement";
+import { clearOfScenery, detourAroundQueues, personRadius, steer, sweptDistance } from "../src/sim/movement";
+import { segmentIntersectsRect } from "../src/sim/geometry";
 import { DT } from "../src/sim/scenario";
 
+/** Advance a small crowd while checking separation throughout each interpolated step. */
 function walkThrough(world: World, ticks = 300) {
   let lateral = 0;
   for (let i = 0; i < ticks; i++) {
@@ -124,4 +126,34 @@ test("a clear look-ahead cannot bypass the sweep of the actual short stride", ()
   const other = { id: "crossing", from: { x: 2.05, y: 2.04 }, pos: { x: 2.05, y: 1.96 }, radius: 0.005 };
   const next = steer(from, { x: 3, y: 2 }, 0.1, 0.005, [other]);
   expect(sweptDistance(from, next, other.from, other.pos)).toBeGreaterThanOrEqual(0.03 - 1e-6);
+});
+
+// A queue's machine-side corner is inside TVM-3's body clearance: route around both obstacles.
+test("a queue detour beside a ticket machine reaches its waypoint without oscillating", () => {
+  let pos = { x: 14.4, y: 24.8 };
+  const target = { x: 13.475, y: 23.225 };
+  const queue = { x: 8, y: 23.33, w: 5.72, h: 1.34 };
+  const radius = personRadius("normal");
+  for (let tick = 0; tick < 200 && Math.hypot(pos.x - target.x, pos.y - target.y) > 1e-6; tick++) {
+    const waypoint = detourAroundQueues(pos, target, [queue], radius);
+    const next = steer(pos, waypoint, 0.13, radius, []);
+    expect(clearOfScenery(pos, next, radius)).toBe(true);
+    expect(segmentIntersectsRect(pos, next, queue)).toBe(false);
+    pos = next;
+  }
+  expect(pos.x).toBeCloseTo(target.x);
+  expect(pos.y).toBeCloseTo(target.y);
+});
+
+// A passenger almost at an occupied slot should stand still, then advance when it clears.
+test("a blocked nearby waypoint waits without sideways jitter and resumes when clear", () => {
+  const from = { x: 12.37, y: 24.015 };
+  const target = { x: 12.4, y: 24 };
+  const neighbor = { id: "queue-head", pos: { x: 13.05, y: 24 }, radius: 0.32 };
+  let pos = from;
+  for (let tick = 0; tick < 20; tick++) {
+    pos = steer(pos, target, 0.08, 0.32, [neighbor]);
+    expect(pos).toEqual(from);
+  }
+  expect(steer(pos, target, 0.08, 0.32, [])).toEqual(target);
 });

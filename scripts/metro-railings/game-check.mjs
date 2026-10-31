@@ -1,7 +1,9 @@
 import { browserCheck, sleep } from "../station-kit/browser-harness.mjs";
 
-const [chrome, output, address, mode = "full"] = process.argv.slice(2);
-if (!chrome || !output || !address) throw new Error("Usage: node scripts/metro-railings/game-check.mjs <chrome> <output-directory> <game-url?debug=1> [full|failure]");
+const [chrome, output, address, mode = "full", seedArgument = "27"] = process.argv.slice(2);
+if (!chrome || !output || !address) throw new Error("Usage: node scripts/metro-railings/game-check.mjs <chrome> <output-directory> <game-url?debug=1> [full|failure] [seed=27]");
+const seed = Number(seedArgument);
+if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error("Seed must be an unsigned 32-bit integer.");
 await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, click, screenshot, consoleErrors, responses }) => {
   if (mode === "failure") {
     await send("Network.setBlockedURLs", { urls: ["*/assets/metro-railings/models/glass-straight.glb"] });
@@ -25,7 +27,7 @@ await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, cl
     await click("跟随"); await sleep(300); cycles.push(await evaluate("window.stationSceneInspect()"));
   }
   if (cycles[2].gpuGeometries !== cycles[1].gpuGeometries || cycles[2].gpuTextures !== cycles[1].gpuTextures) throw new Error("Formal scene resources grew: " + JSON.stringify(cycles));
-  await evaluate("(()=>{const input=document.querySelector('#scenario-seed');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'28');input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await evaluate(`(()=>{const input=document.querySelector('#scenario-seed');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(String(seed))});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await click("准备开局"); await click("出发"); await click("4×");
   let seenSecurity = false, seenStairs = false, ending;
   const deadline = Date.now() + 150000;
@@ -43,5 +45,5 @@ await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, cl
   if (!ending?.player.onPlatform || !ending.player.screened || !ending.player.passedGate || !seenStairs) throw new Error("Offline journey incomplete: " + JSON.stringify({ ending, seenStairs }));
   await screenshot("06-platform.png");
   if (consoleErrors.length) throw new Error(consoleErrors.join("\n"));
-  return { initial, cycles: cycles.map((s) => ({ geometries: s.gpuGeometries, textures: s.gpuTextures })), ending, seenSecurity, seenStairs, loadedNewModels: responses.filter((r) => r.url.includes('/assets/metro-railings/models/') && r.status === 200).length };
+  return { seed, initial, cycles: cycles.map((s) => ({ geometries: s.gpuGeometries, textures: s.gpuTextures })), ending, seenSecurity, seenStairs, loadedNewModels: responses.filter((r) => r.url.includes('/assets/metro-railings/models/') && r.status === 200).length };
 });
