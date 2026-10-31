@@ -3,6 +3,7 @@ import {
   Suspense,
   lazy,
   useCallback,
+  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -74,6 +75,7 @@ export function App() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
+  const [expandedReviewGeneration, setExpandedReviewGeneration] = useState<number | null>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [renderer, setRenderer] = useState<"3d" | "2d">("3d");
   const [metrics] = useState(() => new FrameMetrics());
@@ -127,6 +129,12 @@ export function App() {
     setAssetError("");
   };
   const broadcast = useBroadcast(session, watching);
+  const won = report?.status === "success";
+  const expandedReview = won && expandedReviewGeneration === session.generation;
+  // 胜利展示始终从透视镜头开始；用户之后可自行切换镜头。
+  useEffect(() => {
+    if (won) j.setCamera((current) => current.mode === "follow" ? current : { ...current, mode: "follow" });
+  }, [won, j.setCamera]);
 
   const remaining = Math.max(
     0,
@@ -686,8 +694,9 @@ export function App() {
               <button
                 onClick={() =>
                   j.setCamera((c) => ({
+                    ...c,
                     mode: c.mode === "follow" ? "overview" : "follow",
-                    reset: c.reset,
+                    command: (c.command ?? 0) + 1,
                   }))
                 }
               >
@@ -695,7 +704,7 @@ export function App() {
               </button>
               <button
                 onClick={() =>
-                  j.setCamera((c) => ({ mode: "follow", reset: c.reset + 1 }))
+                  j.setCamera((c) => ({ ...c, mode: "follow", reset: c.reset + 1, command: (c.command ?? 0) + 1 }))
                 }
               >
                 回正
@@ -717,9 +726,20 @@ export function App() {
             </div>
           </>
         )}
+        {won && renderer === "3d" && (
+          <div className={styles.victoryControls} aria-label="胜利镜头控制">
+            <button onClick={() => j.setCamera((c) => ({ ...c, mode: c.mode === "follow" ? "overview" : "follow", command: (c.command ?? 0) + 1 }))}>
+              {j.camera.mode === "follow" ? "总览" : "跟随"}
+            </button>
+            <button onClick={() => j.setCamera((c) => ({ ...c, mode: "follow", reset: c.reset + 1, command: (c.command ?? 0) + 1 }))}>回正</button>
+          </div>
+        )}
         {report && (
-          <section className={`${styles.review} ${styles.panel}`}>
-            <h1>行程复盘</h1>
+          <section className={`${styles.review} ${styles.panel} ${won && !expandedReview ? styles.reviewSuccess : ""}`}>
+            <div className={styles.reviewHeading}>
+              <h1>行程复盘</h1>
+              {won && <button aria-expanded={expandedReview} onClick={() => setExpandedReviewGeneration(expandedReview ? null : session.generation)}>{expandedReview ? "缩小复盘" : "展开复盘"}</button>}
+            </div>
             <div className={styles.reviewGrid}>
               <div>
                 <ReportSummary
