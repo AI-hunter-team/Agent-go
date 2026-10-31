@@ -157,7 +157,10 @@ export function App() {
     latest?.action?.reason || latest?.result?.text || "等待下一次决定";
   const onModelLoadStart = useCallback((url: string) => {
     const key = modelResourceKey(url);
-    if (loadedModelUrls.current.has(key)) return;
+    if (loadedModelUrls.current.has(key)) {
+      setModelLoading({ url: key, status: "loaded", progress: 100 });
+      return;
+    }
     setModelLoading((current) =>
       current.url === key && current.status === "loading"
         ? current

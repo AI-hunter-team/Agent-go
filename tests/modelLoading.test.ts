@@ -21,4 +21,8 @@ describe("model loading overlay state", () => {
   test("treats cache-busting query strings as the same model resource", () => {
     expect(modelResourceKey("/models/character.gltf?v=2")).toBe("/models/character.gltf");
   });
+
+  test("keeps cached resources out of the active loading state", () => {
+    expect(shouldShowModelLoadingOverlay(state({ status: "loaded", progress: 100 }))).toBe(false);
+  });
 });
