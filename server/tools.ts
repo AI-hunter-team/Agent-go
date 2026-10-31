@@ -28,7 +28,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
 
 /** Kept in a fixed order so the prompt prefix stays cacheable. */
 export const AGENT_TOOLS = [
-  tool("move_to", "走到某个地点或某个设施附近；可从入口直接选择公开地图中的设施，无需先经过大厅中部等导航点。如果正在排队，会离开队伍并失去位次。", {
+  tool("move_to", "走到某个地点或某个设施当前队尾；可从入口直接选择公开地图中的设施，无需先经过大厅中部等导航点。如果正在排队，会离开队伍并失去位次。", {
     target: { type: "string", enum: TARGETS, description: "地点编号或设施编号" },
   }),
   tool("join_queue", "直接走到设施的队尾并加入排队；无需先 move_to 导航点或设施附近，设施尚不可见时也可依据公开地图选择，实时状态与能否加入由环境裁定。排到队首后自动办理。对当前所在队伍调用表示继续排队。", {

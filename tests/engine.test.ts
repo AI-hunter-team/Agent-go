@@ -36,6 +36,18 @@ describe("engine", () => {
     expect(act(e, { type: "join_queue", facility: "X9" }).text).toContain("TVM-1");
   });
 
+  test("moving to a facility heads for its current queue tail", () => {
+    const e = new Engine(1);
+    e.takeTriggers();
+    const f = e.world.facility("S2")!;
+    const tail = e.world.queueStandPoint(f, f.queue.length, e.player.kind);
+    const result = act(e, { type: "move_to", target: "S2" });
+    expect(result.ok).toBe(true);
+    expect(e.player.activity).toMatchObject({ kind: "walking", label: "2号安检通道队尾" });
+    expect(e.player.activity.kind === "walking" && e.player.activity.path.at(-1)).toEqual(tail);
+    expect(e.player.pos.x).toBeLessThan(tail.x);
+  });
+
   test("a scripted orderly run descends after the gate and is scored on platform arrival", () => {
     const e = new Engine(1, { timeLimitSeconds: 180, extraQueuePeople: 0 });
     e.takeTriggers();

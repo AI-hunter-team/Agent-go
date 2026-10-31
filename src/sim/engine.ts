@@ -312,7 +312,7 @@ export class Engine {
         return {ok:true,text: `${n.id}：${n.persona ? Object.values(n.persona.look).flat().join("、") : n.kind}；${n.activity.kind}；手持：${holding}`} ;
       }
       case "move_to": {
-        const target = resolveTarget(action.target);
+        const target = resolveTarget(action.target, w, p);
         if (!target) return { ok: false, text: `未知地点 ${action.target}。可用：${NAV_NODES.map((n) => n.id).join("、")}，或设施编号` };
         if (!findPath(p.pos, target.pos)) return { ok: false, text: "目标不可步行到达，保留当前动作与队列位次" };
         const left = this.leaveIfQueued();
@@ -383,13 +383,20 @@ export class Engine {
   }
 }
 
-function resolveTarget(id: string): { pos: Vec; label: string } | null {
+function resolveTarget(id: string, world: World, person: Person): { pos: Vec; label: string } | null {
   const node = nodeById(id);
   if (node) return { pos: node.pos, label: node.label };
   const f = FACILITIES.find((d) => d.id === id);
   if (f) {
-    const beside = queueSlot(f, f.kind === "gate" ? 0 : 2);
-    return { pos: { x: beside.x, y: beside.y + 1.2 }, label: `${f.label}附近` };
+    const facility = world.facility(f.id)!;
+    // A facility target is an approach to its current queue tail. This keeps
+    // exploratory movement from dropping the player at the service head and
+    // then forcing a second decision to walk back to the line.
+    const current = world.queuePosition(person);
+    const queueLengthAfterLeaving = current?.facility.def.id === f.id
+      ? Math.max(0, facility.queue.length - 1)
+      : facility.queue.length;
+    return { pos: world.queueStandPoint(facility, queueLengthAfterLeaving, person.kind), label: `${f.label}队尾` };
   }
   return null;
 }
