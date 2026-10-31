@@ -36,21 +36,32 @@ function player() {
 
 /** 统一普通展示参数，使各验证只设置实际变化的状态。 */
 function frame(overrides: Partial<AnimationFrame> = {}): AnimationFrame {
-  return { motion: "idle", delta: 1 / 30, speed: 1, frozen: false, reducedMotion: false, dance: "", victoryTime: 0, greetingTime: null, ...overrides };
+  return { motion: "idle", delta: 1 / 30, speed: 1, frozen: false, reducedMotion: false, dance: "", victoryTime: 0, greetingTime: null,
+    danceTime: overrides.victoryTime ?? 0, previousDance: "", previousDanceTime: 0, ...overrides };
 }
 
 describe("胜利和问候的独立展示", () => {
-  it("每局只抽一次，重建资源不重抽，新局清除问候和接管状态", () => {
+  it("每段完整播完重新随机，重挂载不打断当前段，新局清理", () => {
     let calls = 0;
     const state = new ScenePerformance(() => {}, () => { calls++; return 0.55; });
-    state.setClips(["dance_05", "dance_02", "dance_03"], 2.83);
+    const dances = ["dance_02", "dance_03", "dance_05"].map((name) => ({ name, duration: 1 }));
+    state.setClips(dances, 2.83);
     state.sync(1, false); expect(state.dance).toBe("");
     expect(state.greet(false)).toBe(true); expect(state.greet(false)).toBe(false);
-    state.advance(0.1); state.advance(0.1); state.setClips(["dance_02", "dance_03", "dance_05"], 2.83);
+    state.advance(0.1); state.advance(0.1); state.setClips(dances, 2.83);
     expect(state.greetingTime).toBeCloseTo(0.1);
     state.sync(1, true); expect(state.greetingTime).toBeNull(); expect(state.dance).toBe("dance_03");
-    state.setClips([], 0); state.setClips(["dance_02", "dance_03", "dance_05"], 2.83);
+    state.setClips(dances, 2.83);
     state.sync(1, true); expect(calls).toBe(1); expect(state.dance).toBe("dance_03");
+    for (let i = 0; i < 9; i++) state.advance(0.1);
+    expect(state.dance).toBe("dance_03"); expect(calls).toBe(1);
+    state.advance(0.1); expect(calls).toBe(2); expect(state.dance).toBe("dance_05"); expect(state.previousDance).toBe("dance_03");
+    expect(state.previousDanceTime).toBe(1); expect(state.danceTime).toBe(0);
+    state.setClips(dances, 2.83); expect(calls).toBe(2);
+    for (let i = 0; i < 10; i++) state.advance(0.1);
+    expect(calls).toBe(3); expect(state.dance).toBe("dance_03");
+    for (let i = 0; i < 20; i++) state.advance(0.1, true);
+    expect(calls).toBe(3); expect(state.danceTime).toBeCloseTo(0);
     state.dismissCamera(); expect(state.cinematic).toBe(false); expect(state.needsFrames(false)).toBe(true);
     state.sync(2, false); expect(state.dance).toBe(""); expect(state.cinematicDismissed).toBe(false); expect(state.greetingTime).toBeNull();
   });
@@ -78,9 +89,10 @@ describe("胜利和问候的独立展示", () => {
       expect(bones.some((b, i) => b.quaternion.angleTo(before[i]) > 0.05)).toBe(true);
       const position = hips.getWorldPosition(new Vector3());
       expect(position.x).toBeCloseTo(anchor.x, 5); expect(position.z).toBeCloseTo(anchor.z, 5);
-      const cycle = asset.animations.find((clip) => clip.name === dance)!.duration - 0.25;
-      animator.update(frame({ dance, victoryTime: cycle - 0.0001 })); const tail = bones.map((b) => b.quaternion.clone());
-      animator.update(frame({ dance, victoryTime: cycle + 0.0001 }));
+      const duration = asset.animations.find((clip) => clip.name === dance)!.duration;
+      const next = animator.performances.dances[(animator.performances.dances.indexOf(dance) + 1) % 3];
+      animator.update(frame({ dance, victoryTime: duration - 0.0001 })); const tail = bones.map((b) => b.quaternion.clone());
+      animator.update(frame({ dance: next, victoryTime: duration + 0.0001, danceTime: 0.0001, previousDance: dance, previousDanceTime: duration }));
       expect(Math.max(...bones.map((b, i) => b.quaternion.angleTo(tail[i])))).toBeLessThan(0.02);
     }
     expect(new Box3().setFromObject(model).getSize(new Vector3()).y).toBeGreaterThan(0);

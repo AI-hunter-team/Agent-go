@@ -4,8 +4,9 @@ import { findAvatarClip } from "../avatarModel";
 
 /** 收集模型自身的舞蹈和问候，兼容导出器的数字后缀。 */
 export function findPerformanceClips(clips: AnimationClip[]) {
+  const danceClips = clips.filter((clip) => /dance|victory|celebrat|胜利|舞蹈|庆祝/i.test(clip.name) && clip.duration > 0);
   return {
-    dances: clips.filter((clip) => /dance|victory|celebrat|胜利|舞蹈|庆祝/i.test(clip.name) && clip.duration > 0).map((clip) => clip.name).sort(),
+    dances: danceClips.map((clip) => clip.name).sort(), danceClips,
     greeting: clips.find((clip) => /greet|hello|wave|问候|招手|挥手/i.test(clip.name) && clip.duration > 0),
   };
 }
@@ -23,6 +24,7 @@ function upperBodyTracks(model: Object3D, clip: AnimationClip, upper: boolean) {
 export interface AnimationFrame {
   motion: Motion; delta: number; speed: number; frozen: boolean; reducedMotion: boolean;
   dance: string; victoryTime: number; greetingTime: number | null;
+  danceTime: number; previousDance: string; previousDanceTime: number;
 }
 
 /** 显式采样并混合骨架动作：正常步态、完整/上半身问候和无硬切的舞蹈循环。 */
@@ -76,13 +78,12 @@ export class AvatarAnimator {
     action.time = loop && clip.duration > 0 ? time % clip.duration : Math.min(Math.max(0, time), clip.duration);
   }
 
-  /** 用上一轮尾部与下一轮开头交叠，避免 LoopRepeat 在首尾姿态不同的素材上硬跳。 */
-  private danceLoop(name: string, time: number, weight: number) {
-    const duration = this.clips.get(name)!.duration, overlap = Math.min(0.25, duration / 4);
-    const cycle = duration - overlap, phase = time % cycle;
-    const blend = time >= cycle && phase < overlap ? phase / overlap : 1;
-    this.sample(name, phase, weight * blend);
-    this.sample(`${name}:loop`, cycle + phase, weight * (1 - blend));
+  /** 上段完整播放后，用其末帧平滑过渡到随机下一段，保留每段完整时长。 */
+  private danceTransition(name: string, time: number, previous: string, previousTime: number, weight: number) {
+    const overlap = Math.min(0.25, this.clips.get(name)!.duration / 4);
+    const blend = previous && this.clips.has(previous) ? Math.min(1, time / overlap) : 1;
+    this.sample(name, time, weight * blend);
+    this.sample(`${previous}:loop`, previousTime, weight * (1 - blend));
   }
 
   /** 基础动作负责腿部移动；问候按移动状态平滑切换全身或上半身遮罩。 */
@@ -113,7 +114,7 @@ export class AvatarAnimator {
     }
     if (dance) {
       if (frame.reducedMotion) this.sample(dance.name, Math.min(1, dance.duration * 0.35), 1);
-      else this.danceLoop(dance.name, frame.victoryTime, danceWeight);
+      else this.danceTransition(dance.name, frame.danceTime, frame.previousDance, frame.previousDanceTime, danceWeight);
     }
     this.mixer.update(0);
   }

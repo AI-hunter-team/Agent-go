@@ -42,7 +42,7 @@ function RenderSchedule({ session, targetFps, metrics, reducedMotion }: Pick<Sce
   const { invalidate, gl } = useThree();
   const performanceState = getScenePerformance(session);
   // 先推进展示秒表，再让角色和相机采样；不使用 R3F 的累计运行时间。
-  useFrame((_, delta) => { getScenePerformance(session).advance(delta); }, -2);
+  useFrame((_, delta) => { getScenePerformance(session).advance(delta, reducedMotion); }, -2);
   useEffect(() => {
     let raf = 0;
     let last = 0;
@@ -272,7 +272,7 @@ function Contents(props: SceneProps) {
       const point = root ? root.getWorldPosition(new Vector3()).add(new Vector3(0, 0.9, 0)).project(camera) : new Vector3();
       const rect = gl.domElement.getBoundingClientRect();
       return { generation: session.generation, t: session.engine.t, status: session.engine.status, displayTime: performance.time,
-        visible: performance.visible, dance: performance.dance, victoryTime: performance.victoryTime, greetingTime: performance.greetingTime,
+        visible: performance.visible, dance: performance.dance, danceTime: performance.danceTime, previousDance: performance.previousDance, victoryTime: performance.victoryTime, greetingTime: performance.greetingTime,
         cinematic: performance.cinematic, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
         position: root?.position.toArray(), bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
     };

@@ -7,52 +7,64 @@ export class ScenePerformance {
   delta = 0;
   victoryAt: number | null = null;
   dance = "";
+  previousDance = "";
+  previousDanceTime = 0;
+  private danceAt = 0;
   cinematicDismissed = false;
   greetingAt: number | null = null;
   greetingDuration = 0;
   selectedUntil = 0;
   visible = true;
-  private roll = 0;
-  private dances: string[] = [];
+  private dances: { name: string; duration: number }[] = [];
   private asset = "";
   private skipFrame = true;
 
   /** 通过原会话通知唤醒画面，但不推进世界时间。 */
   constructor(private readonly notify: () => void = () => {}, private readonly random: () => number = Math.random) {}
 
-  /** 新局清理展示；第一次胜利只抽取一次，与 Canvas 生命周期无关。 */
+  /** 新局清理展示；第一次胜利开始舞蹈序列，与 Canvas 生命周期无关。 */
   sync(generation: number, success: boolean) {
     if (generation !== this.generation) {
       this.generation = generation; this.time = 0; this.delta = 0; this.victoryAt = null;
-      this.dance = ""; this.greetingAt = null; this.selectedUntil = 0;
+      this.dance = ""; this.previousDance = ""; this.previousDanceTime = 0; this.danceAt = 0;
+      this.greetingAt = null; this.selectedUntil = 0;
       this.cinematicDismissed = false; this.skipFrame = true;
     }
     if (success && this.victoryAt === null) {
-      this.victoryAt = this.time; this.roll = this.random(); this.greetingAt = null;
+      this.victoryAt = this.time; this.greetingAt = null;
       this.chooseDance();
     }
   }
 
   /** 资源加载后登记自身动作；不把其他角色的动画移植到当前骨架。 */
-  setClips(dances: string[], greetingDuration: number, asset = this.asset) {
+  setClips(dances: { name: string; duration: number }[], greetingDuration: number, asset = this.asset) {
     this.setAsset(asset);
     if (this.greetingDuration !== greetingDuration) this.greetingAt = null;
-    this.dances = [...dances].sort(); this.greetingDuration = greetingDuration;
-    this.chooseDance(); this.notify();
+    this.dances = dances.filter((clip) => Number.isFinite(clip.duration) && clip.duration > 0).sort((a, b) => a.name.localeCompare(b.name));
+    this.greetingDuration = greetingDuration;
+    if (!this.dances.some((clip) => clip.name === this.dance)) { this.dance = ""; this.previousDance = ""; this.chooseDance(); }
+    this.notify();
   }
 
   /** 只有更换模型才清除其动作能力；同一模型重挂载保留问候进度。 */
   setAsset(asset: string) {
     if (asset === this.asset) return;
-    this.asset = asset; this.dances = []; this.dance = "";
+    this.asset = asset; this.dances = []; this.dance = ""; this.previousDance = ""; this.previousDanceTime = 0;
     this.greetingDuration = 0; this.greetingAt = null; this.notify();
   }
 
-  /** 使用本局保存的随机值映射动作，重建画面或换画质不会重抽。 */
+  /** 每段播完重新随机选下一段；多段素材避免紧接着重复，单段素材正常循环。 */
   private chooseDance() {
-    this.dance = this.victoryAt === null || !this.dances.length ? "" : this.dances[Math.min(this.dances.length - 1, Math.floor(this.roll * this.dances.length))];
+    if (this.victoryAt === null || !this.dances.length) return;
+    const choices = this.dances.length > 1 ? this.dances.filter((clip) => clip.name !== this.dance) : this.dances;
+    this.previousDance = this.dance;
+    this.previousDanceTime = this.dances.find((clip) => clip.name === this.dance)?.duration ?? 0;
+    this.dance = choices[Math.min(choices.length - 1, Math.floor(this.random() * choices.length))].name;
+    this.danceAt = this.time;
   }
 
+  /** 当前这一段的播放进度，与不中断的镜头总时钟分开。 */
+  get danceTime() { return this.time - this.danceAt; }
   /** 返回胜利展示经过的秒数。 */
   get victoryTime() { return this.victoryAt === null ? 0 : this.time - this.victoryAt; }
   /** 问候播放完成后不再占用渲染调度。 */
@@ -75,10 +87,15 @@ export class ScenePerformance {
   setVisible(visible: boolean) { this.visible = visible; this.delta = 0; this.skipFrame = true; }
 
   /** 按可见渲染帧推进秒表，动作固定 1×，绝不修改会话速度。 */
-  advance(delta: number) {
+  advance(delta: number, reducedMotion = false) {
     this.delta = !this.visible || this.skipFrame ? 0 : Math.max(0, Math.min(delta, 0.1));
     this.skipFrame = false; this.time += this.delta;
     if (this.greetingTime !== null && this.greetingTime >= this.greetingDuration) this.greetingAt = null;
+    if (reducedMotion) this.danceAt += this.delta;
+    else {
+      const duration = this.dances.find((clip) => clip.name === this.dance)?.duration;
+      if (duration && this.danceTime >= duration - 1e-8) this.chooseDance();
+    }
   }
 
   /** 仅有可见动态、问候或短暂选中反馈时维持帧循环。 */

@@ -50,13 +50,14 @@ function ImportedModel({ url, session, actorId, reducedMotion }: { url: string; 
   // 仅主角登记舞蹈和问候；保安的普通播放仍服从世界冻结。
   useEffect(() => {
     if (actorId !== "player") return;
-    performance.setClips(animator.performances.dances, animator.performances.greeting?.duration ?? 0, url);
+    performance.setClips(animator.performances.danceClips, animator.performances.greeting?.duration ?? 0, url);
   }, [actorId, animator, performance, url]);
   useFrame(() => {
     const motion = session.presentation.current.actors.get(actorId)?.motion ?? "idle";
     const player = actorId === "player";
     animator.update({ motion, delta: performance.delta, speed: session.speed, frozen: session.frozen,
       reducedMotion, dance: player ? performance.dance : "", victoryTime: performance.victoryTime,
+      danceTime: performance.danceTime, previousDance: player ? performance.previousDance : "", previousDanceTime: performance.previousDanceTime,
       greetingTime: player ? performance.greetingTime : null });
     // 模型 Y 才是竖直方向；骨架父节点可旋转，不能直接冻结骨骼局部 X/Z。
     constrainRootMotion();

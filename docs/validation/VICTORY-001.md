@@ -40,10 +40,10 @@
 |---|---|
 | `public/models/dafeiyu.glb` | 替换默认主角为用户四动作资产；现有程序 Idle/Walk 继续补齐普通行为 |
 | `scenePerformance.ts` — `ScenePerformance.constructor` | 接收画面唤醒回调和独立随机源，不读写模拟随机数 |
-| `sync` | 按 generation 清理新局，并在第一次胜利抽取一次舞蹈 |
-| `setClips`、`setAsset` | 登记当前模型动作；换资源清理，同资源重挂载保留进度 |
-| `chooseDance` | 把本局保存的随机值映射到稳定排序的舞蹈列表 |
-| `victoryTime`、`greetingTime`、`cinematic` | 分别读取胜利时间、问候时间及镜头是否仍受自动控制 |
+| `sync` | 按 generation 清理新局，并在胜利时启动随机舞蹈序列 |
+| `setClips`、`setAsset` | 登记当前模型动作及真实时长；换资源清理，同资源重挂载保留当前段和进度 |
+| `chooseDance` | 每段结束从候选舞蹈重新随机，多段时排除刚播完的片段，保存上段末帧用于过渡 |
+| `victoryTime`、`danceTime`、`greetingTime`、`cinematic` | 分别读取镜头总时间、当前舞蹈时间、问候时间及镜头是否自动控制 |
 | `greet` | 拒绝胜利/重复触发，开始一次问候或减少动态效果下的短暂高亮 |
 | `dismissCamera` | 只取消自动运镜，舞蹈继续 |
 | `setVisible`、`advance`、`needsFrames` | 隐藏暂停、丢弃恢复首帧休眠时间、推进1×展示时钟并决定是否续帧 |
@@ -53,7 +53,7 @@
 | `AvatarAnimator.constructor` | 创建本实例播放器、普通动作索引、舞蹈副本与问候遮罩 |
 | `add`、`bind` | 保存片段并创建绑定；StrictMode 清理后可以重新绑定 |
 | `sample` | 以给定时间和权重采样动作，跳过缺失/空遮罩 |
-| `danceLoop` | 在循环首尾交叠约0.25秒，避免素材姿态硬跳 |
+| `danceTransition` | 上段完整播放结束后，以末帧过渡到下一段开头约0.25秒，不缩短片段时长 |
 | `update` | 混合普通步态、静止全身问候、行走上半身问候或舞蹈；减少动态效果选静态姿态 |
 | `dispose` | 停止动作、解除绑定并释放播放器引用 |
 | `victoryCamera.ts` — `smooth` | 提供平滑起止插值 |
@@ -87,3 +87,12 @@
 - 主线新增变化仅既有会话测试预算及协作文档；`npm test -- tests/gameSession.test.ts` 复验8/8通过，合并的该测试与 origin/main 一致。其余523项、类型、构建与浏览器证据沿用上述相同业务代码结果，不新增或无差别重跑测试。
 - 暂存差异检查通过，不提交 `.codex/` 证据、构建产物、实际配置或凭据。本轮仅修改交付记录及保留上游测试预算，无业务函数变化。
 - 普通 SSH push 成功，PR #33 为非草稿，目标 main；功能 `7493088`、主线整合 `578c1c0`，最新头和远端 CI 见 PR。PR 交付不是合并/部署授权。
+
+## 按段随机播放修正（用户追加要求）
+
+- 用户明确纠正原“每局固定一段”的方案：每段完整播完之后重新随机下一段，以此持续播放。多段素材避免紧接着重复，单段素材循环自身。
+- 修改 `ScenePerformance.advance/chooseDance/setClips`：按 GLB 实际时长调度并记录当前片段进度；相机仍使用独立累计胜利时间。减少动态效果暂停片段调度，同一资源重挂载不重新抽取。
+- `AvatarAnimator.danceTransition` 用上段末帧平滑混合下一段，替代原提前交叠的固定片段循环。`ImportedModel` 传入片段真实时长和过渡状态；`RenderSchedule` 传递减少动态效果，`inspect` 只读输出当前段进度。
+- 原5项回归内替换旧策略断言，未新增测试数量。`npm run typecheck`、`npm test -- --maxWorkers=2 --testTimeout=15000`（523/523）、`npm run build`、差异检查通过。
+- Chrome真实展示夹具自然等待片段结束，观察到 `dance_02.001 → dance_05.001 → dance_02.001`；切换前最后采样分别约12.806秒、2.875秒（轮询间隔80ms），与12.833秒/2.917秒完整时长相符；位置/世界时间不变，切换画质保留当前片段与进度，控制台无错误。证据位于忽略目录 `.codex/victory-001/sequence/`。
+- 本轮未重复完整对局，原问候/报告路径证据保留；5198使用的 `dist/` 已更新，刷新页面加载新代码。产物仍为 `dist/`、`build/server.js`。
