@@ -14,6 +14,7 @@ import { CreativeSystem } from "./creative";
 import { GuardSystem } from "./guards";
 import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
 import { findPath, nodeById } from "./nav";
+import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
 import { buildObservation, visibleFacilities } from "./observation";
 import { DT, RULES, STATUS_LABEL, buildScenario } from "./scenario";
@@ -76,8 +77,10 @@ export class Engine {
     w.t = round1(w.t + DT);
 
     this.npcs.step();
+    w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, radius: personRadius("guard") }));
     w.stepPeopleAndFacilities();
-    this.guards.step();
+    this.guards.step([...w.persons.values()].map((p) => ({ id: p.id, pos: p.pos, from: w.tickStarts.get(p.id), radius: personRadius(p.kind) })));
+    w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, from: w.collisionGuards.find((old) => old.id === g.def.id)?.pos, radius: personRadius("guard") }));
     this.creative.step(this.player);
     this.account(activityBefore);
 

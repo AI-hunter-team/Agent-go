@@ -1,10 +1,11 @@
 import type { FacilityStatus, GameEvent, PassengerKind, Trigger, TriggerKind, Vec } from "../shared/types";
-import { dist, moveToward } from "./geometry";
-import { FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, queueSlot, type FacilityDef } from "./layout";
+import { dist } from "./geometry";
+import { FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
 import { Rng } from "./rng";
 import { DT, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { clearOfPeople, clearServiceExit, detourAroundQueues, personRadius, steer, type MovingBody } from "./movement";
 
 export type Activity =
   | { kind: "idle" }
@@ -43,8 +44,6 @@ export interface Facility {
   pendingRecheck: number | null;
 }
 
-const ARRIVE_EPS = 0.05;
-
 export class World {
   t = 0;
   readonly rng: Rng;
@@ -56,6 +55,57 @@ export class World {
   /** Number of passengers (including the player) who have passed a gate. */
   gatePassed = 0;
   private nextId = 1;
+  collisionGuards: MovingBody[] = [];
+  readonly tickStarts = new Map<string, Vec>();
+  readonly cutInReservations = new Map<string, { facility: string; npcId: string }>();
+
+  collisionBodies(exceptId: string): MovingBody[] {
+    return [...this.persons.values()].filter((p) => p.id !== exceptId).map<MovingBody>((p) => ({ id: p.id, pos: p.pos, from: this.tickStarts.get(p.id), radius: personRadius(p.kind) })).concat(this.collisionGuards.filter((g) => g.id !== exceptId));
+  }
+
+  queueStandPoint(f: Facility, index: number, incoming: PassengerKind = "normal"): Vec {
+    const ids = this.physicalQueue(f);
+    const slot = f.queue[index] ? ids.indexOf(f.queue[index]) : ids.length + index - f.queue.length;
+    return this.queuePoint(f, ids, slot, incoming);
+  }
+
+  cutInPoint(p: Person, f: Facility): Vec {
+    const ids = this.physicalQueue(f);
+    return this.queuePoint(f, ids, ids.indexOf(p.id), p.kind);
+  }
+
+  private physicalQueue(f: Facility): string[] {
+    const ids = [...(f.serving ? [f.serving.personId] : []), ...f.queue];
+    for (const [id, reservation] of this.cutInReservations) {
+      if (reservation.facility !== f.def.id || this.persons.get(id)?.activity.kind !== "creative") continue;
+      const before = ids.indexOf(reservation.npcId);
+      if (before >= 0) ids.splice(before, 0, id);
+    }
+    return ids;
+  }
+
+  private queuePoint(f: Facility, ids: string[], slot: number, incoming: PassengerKind): Vec {
+    let x = f.def.head.x;
+    for (let i = 1; i <= slot; i++) {
+      const before = this.persons.get(ids[i - 1])?.kind ?? incoming;
+      const next = this.persons.get(ids[i])?.kind ?? incoming;
+      x -= Math.max(QUEUE_SPACING, personRadius(before) + personRadius(next) + 0.02);
+    }
+    return { x, y: f.def.head.y };
+  }
+
+  movePerson(p: Person, target: Vec, stride: number, detour = true): boolean {
+    const queues = [...this.facilities.values()].flatMap((f) => {
+      const people = [...f.queue, ...(f.serving ? [f.serving.personId] : [])].map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
+      if (people.length < 2) return [];
+      const margin = personRadius(p.kind) + Math.max(...people.map((person) => personRadius(person.kind))) + 0.03;
+      const minX = Math.min(...people.map((person) => person.pos.x)), maxX = Math.max(...people.map((person) => person.pos.x));
+      return [{ x: minX - margin, y: f.def.head.y - margin, w: maxX - minX + margin * 2, h: margin * 2 }];
+    });
+    const waypoint = detour ? detourAroundQueues(p.pos, target, queues) : target;
+    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), this.collisionBodies(p.id), detour);
+    return dist(p.pos, target) < 1e-6;
+  }
 
   constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds) {
     this.rng = new Rng(seed);
@@ -115,7 +165,7 @@ export class World {
   /** Walk to a point. Returns an error message when it cannot be reached on foot. */
   walkTo(p: Person, to: Vec, label: string): string | null {
     if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
-    const path = findPath(p.pos, to);
+    const path = findPath(p.pos, to, personRadius(p.kind));
     if (!path) return `无法步行到达${label}：需要先通过安检或闸机`;
     p.activity = { kind: "walking", path, label };
     return null;
@@ -127,8 +177,8 @@ export class World {
     if (!f) return `不存在设施 ${facilityId}`;
     if (p.activity.kind === "stairs") return "正在下楼梯，请等到达站台";
     if (p.activity.kind === "queued" || p.activity.kind === "service") return "已经在队伍中，需先离队";
-    const tail = queueSlot(f.def, f.queue.length);
-    const path = findPath(p.pos, tail);
+    const tail = this.queueStandPoint(f, f.queue.length, p.kind);
+    const path = findPath(p.pos, tail, personRadius(p.kind));
     if (!path) return `无法步行到达 ${facilityId} 的队尾：需要先通过安检或闸机`;
     p.activity = { kind: "to_queue", facility: facilityId, path };
     return null;
@@ -199,6 +249,8 @@ export class World {
 
   /** Advance people and facilities by one fixed step. */
   stepPeopleAndFacilities() {
+    this.tickStarts.clear();
+    for (const p of this.persons.values()) this.tickStarts.set(p.id, { ...p.pos });
     for (const p of this.persons.values()) this.stepPerson(p);
     for (const f of this.facilities.values()) this.stepFacility(f);
   }
@@ -215,16 +267,25 @@ export class World {
         break;
       }
       case "walking": {
-        if (followPath(p, a.path, stride)) {
+        if (this.followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
           this.personEvent(p, "arrived", `已到达${a.label}`);
         }
+        if (!p.isPlayer && p.passedGate && !p.onPlatform && dist(p.pos, STAIRS_TOP) <= STAIRS_REACH) this.descendStairs(p);
         break;
       }
       case "to_queue": {
         const f = this.facilities.get(a.facility)!;
-        a.path[a.path.length - 1] = queueSlot(f.def, f.queue.length);
-        if (followPath(p, a.path, stride)) {
+        const tail = this.queueStandPoint(f, f.queue.length, p.kind);
+        const approaching = [...this.persons.values()].filter((other) => other.activity.kind === "to_queue" && other.activity.facility === a.facility)
+          .sort((left, right) => dist(left.pos, tail) - dist(right.pos, tail) || left.id.localeCompare(right.id));
+        const rank = approaching.findIndex((other) => other.id === p.id);
+        // Only the nearest arrival approaches the tail. Others stage behind it,
+        // rather than surrounding the same point and blocking it from every side.
+        const target = this.queueStandPoint(f, f.queue.length + rank, p.kind);
+        if (!a.path.length) a.path.push(target);
+        else a.path[a.path.length - 1] = target;
+        if (this.followPath(p, a.path, stride) && rank === 0) {
           if (f.status !== "open") {
             p.activity = { kind: "idle" };
             this.personEvent(p, "action_failed", `到达后发现 ${a.facility} ${STATUS_LABEL[f.status]}，无法排队`);
@@ -239,7 +300,7 @@ export class World {
       case "queued": {
         const f = this.facilities.get(a.facility)!;
         const i = f.queue.indexOf(p.id);
-        if (i >= 0) p.pos = moveToward(p.pos, queueSlot(f.def, i), stride);
+        if (i >= 0) this.movePerson(p, this.queueStandPoint(f, i), stride, false);
         break;
       }
       case "waiting": {
@@ -251,12 +312,15 @@ export class World {
         break;
       }
       case "stairs": {
-        a.remaining = Math.max(0, a.remaining - DT);
-        const progress = Math.min(1, (STAIRS_SECONDS - a.remaining) / STAIRS_SECONDS);
-        p.pos = {
+        const remaining = Math.max(0, a.remaining - DT);
+        const progress = Math.min(1, (STAIRS_SECONDS - remaining) / STAIRS_SECONDS);
+        const next = {
           x: a.start.x + (STAIRS_BOTTOM.x - a.start.x) * progress,
           y: a.start.y + (STAIRS_BOTTOM.y - a.start.y) * progress,
         };
+        if (!clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
+        p.pos = next;
+        a.remaining = remaining;
         if (a.remaining <= 1e-9) {
           p.pos = { ...STAIRS_BOTTOM };
           p.onPlatform = true;
@@ -270,6 +334,18 @@ export class World {
     }
   }
 
+  private followPath(p: Person, path: Vec[], stride: number): boolean {
+    let budget = stride;
+    while (path.length && budget > 1e-8) {
+      const next = path[0];
+      const before = { ...p.pos };
+      if (!this.movePerson(p, next, budget)) return false;
+      budget -= dist(before, p.pos);
+      path.shift();
+    }
+    return path.length === 0;
+  }
+
   private stepFacility(f: Facility) {
     if (f.status !== "open") {
       this.interruptService(f);
@@ -279,8 +355,12 @@ export class World {
       f.serving.remaining -= DT;
       if (f.serving.remaining <= 1e-9) {
         const p = this.persons.get(f.serving.personId);
+        const nominal = f.def.exit ?? { x: f.def.head.x, y: f.def.head.y + 1.3 };
+        const exits = f.def.kind === "tvm" ? [nominal, { x: nominal.x, y: f.def.head.y - 1.3 }] : [nominal, { x: nominal.x, y: nominal.y + 0.85 }, { x: nominal.x, y: nominal.y - 0.85 }];
+        const exit = p ? exits.find((point) => clearServiceExit(p.pos, point, personRadius(p.kind)) && clearOfPeople(p.pos, point, personRadius(p.kind), this.collisionBodies(p.id))) : nominal;
+        if (!exit) return;
         f.serving = null;
-        if (p) this.completeService(f, p);
+        if (p) { this.completeService(f, p); p.pos = exit; }
       }
       return;
     }
@@ -315,7 +395,7 @@ export class World {
     switch (f.def.kind) {
       case "tvm":
         p.hasTicket = true;
-        p.pos = { x: f.def.head.x - 0.4, y: f.def.head.y + 1.2 };
+        p.pos = { x: f.def.head.x, y: f.def.head.y + 1.3 };
         p.activity = { kind: "idle" };
         this.personEvent(p, "service_done", `在 ${f.def.id} 买到单程票`);
         break;
@@ -335,25 +415,6 @@ export class World {
         break;
     }
   }
-}
-
-/** Walk along a path; returns true once the final waypoint is reached. */
-function followPath(p: Person, path: Vec[], stride: number): boolean {
-  let budget = stride;
-  while (path.length > 0 && budget > 0) {
-    const next = path[0];
-    const d = dist(p.pos, next);
-    if (d <= budget + ARRIVE_EPS) {
-      p.pos = { ...next };
-      budget -= d;
-      if (path.length === 1) return true;
-      path.shift();
-    } else {
-      p.pos = moveToward(p.pos, next, budget);
-      budget = 0;
-    }
-  }
-  return path.length === 0;
 }
 
 export const round1 = (n: number) => Math.round(n * 10) / 10;

@@ -33,7 +33,7 @@ export interface FacilityDef {
 }
 
 function facility(id: string, kind: FacilityKind, label: string, x: number, y: number): FacilityDef {
-  const head = { x: x - 0.6, y };
+  const head = { x: x - 0.8, y };
   const exit = kind === "tvm" ? null : { x: x + 1.4, y };
   return { id, kind, label, pos: { x, y }, head, exit };
 }

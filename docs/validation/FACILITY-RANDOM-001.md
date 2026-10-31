@@ -62,3 +62,20 @@
 结论：云端更新已接入，软件兼容复验通过；可按仓库模板提交 PR 审核。远端 CI 结果以 PR 对应提交的实际检查为准。
 
 交付记录：功能提交 `ee83b29316ee5407006dcf27e793796723937705` 已推送至 `codex/random-facility-failures`，已创建非草稿 [PR #16](https://github.com/AI-hunter-team/Agent-go/pull/16) 面向 main 提交审核。本段与简报追加仅为文档交付更新，无功能变化；远端 CI/审查/合入不以本地结果替代。
+
+## 兼容集成与最终复验（2026-10-31）
+
+- 最新 `main` 核对：远端 `main` 为 `d4884a8d5f863a43dabb9efaf3793c6553bae687`，PR #17 增加 NPC 物理避让并修改离线成功样本。PR #16 的 base SHA 仍为 `b1bde9d`，原状态 `mergeable=false`。
+- 在 PR worktree 将最新 `main` 合入后，自动合并仅在 `tests/heuristicAgent.test.ts`、`tests/report.test.ts`、`tests/runner.test.ts`、`tests/trajectory.test.ts` 出现夹具冲突。采用主线关于物理避让的行为，实测组合规则下种子 20 和 9 均超时；扫描种子 1–30 找到 28、29 成功。以上 4 处成功流程改用种子 28，其他功能断言保持。
+- 版本：最新 main `d4884a8` + PR #16 + 本次夹具兼容调整；未改依赖、锁文件、共享接口或产品规则。
+
+| 检查 | 实际命令/操作 | 状态与证据 |
+|---|---|---|
+| 冲突范围 | `git merge-tree $(git merge-base HEAD main) main HEAD`，随后在独立 PR worktree 合入 main | 4 个测试夹具冲突已解决；PR #17 的源码/文档/测试改动保留 |
+| 类型检查 | `npm run typecheck` | 通过，退出 0 |
+| 受影响测试 | `npm test -- tests/heuristicAgent.test.ts tests/report.test.ts tests/runner.test.ts tests/trajectory.test.ts tests/scenario.test.ts` | 通过，5 文件、45 项 |
+| 完整测试 | `npm test`（允许本机 HTTP 测试监听） | 通过，44 文件、399 项，退出 0，10.89 秒 |
+| 生产构建 | `npm run build` | 通过，退出 0；保留既有大场景 chunk 提示 |
+| 差异空白 | `git diff --check` | 通过，退出 0 |
+
+首次完整测试在受限沙箱下运行，网络监听受 EPERM 阻止，且旧成功夹具失败；已说明原因并在本机监听允许后，以种子 28 修复夹具重跑。首次结果不作为通过证据。兼容修改已通过本地集成验证；PR 更新后的远端 CI、review 与合并结果仍待实际执行并记录。
