@@ -1,5 +1,7 @@
 import type { GameSession } from "../gameSession";
 
+export const CAMERA_IDLE_SECONDS = 4;
+
 /** 保存一局的纯展示状态；模拟器、成绩和随机流完全独立。 */
 export class ScenePerformance {
   generation = -1;
@@ -11,6 +13,8 @@ export class ScenePerformance {
   previousDanceTime = 0;
   private danceAt = 0;
   cinematicDismissed = false;
+  private cameraResumeAt: number | null = null;
+  private cameraHeld = false;
   greetingAt: number | null = null;
   greetingDuration = 0;
   selectedUntil = 0;
@@ -28,7 +32,7 @@ export class ScenePerformance {
       this.generation = generation; this.time = 0; this.delta = 0; this.victoryAt = null;
       this.dance = ""; this.previousDance = ""; this.previousDanceTime = 0; this.danceAt = 0;
       this.greetingAt = null; this.selectedUntil = 0;
-      this.cinematicDismissed = false; this.skipFrame = true;
+      this.cinematicDismissed = false; this.cameraResumeAt = null; this.cameraHeld = false; this.skipFrame = true;
     }
     if (success && this.victoryAt === null) {
       this.victoryAt = this.time; this.greetingAt = null;
@@ -71,6 +75,8 @@ export class ScenePerformance {
   get greetingTime() { return this.greetingAt === null ? null : this.time - this.greetingAt; }
   /** 胜利运镜可被用户接管，舞蹈不受影响。 */
   get cinematic() { return this.victoryAt !== null && !this.cinematicDismissed; }
+  /** 只读剩余静置时间；按住拖动期间不启动倒计时。 */
+  get cameraResumeIn() { return this.cameraResumeAt === null ? null : Math.max(0, this.cameraResumeAt - this.time); }
 
   /** 点选时只触发一次问候；减少动态效果只短暂强调脚下标记。 */
   greet(reducedMotion: boolean) {
@@ -80,8 +86,26 @@ export class ScenePerformance {
     this.skipFrame = true; this.notify(); return true;
   }
 
-  /** 手动镜头操作接管控制权。 */
-  dismissCamera() { if (!this.cinematic) return; this.cinematicDismissed = true; this.notify(); }
+  /** 明确点击总览或回正时保留用户模式，不让临时倒计时覆盖按钮选择。 */
+  dismissCamera() {
+    if (this.victoryAt === null) return;
+    this.cinematicDismissed = true; this.cameraResumeAt = null; this.cameraHeld = false; this.notify();
+  }
+
+  /** 拖动临时接管；滚轮每次重置静置时间，按住时不抢回镜头。 */
+  interactCamera(held = false) {
+    if (this.victoryAt === null) return;
+    const changed = this.cinematic;
+    this.cinematicDismissed = true; this.cameraHeld = held;
+    this.cameraResumeAt = held ? null : this.time + CAMERA_IDLE_SECONDS;
+    if (changed || !held) this.notify();
+  }
+
+  /** 松开、取消或窗口失焦后才开始恢复倒计时。 */
+  releaseCamera() {
+    if (!this.cameraHeld) return;
+    this.cameraHeld = false; this.cameraResumeAt = this.time + CAMERA_IDLE_SECONDS; this.notify();
+  }
 
   /** 隐藏及重新挂载都丢弃首帧间隔，避免后台时长被算进动作。 */
   setVisible(visible: boolean) { this.visible = visible; this.delta = 0; this.skipFrame = true; }
@@ -90,6 +114,9 @@ export class ScenePerformance {
   advance(delta: number, reducedMotion = false) {
     this.delta = !this.visible || this.skipFrame ? 0 : Math.max(0, Math.min(delta, 0.1));
     this.skipFrame = false; this.time += this.delta;
+    if (this.cameraResumeAt !== null && this.time >= this.cameraResumeAt - 1e-8) {
+      this.cameraResumeAt = null; this.cinematicDismissed = false; this.notify();
+    }
     if (this.greetingTime !== null && this.greetingTime >= this.greetingDuration) this.greetingAt = null;
     if (reducedMotion) this.danceAt += this.delta;
     else {
@@ -100,7 +127,7 @@ export class ScenePerformance {
 
   /** 仅有可见动态、问候或短暂选中反馈时维持帧循环。 */
   needsFrames(reducedMotion: boolean) {
-    return this.visible && (this.greetingAt !== null || this.time < this.selectedUntil || (!reducedMotion && (this.cinematic || !!this.dance)));
+    return this.visible && (this.cameraResumeAt !== null || this.greetingAt !== null || this.time < this.selectedUntil || (!reducedMotion && (this.cinematic || !!this.dance)));
   }
 }
 
