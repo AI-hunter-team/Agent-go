@@ -78,7 +78,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
         <h2 id="model-config-title">模型 API 配置</h2>
         <button className="ghost" disabled={busy !== null} onClick={onClose}>返回开局设置</button>
       </div>
-      <p className="muted">连接你的 OpenAI 兼容 API，验证后选择模型来驱动角色。</p>
+      <p className="muted">连接你的 OpenAI 兼容 API，验证后选择模型来驱动 Agent。NPC 使用开发者配置的独立模型。</p>
       <ol className="config-steps" aria-label="配置步骤">
         <li className="on">1 填写接口</li>
         <li className={verified ? "on" : ""}>2 选择模型</li>

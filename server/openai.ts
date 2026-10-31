@@ -212,7 +212,10 @@ export class OpenAILlmService implements LlmService {
     let metadata: Pick<NpcReply, "model" | "usage" | "output"> = { model: this.model, usage: null };
     try {
       const response = await this.client.complete({
-        ...this.completionOptions(1024),
+        // K2.6 uses a thinking toggle and does not accept reasoning_effort.
+        ...(this.model === "kimi-k2.6"
+          ? { model: this.model, max_completion_tokens: 1024, thinking: { type: "disabled" } }
+          : this.completionOptions(1024)),
         ...this.jsonOptions(NPC_SYSTEM, untrustedData("NPC 对话资料", request), NPC_SCHEMA, "npc_reply"),
       });
       const choice = response.choices?.[0];

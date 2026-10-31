@@ -27,11 +27,19 @@ export interface LlmService {
   negotiate?(request: CutInDialogueRequest): Promise<NpcReply>;
 }
 
+/** Developer-owned NPC model; never resolved from a browser's Agent config. */
+export interface NpcService {
+  readonly model: string;
+  negotiate(request: CutInDialogueRequest): Promise<NpcReply>;
+}
+
 export interface AppDeps {
   llm: LlmService | null;
+  npcLlm?: NpcService | null;
   sessions: SessionStore;
   debugLogger?: DebugLogger;
   modelParameters?: Record<string, unknown>;
+  npcModelParameters?: Record<string, unknown>;
   modelConfigs?: ModelConfigStore;
   frontendDir?: string;
 }
@@ -63,7 +71,7 @@ function npcFailure(reason: string, model: string | null): NpcReply {
   return { accepted: false, reply: "暂时无法答复，请保持原来的排队位置。", reason, source: "error", model, usage: null };
 }
 
-export function createApp({ llm, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
+export function createApp({ llm, npcLlm = null, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, npcModelParameters = {}, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
@@ -168,14 +176,15 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
       const sessionId = req.body?.sessionId;
       const session = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
       if (sessionId && !session) return void res.status(404).json({ error: "会话不存在或已结束" });
-      const { llm, parameters } = session ? forSession(req, session) : runtime(req);
-      if (!llm?.negotiate) return void res.status(503).json(npcFailure("未配置模型，NPC 未答复，未获得插队许可。", null));
+      if (!session) return void res.status(403).json(npcFailure("NPC 对话需要有效的对局会话。", null));
+      forSession(req, session);
+      if (!npcLlm) return void res.status(503).json(npcFailure("开发者未配置模型，NPC 未答复，未获得插队许可。", null));
       try {
         const request: CutInDialogueRequest = { npc: req.body.npc, message: req.body.message, history: req.body.history };
-        const { value: reply, debug } = await traceOperation({ operation: "negotiate", runId: session?.runId ?? null, sessionId: session?.id ?? null }, { request, modelParameters: parameters }, debugLogger, () => llm.negotiate!(request));
-        res.status(reply.source === "error" ? 502 : 200).json({ ...reply, debug });
+        const { value: reply, debug } = await traceOperation({ operation: "negotiate", runId: session.runId, sessionId: session.id }, { request, modelParameters: npcModelParameters }, debugLogger, () => npcLlm.negotiate(request));
+        res.status(reply.source === "error" ? 502 : 200).json(debugLogger.clean({ ...reply, debug }));
       } catch (error) {
-        res.status(502).json(npcFailure(`NPC 对话失败，未获得插队许可：${error instanceof Error ? error.message : String(error)}`, llm.model));
+        res.status(502).json(debugLogger.clean(npcFailure(`NPC 对话失败，未获得插队许可：${error instanceof Error ? error.message : String(error)}`, npcLlm.model)));
       }
     }),
   );
