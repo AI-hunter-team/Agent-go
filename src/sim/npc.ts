@@ -1,6 +1,6 @@
 import type { FacilityKind } from "../shared/types";
 import { dist } from "./geometry";
-import { ATTRACTIONS, ENTRANCE, SECURITY_X, queueSlot } from "./layout";
+import { ATTRACTIONS, ENTRANCE, SECURITY_X, TRAIN_BOARDING_X, TRAIN_DOOR_Z, queueSlot } from "./layout";
 import { Rng } from "./rng";
 import { RULES, multiplierOf, type NpcSpawn, type Scenario, type ScriptedEvent } from "./scenario";
 import type { Person, World } from "./world";
@@ -98,8 +98,12 @@ export class NpcDirector {
     const w = this.world;
     if (p.passedGate && !p.onPlatform) return; // World owns the landing/stairs connection.
     if (p.onPlatform) {
-      if (p.pos.x >= 54) w.persons.delete(p.id);
-      else w.walkTo(p, { x: 55, y: p.pos.y }, "站台深处");
+      // NPCs board as soon as they reach the lower platform. Their door
+      // assignment is retained for the boarding event while the passenger is
+      // removed before it can obstruct the stairs, escalator, or doorway.
+      if (p.boardingDoor === undefined) this.boardingDoor(p);
+      p.activity = { kind: "done" };
+      w.persons.delete(p.id);
       return;
     }
     // World owns NPC route selection after the gate; never send them back to a gate.
@@ -113,5 +117,18 @@ export class NpcDirector {
       if (!best || cost < best.cost) best = { id: f.def.id, cost };
     }
     if (best) w.joinQueue(p, best.id);
+  }
+
+  /** Spread passengers across the visible platform doors so one doorway does
+   * not become a permanent collision point for everyone behind it. */
+  private boardingDoor(p: Person) {
+    if (p.boardingDoor !== undefined) return { x: TRAIN_BOARDING_X, y: TRAIN_DOOR_Z[p.boardingDoor] };
+    // The person id is monotonic, so modulo assignment spreads a burst of
+    // arrivals across the visible doors even though each NPC is removed as
+    // soon as it reaches the platform.
+    const numericId = Number.parseInt(p.id.slice(1), 10);
+    const index = Number.isFinite(numericId) ? numericId % TRAIN_DOOR_Z.length : 0;
+    p.boardingDoor = index;
+    return { x: TRAIN_BOARDING_X, y: TRAIN_DOOR_Z[index] };
   }
 }
