@@ -30,6 +30,10 @@
 
 本轮未重新运行1000种子/50局、13种子实机矩阵、60秒性能、20次切图、移动真机/低端设备、其他浏览器或真实模型。人工审查与用户美术方向批准未进行；当前Node CI仅自动触发目标main的PR，本PR创建后在最终分支提交手动启动现有CI，不改CI规则。Compose smoke沿既有PR路径规则运行。[PR #71](https://github.com/AI-hunter-team/Agent-go/pull/71)已创建；远端CI绑定最终分支head手动启动，实际运行链接与状态见PR正文/检查页，不预写通过。
 
+## 容器CI发现及修复
+
+首轮[Compose smoke](https://github.com/AI-hunter-team/Agent-go/actions/runs/41245735983)在镜像构建阶段失败：Vite无法解析validation.html；新多入口构建已包含该文件，但.dockerignore沿用旧白名单将其排除。仅新增!validation.html，保持其他排除规则、Docker运行权限和部署配置不变。失败未按通过记载。修复后类型/构建/diff通过，完整110文件976项再次通过（90.96秒）；普通push后在最新提交再次启动Node CI及Compose，远端实际结果见PR。
+
 ## 交接
 
 实现完成；本轮软件检查及上述浏览器冒烟通过；未合入或部署。新建默认V3，可用?worldgen=v2回退新建，保留已存V3和旧版本读取；回退代码不删除用户数据。合入#68后再检查本PR目标和冲突，重点复验角色准备/入场、默认V3、旧世界恢复、楼扶梯与登车；来源性能数据不可替代新首页下的性能复测。
