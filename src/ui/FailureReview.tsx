@@ -22,7 +22,7 @@ function Cost({ value, label }: { value: ReviewMetadata; label: string }) {
 
 export function FailureReview({ session, report, onAdopt, active = true }: { session: ReviewSession; report: GameReport; onAdopt: (guidance: string) => void; active?: boolean }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
-  useEffect(() => { void session.checkService(report.agentKind === "llm"); }, [session, report.agentKind]);
+  useEffect(() => { void session.checkService(false); }, [session]);
   useEffect(() => {
     if (!active) return;
     return session.cancelDraft;
@@ -78,8 +78,8 @@ export function FailureReview({ session, report, onAdopt, active = true }: { ses
       </details>
     </>}
     {state.serviceStatus === "checking" && state.status === "idle" && <p className="muted" role="status">正在连接复盘服务…</p>}
-    {["unavailable", "error"].includes(state.serviceStatus) && state.status === "idle" && <><p className="muted" role="status">{state.serviceError ?? "复盘服务暂不可用，请稍后再试。当前报告与回放仍可查看。"}</p><button onClick={() => void session.checkService(report.agentKind === "llm")}>重试连接复盘服务</button></>}
-    {state.serviceStatus === "available" && report.agentKind === "offline" && state.status === "idle" && <><p className="muted">回顾本局的关键转折，找到下一次可以尝试的走法。</p><button onClick={session.ensureReview}>生成行程分析</button></>}
+    {["unavailable", "error"].includes(state.serviceStatus) && state.status === "idle" && <><p className="muted" role="status">{state.serviceError ?? "复盘服务暂不可用，请稍后再试。当前报告与回放仍可查看。"}</p><button onClick={() => void session.checkService(false)}>重试连接复盘服务</button></>}
+    {state.serviceStatus === "available" && state.status === "idle" && <><p className="muted">按需分析本局并提出策略建议，生成复盘会消耗模型额度。</p><button onClick={session.ensureReview}>生成行程分析</button></>}
     {state.status === "loading" && <p role="status">正在回顾整局记录与全局情况…</p>}
     {state.error && <><p className="error" role="alert">{state.error}</p><button onClick={session.ensureReview}>重试复盘</button></>}
     {!!attempts.length && <details className="review-evidence"><summary>复盘调用用量</summary><p className="meta">复盘与指导整理累计 {attempts.length} 次调用 · 输入 {attempts.reduce((n, a) => n + (a.usage?.inputTokens ?? 0), 0)} / 输出 {attempts.reduce((n, a) => n + (a.usage?.outputTokens ?? 0), 0)} token（含失败尝试，用量未返回的调用不估算）</p></details>}

@@ -118,17 +118,48 @@ describe("胜利和问候的独立展示", () => {
     ordinary.animator.dispose(); greeting.animator.dispose();
   });
 
-  it("楼梯和扶梯终点的镜头均保持在正面安全弧线，减少动态效果时固定", () => {
+  it("电影镜头改变景别、高度及焦距，保持双终点安全并从手动视角连续恢复", () => {
     for (const end of [STAIRS_BOTTOM, ESCALATOR_BOTTOM]) {
       const camera = new VictoryCamera(), pose = { x: end.x, y: -2, z: end.y, yaw: Math.PI / 2 };
-      for (const time of [6, 10, 14, 18, 22]) {
+      const heights: number[] = [], distances: number[] = [], lenses: number[] = [];
+      for (const time of [1.5, 7.5, 13.5, 19.5, 25.5, 31.5, 37.5]) {
         camera.update(pose, time, 1.5, false);
         expect(camera.position.x).toBeGreaterThan(pose.x);
         expect(cameraFraction(camera.target, camera.position)).toBeCloseTo(1);
         expect(camera.position.distanceTo(camera.target)).toBeGreaterThan(3);
+        heights.push(camera.position.y); distances.push(camera.position.distanceTo(camera.target)); lenses.push(camera.fov);
       }
+      expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(2);
+      expect(Math.max(...distances) - Math.min(...distances)).toBeGreaterThan(1.5);
+      expect(Math.max(...lenses) - Math.min(...lenses)).toBeGreaterThan(6);
+      const manual = new Vector3(end.x + 4, 0.4, end.y + 1), target = new Vector3(end.x, -1, end.y);
+      camera.capture(manual, target.clone().sub(manual).normalize(), 50, 51, manual.distanceTo(target));
+      camera.update(pose, 50, 1.5, false);
+      expect(camera.position.distanceTo(manual)).toBeLessThan(1e-8); expect(camera.fov).toBe(51);
+      camera.update(pose, 50.01, 1.5, false);
+      expect(camera.position.distanceTo(manual)).toBeLessThan(0.01);
       camera.update(pose, 1, 1.5, true); const fixed = camera.position.clone();
       camera.update(pose, 20, 1.5, true); expect(camera.position.equals(fixed)).toBe(true);
     }
+  });
+
+  it("拖动按住不抢回，松开四秒恢复，滚轮续期且隐藏时暂停倒计时", () => {
+    const state = new ScenePerformance(); state.sync(1, true); state.advance(0);
+    state.interactCamera(true);
+    for (let i = 0; i < 60; i++) state.advance(0.1);
+    expect(state.cinematic).toBe(false); expect(state.cameraResumeIn).toBeNull();
+    state.releaseCamera();
+    for (let i = 0; i < 30; i++) state.advance(0.1);
+    expect(state.cinematic).toBe(false);
+    state.interactCamera();
+    state.setVisible(false); state.advance(30); expect(state.cameraResumeIn).toBeCloseTo(4);
+    state.setVisible(true); state.advance(30);
+    for (let i = 0; i < 39; i++) state.advance(0.1);
+    expect(state.cinematic).toBe(false); expect(state.needsFrames(true)).toBe(true);
+    state.advance(0.1); expect(state.cinematic).toBe(true);
+    state.interactCamera(); state.dismissCamera();
+    for (let i = 0; i < 50; i++) state.advance(0.1);
+    expect(state.cinematic).toBe(false); expect(state.cameraResumeIn).toBeNull();
+    state.sync(2, false); expect(state.cameraResumeIn).toBeNull();
   });
 });

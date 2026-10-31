@@ -4,6 +4,7 @@ import {
   lazy,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -20,7 +21,13 @@ import { CHARACTERS, useJourney } from "./useJourney";
 import { useBroadcast } from "./useBroadcast";
 import { randomSeed } from "./seed";
 import { FrameMetrics } from "./frameMetrics";
-import { Modal, TooltipProvider } from "./overlays";
+import { Modal, ProgressBar, TooltipProvider } from "./overlays";
+import {
+  clampModelProgress,
+  modelResourceKey,
+  shouldShowModelLoadingOverlay,
+  type ModelLoadingState,
+} from "./modelLoading";
 import { MapCanvas } from "./MapCanvas";
 import { DecisionLog } from "./DecisionLog";
 import { InteractionPanel } from "./InteractionPanel";
@@ -28,8 +35,7 @@ import type { RenderOptions } from "./render";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
 import { DialogueDock } from "./DialogueDock";
-import { ReportSummary, EventTimeline } from "./ReportView";
-import { TrajectoryReplayView } from "./TrajectoryReplay";
+import { JourneyReview } from "./JourneyReview";
 import { getSessionHeadMessage, type HeadMessageMode } from "./headMessages";
 import styles from "./App.module.css";
 
@@ -108,10 +114,19 @@ export function App() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
+  const [modelLoading, setModelLoading] = useState<ModelLoadingState>({
+    url: null,
+    status: "idle",
+    progress: 0,
+  });
+  const loadedModelUrls = useRef(new Set<string>());
   const [reviewState, setReviewState] = useState<{ generation: number; expanded: boolean } | null>(null);
-  const [expandedRecordGeneration, setExpandedRecordGeneration] = useState<number | null>(null);
+  const [recordState, setRecordState] = useState<{ generation: number; expanded: boolean } | null>(null);
+  const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 600px)").matches);
+  const [previousOpen, setPreviousOpen] = useState(false);
+  const previousReport = useMemo(() => j.previousRun?.runner.report() ?? null, [j.previousRun, previousOpen]);
+  const historyPause = useRef<{ generation: number; resume: boolean } | null>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
-  const reviewHeading = useRef<HTMLHeadingElement>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [renderer, setRenderer] = useState<"3d" | "2d">("3d");
   const [metrics] = useState(() => new FrameMetrics());
@@ -141,12 +156,50 @@ export function App() {
   const interactionDialogue = runner?.interactionDialogues.at(-1);
   const latestText =
     latest?.action?.reason || latest?.result?.text || "等待下一次决定";
+  const onModelLoadStart = useCallback((url: string) => {
+    const key = modelResourceKey(url);
+    if (loadedModelUrls.current.has(key)) {
+      setModelLoading({ url: key, status: "loaded", progress: 100 });
+      return;
+    }
+    setModelLoading((current) =>
+      current.url === key && current.status === "loading"
+        ? current
+        : { url: key, status: "loading", progress: 0 },
+    );
+  }, []);
+  const onModelProgress = useCallback((progress: number) => {
+    setModelLoading((current) =>
+      current.status === "loading"
+        ? { ...current, progress: clampModelProgress(progress) }
+        : current,
+    );
+  }, []);
+  const onModelLoaded = useCallback((url: string) => {
+    const key = modelResourceKey(url);
+    loadedModelUrls.current.add(key);
+    setModelLoading((current) =>
+      current.url === key ? { ...current, status: "loaded", progress: 100 } : current,
+    );
+  }, []);
   const onAssetError = useCallback(
-    (message: string) => setAssetError(message),
+    (message: string, url?: string) => {
+      setAssetError(message);
+      if (!url) return;
+      const key = modelResourceKey(url);
+      setModelLoading((current) =>
+        current.url === key ? { ...current, status: "failed" } : current,
+      );
+    },
     [],
   );
   const onSceneError = useCallback(
-    (message = "三维画面暂时不可用") => setSceneError(message),
+    (message = "三维画面暂时不可用") => {
+      setSceneError(message);
+      setModelLoading((current) =>
+        current.status === "loading" ? { ...current, status: "failed" } : current,
+      );
+    },
     [],
   );
   const retryScene = () => {
@@ -160,9 +213,8 @@ export function App() {
   };
   const broadcast = useBroadcast(session, watching);
   const won = report?.status === "success";
-  const recordExpanded = expandedRecordGeneration === session.generation;
-  const reviewOpened = reviewState?.generation === session.generation;
-  const expandedReview = reviewOpened && reviewState.expanded;
+  const recordExpanded = recordState?.generation === session.generation ? recordState.expanded : false;
+  const expandedReview = !!report && (reviewState?.generation === session.generation ? reviewState.expanded : true);
   const messageMode: HeadMessageMode = watching ? recordExpanded ? "icons" : "full" : thought ? "icons" : "hidden";
   optionsRef.current = {
     showVision, showTrail, thinking: runner?.phase === "thinking", trail: session.engine.trail,
@@ -173,11 +225,25 @@ export function App() {
   };
   const closeReview = () => {
     setReviewState({ generation: session.generation, expanded: false });
+    requestAnimationFrame(() => reviewTrigger.current?.focus());
   };
   useEffect(() => {
-    if (expandedReview) reviewHeading.current?.focus();
-    else if (reviewOpened) reviewTrigger.current?.focus();
-  }, [expandedReview, reviewOpened]);
+    const query = window.matchMedia("(max-width: 600px)");
+    const update = () => setMobile(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const openPrevious = () => {
+    historyPause.current = { generation: session.generation, resume: watching && !session.paused };
+    if (watching) session.setPaused(true);
+    setReviewState({ generation: session.generation, expanded: false });
+    setPreviousOpen(true);
+  };
+  const closePrevious = () => {
+    setPreviousOpen(false);
+    if (historyPause.current?.generation === session.generation && historyPause.current.resume) session.setPaused(false);
+    historyPause.current = null;
+  };
   // 胜利展示始终从透视镜头开始；用户之后可自行切换镜头。
   useEffect(() => {
     if (won) j.setCamera((current) => current.mode === "follow" ? current : { ...current, mode: "follow" });
@@ -208,6 +274,10 @@ export function App() {
       </button>
     </section>
   );
+  const showModelLoading =
+    renderer === "3d" &&
+    !sceneError &&
+    shouldShowModelLoadingOverlay(modelLoading);
 
   return (
     <TooltipProvider>
@@ -253,6 +323,9 @@ export function App() {
                     guardAssetUrl={guardAvatar.url}
                     guardAssetRotation={guardAvatar.rotation}
                     onAssetError={onAssetError}
+                    onModelLoadStart={onModelLoadStart}
+                    onModelProgress={onModelProgress}
+                    onModelLoaded={onModelLoaded}
                     onGuardAssetError={guardAvatar.onError}
                     onStationAssetError={onAssetError}
                     onFailure={onSceneError}
@@ -267,6 +340,23 @@ export function App() {
               </SceneBoundary>
             )}
           </div>
+          {showModelLoading && (
+            <div className={styles.modelLoadingOverlay} role="status" aria-live="polite">
+              <div className={styles.modelLoadingCard}>
+                <div className={styles.modelLoadingHeading}>
+                  <span>正在加载模型</span>
+                  <strong>{modelLoading.progress}%</strong>
+                </div>
+                <ProgressBar
+                  value={modelLoading.progress}
+                  label="模型加载进度"
+                  className={styles.modelProgress}
+                  fillClassName={styles.modelProgressFill}
+                />
+                <p>正在准备角色形象，请稍候…</p>
+              </div>
+            </div>
+          )}
         </div>
         {!watching && !ended && flow.stage !== "lobby" && (
           <div className={styles.topLeft}>
@@ -304,7 +394,7 @@ export function App() {
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="muted">
-                  配置后续旅程；浏览与选角无需连接模型。
+                  {ended ? "本局复盘沿用开局绑定模型；此处配置用于下一局。" : "画面设置立即生效；模型与开局条件用于下一局。"}
                 </Dialog.Description>
                 <div className="drawer-body">
                   <details open>
@@ -347,7 +437,7 @@ export function App() {
                     />
                   </details>
                   <details>
-                    <summary>高级设置</summary>
+                    <summary>开局条件与角色外观</summary>
                     <label className="field">
                       情景种子
                       <div className="row">
@@ -667,9 +757,9 @@ export function App() {
                 </button>
                 <button
                   className="ghost full-width"
-                  onClick={() => j.navigate("guidance")}
+                  onClick={() => kind === "offline" ? j.setDrawer(true) : j.navigate("guidance")}
                 >
-                  修改指导
+                  {kind === "offline" ? "调整开局条件" : "修改指导"}
                 </button>
               </>
             )}
@@ -679,21 +769,33 @@ export function App() {
           <section key="launch" className={styles.launch} role="status">
             <strong>Agent Go</strong>
             <span>正在就位，尚未开始计时…</span>
-            <button onClick={() => j.navigate("guidance")}>取消出发</button>
+            <button onClick={() => j.navigate(kind === "offline" ? "plan" : "guidance")}>取消出发</button>
           </section>
         )}
         {watching && runner && (
           <>
-            <DialogueDock key={`dialogue-${session.generation}`} session={session} />
             {broadcast && (
-              <div className={styles.broadcast} role="status">
+              <div className={styles.broadcast} role="status" data-scene-obstacle>
                 ◖ 现场播报：{broadcast}
               </div>
             )}
-            <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录">
+            <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录" data-scene-obstacle>
+              <div className={styles.actionInfo}>
+                <Modal
+                  title="本局信息"
+                  description="本局模型已固定，更换模型需结束本局并返回大厅。"
+                  trigger={<button>ⓘ 本局信息</button>}
+                >
+                  <p>场景：地铁末班车</p>
+                  <p>角色：{runner.journey?.characterName}</p>
+                  <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
+                  <p>情景种子：{seed}</p>
+                  <p>时限：{settings.timeLimitSeconds} 秒</p>
+                </Modal>
+              </div>
               <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
-                onClick={() => setExpandedRecordGeneration(recordExpanded ? null : session.generation)}>
-                <span>{recordExpanded ? "收起行程记录" : "展开行程记录"}</span>
+                onClick={() => setRecordState({ generation: session.generation, expanded: !recordExpanded })}>
+                <span>{recordExpanded ? "收起行程记录" : mobile ? describeActivity(session.engine.world, session.engine.player) : "展开行程记录"}</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
               </button>
               <div id="journey-record-content" hidden={!recordExpanded}>
@@ -733,7 +835,7 @@ export function App() {
                 }
               >
                 <DecisionLog decisions={runner.decisions} />
-                <DecisionTrace attempts={runner.attempts} />
+                <details><summary>全部原始调用记录</summary><DecisionTrace attempts={runner.attempts} /></details>
                 {runner.dialogues.map((d, i) => (
                   <NpcDialogue key={i} record={d} />
                 ))}
@@ -741,7 +843,7 @@ export function App() {
               </Modal>
               </div>
             </section>
-            <section key={`timer-${session.generation}`} className={`${styles.timer} ${styles.panel}`}>
+            <section key={`timer-${session.generation}`} className={`${styles.timer} ${styles.panel}`} data-scene-obstacle>
               <span className={styles.eyebrow}>剩余时间</span>
               <strong>{clock}</strong>
               <progress max={settings.timeLimitSeconds} value={remaining} />
@@ -755,6 +857,8 @@ export function App() {
                       : "前往购票区"}
               </span>
             </section>
+            <div className={styles.runDock} data-scene-obstacle>
+            <DialogueDock key={`dialogue-${session.generation}`} session={session} />
             <div className={styles.controls}>
               <button
                 className="primary"
@@ -792,17 +896,8 @@ export function App() {
               <button onClick={() => session.stop()}>结束</button>
             </div>
             <div className={styles.runInfo}>
-              <Modal
-                title="本局信息"
-                description="本局模型已固定，更换模型需结束本局并返回大厅。"
-                trigger={<button>ⓘ 本局信息</button>}
-              >
-                <p>场景：地铁末班车</p>
-                <p>角色：{runner.journey?.characterName}</p>
-                <p>实际模型：{runner.journey?.model ?? "离线固定策略"}</p>
-                <p>情景种子：{seed}</p>
-                <p>时限：{settings.timeLimitSeconds} 秒</p>
-              </Modal>
+              {j.previousRun && <button onClick={openPrevious}>上一局报告</button>}
+            </div>
             </div>
           </>
         )}
@@ -817,37 +912,23 @@ export function App() {
         {report && (
           <>
           <div className={styles.endActions} aria-label="本局结束操作" hidden={expandedReview}>
-            <button ref={reviewTrigger} aria-expanded={expandedReview} aria-controls="journey-review" onClick={() => {
+            <button ref={reviewTrigger} aria-expanded={expandedReview} onClick={() => {
               if (expandedReview) closeReview();
               else setReviewState({ generation: session.generation, expanded: true });
             }}>{expandedReview ? "收起复盘" : "行程复盘"}</button>
-            <button className="primary" onClick={j.retry}>再来一局</button>
+            <button className="primary" onClick={() => j.retry({ twoDimensional: renderer === "2d" })}>再来一局</button>
           </div>
-          <section id="journey-review" aria-labelledby="journey-review-title" hidden={!expandedReview} className={`${styles.review} ${styles.panel}`}>
-            {reviewOpened && <>
-            <div className={styles.reviewHeading}>
-              <div>
-                <h1 id="journey-review-title" ref={reviewHeading} tabIndex={-1}>行程复盘</h1>
-                <p className="muted">{report.journey?.sceneName ?? "地铁末班车"} · {report.journey?.characterName ?? "本次行程"}</p>
-              </div>
-              <button onClick={closeReview}>返回场景</button>
-            </div>
-            <div className={styles.reviewGrid}>
-              <div>
-                <ReportSummary
-                  key={session.generation}
-                  report={report}
-                  onAdopt={j.edit}
-                  active={expandedReview}
-                  replay={<><p className="muted">回看角色轨迹；NPC 和设施显示终局状态。</p><TrajectoryReplayView report={report} engine={session.engine} /></>}
-                  records={<><DecisionLog decisions={report.decisions} /><EventTimeline report={report} /></>}
-                />
-              </div>
-            </div>
-            </>}
-          </section>
+          <JourneyReview key={session.generation} report={report} engine={session.engine} review={j.review} open={expandedReview} onClose={closeReview}
+            onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
+            onSameScenario={() => j.retry({ sameScenario: true, twoDimensional: renderer === "2d" })}
+            onEdit={text => { j.edit(text); if (kind === "offline" && text === undefined) j.setDrawer(true); }}
+            onConfigureModel={() => j.setDrawer(true)} onLobby={j.returnLobby} onPrevious={j.previousRun ? openPrevious : undefined} />
           </>
         )}
+        {j.previousRun && previousReport && <>
+          {!j.working && !watching && <button className={styles.previousReport} onClick={openPrevious}>上一局报告</button>}
+          <JourneyReview key={`previous-${j.previousRun.generation}`} report={previousReport} engine={j.previousRun.engine} review={j.previousRun.review} open={previousOpen} onClose={closePrevious} previous />
+        </>}
         {debug && (
           <details className={styles.debug}>
             <summary>开发调试</summary>

@@ -56,7 +56,7 @@ export function DialogueDock({ session }: { session: GameSession }) {
   }, [key, current?.status]);
 
   if (!current) return null;
-  return <section ref={dock} className={styles.dock} data-dialogue-dock data-expanded={expanded} aria-label="当前对话">
+  return <section ref={dock} className={styles.dock} data-dialogue-dock data-scene-obstacle data-expanded={expanded} aria-label="当前对话">
     <div className={styles.heading}>
       <button className={styles.toggle} aria-expanded={expanded} aria-controls={bodyId} onClick={() => { setManual({ key, collapsed: expanded }); session.notify(); }}>
         <span className={styles.symbol} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M5 5h14v10H9l-4 4V5Z"/><path d="M8 9h8M8 12h5"/></svg></span>

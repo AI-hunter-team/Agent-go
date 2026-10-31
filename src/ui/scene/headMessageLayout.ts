@@ -20,13 +20,14 @@ export function layoutHeadMessages(messages: readonly MessageBox[], bounds: { wi
     const x = clampX(message.x), y = clampY(message.y);
     const xs = [x, margin, maxX];
     const ys = [y, margin, maxY];
-    for (const box of [...obstacles, ...placed]) {
+    const occupied = [...obstacles, ...placed];
+    for (const box of occupied) {
       xs.push(clampX(box.x - message.width - gap), clampX(box.x + box.width + gap));
       ys.push(clampY(box.y - message.height - gap), clampY(box.y + box.height + gap));
     }
     let best: MessageBox | undefined, distance = Infinity;
     for (const candidateX of xs) for (const candidateY of ys) {
-      const overlaps = [...obstacles, ...placed].some(box => candidateX < box.x + box.width + gap && candidateX + message.width + gap > box.x
+      const overlaps = occupied.some(box => candidateX < box.x + box.width + gap && candidateX + message.width + gap > box.x
         && candidateY < box.y + box.height + gap && candidateY + message.height + gap > box.y);
       const score = (candidateX - x) ** 2 + (candidateY - y) ** 2;
       if (!overlaps && score < distance) {

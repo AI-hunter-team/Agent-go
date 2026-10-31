@@ -6,6 +6,9 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [GUIDANCE-DIALOGUE-PR-001](GUIDANCE-DIALOGUE-PR-001.md) | 指导重试与多 NPC 对话整合最新 main，766项/类型/构建通过；窄屏报告按钮遮挡修复与无费用浏览器复验，PR前交付证据 |
+| [LAYOUT-SCROLL-001](LAYOUT-SCROLL-001.md) | 选角/指导错位与无效滚动、矮屏布局、底部控件及气泡遮挡；31 项相关回归及所列浏览器检查，整合 main 后完整 724 项通过；PR 交付 |
+| [REVIEW-UX-001](REVIEW-UX-001.md) | 三层复盘、手机常驻操作、重玩/调整及上一局内存报告；原 696 项，整合最新 main/策略采用及登车阈值回归后 722 项通过，PR 交付 |
 | [REVIEW-PR-001](REVIEW-PR-001.md) | 复盘界面、策略采纳和模型优先级的独立分支集成及 PR 交付检查 |
 | [REVIEW-STRATEGIES-001](REVIEW-STRATEGIES-001.md) | 策略前置、单击进入开局设置并预填，以及无费用自然超时失败样例 |
 | [REVIEW-SERVER-001](REVIEW-SERVER-001.md) | 本局用户模型优先、服务端兜底及局后复盘绑定生命周期 |
@@ -46,6 +49,7 @@
 | [PR18-MERGE-001](PR18-MERGE-001.md) | 名称统一 PR 与最新 main 的文档冲突解决及集成验证；最终合入见原 PR |
 | [BRAND-002](BRAND-002.md) | 英文名agent-go及包/下载/素材生成标识统一；验证范围与结果见报告 |
 | [NPC-PR-001](NPC-PR-001.md) | 人物修复与最新 main 兼容、PR/CI/合并及已合并分支清理，进行中 |
+| [ESCALATOR-NPC-001](ESCALATOR-NPC-001.md) | 右侧扶梯 NPC 满载改道与入口堆积回归；相关测试、类型和构建通过，完整服务端测试受环境 listen EPERM/既有边界波动影响 |
 | [NPC-VISUAL-001](NPC-VISUAL-001.md) | 连续移动避让、队列/办理占位、设施朝向、364 项检查及离线浏览器复验 |
 | [DEEPSEEK-THINKING-001](DEEPSEEK-THINKING-001.md) | 官方 DeepSeek 思考模式工具选择、多轮回传及 JSON 模式适配；模拟接口验证，不代表真实模型验收 |
 | [STARTUP-API-001](STARTUP-API-001.md) | 本地服务恢复、上游权限 400 与 DeepSeek 工具调用参数 400 诊断、386 项集成回归及真实 Safari 开局；包含临时伪响应入口导致截图 500 的纠正记录 |

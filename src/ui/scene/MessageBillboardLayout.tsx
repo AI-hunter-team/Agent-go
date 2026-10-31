@@ -40,8 +40,11 @@ export function MessageBillboardLayout() {
       if (anchor.left >= viewport.left && anchor.left <= viewport.right && anchor.top >= viewport.top && anchor.top <= viewport.bottom) boxes.push(box);
       measured.push({ element, offset, box });
     }
-    const dock = gl.domElement.closest("main")?.querySelector<HTMLElement>("[data-dialogue-dock]")?.getBoundingClientRect();
-    const obstacles = dock ? [{ x: dock.left - viewport.left, y: dock.top - viewport.top, width: dock.width, height: dock.height }] : [];
+    const hud = boxes.length ? gl.domElement.closest("main")?.querySelectorAll<HTMLElement>("[data-scene-obstacle]") : [];
+    const obstacles = [...(hud ?? [])].filter(element => element.offsetWidth && element.offsetHeight).map(element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left - viewport.left, y: rect.top - viewport.top, width: rect.width, height: rect.height };
+    });
     const placed = new Map(layoutHeadMessages(boxes, viewport, obstacles).map(box => [box.id, box]));
     for (const { element, offset, box } of measured) {
       const target = placed.get(box.id);

@@ -1,4 +1,4 @@
-.dock { position: absolute; z-index: 35; left: 50%; bottom: 100px; transform: translateX(-50%); width: min(560px, calc(100% - 48px)); border: 1px solid #ffffffdf; border-radius: 22px; background: #fffef8f7; color: #26342e; box-shadow: 0 10px 36px #17243a22; overflow: hidden; }
+.dock { grid-area: dialogue; justify-self: center; z-index: 35; width: min(560px, 100%); margin-bottom: 10px; border: 1px solid #ffffffdf; border-radius: 22px; background: #fffef8f7; color: #26342e; box-shadow: 0 10px 36px #17243a22; overflow: hidden; }
 .heading { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .toggle { flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0; background: transparent; border: 0; text-align: left; box-shadow: none; }
 .toggle:hover { background: transparent; }
@@ -28,7 +28,7 @@
 .round { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 12px; }
 .round span { margin-left: auto; color: #6b756d; }
 @media (max-width: 600px) {
-  .dock { width: calc(100% - 24px); bottom: 132px; border-radius: 18px; }
+  .dock { width: 100%; border-radius: 18px; }
   .heading { padding: 6px 10px; gap: 4px; }
   .toggle { gap: 8px; }
   .symbol { width: 32px; height: 32px; border-radius: 10px; }
