@@ -6,6 +6,7 @@ import { paintSign, SIGN_FACE, signCanvasSize } from "../src/assets/station-kit/
 import { createFloorReflection, disposeFloorReflection } from "../src/assets/station-kit/reflection";
 import { stationPlacements } from "../src/ui/scene/stationLayout";
 import { cameraFraction } from "../src/ui/scene/cameraCollision";
+import { STAIRS_BOTTOM, STAIRS_TOP } from "../src/sim/layout";
 
 const materials = makeMaterials();
 
@@ -49,7 +50,7 @@ describe("station display regressions", () => {
     const placements = stationPlacements(), floors = placements.filter((p) => p.id.startsWith("floor-"));
     expect(new Set(floors.map((p) => p.id))).toEqual(new Set(["floor-sage"]));
     expect(new Set(floors.map((p) => p.position[1]))).toEqual(new Set([0, -2]));
-    expect(floors.every((p) => p.position[0] < 48 || p.position[0] > 57)).toBe(true);
+    expect(floors.every((p) => p.position[0] < STAIRS_TOP.x || p.position[0] > STAIRS_BOTTOM.x)).toBe(true);
     expect(placements.filter((p) => p.id === "ceiling-panel").every((p) => p.position[1] === 6 && p.upper)).toBe(true);
     expect(BASE_WALL_HEIGHT + FASCIA_HEIGHT).toBe(STATION_CEILING);
     expect(new Box3().setFromObject(createAsset("pillar", materials)).max.y).toBeCloseTo(FRAME_HEIGHT, 5);

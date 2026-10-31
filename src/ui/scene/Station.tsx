@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { DoubleSide, Group } from "three";
 import { makeMaterials, setFacilityState, setGateProgress } from "../../assets/station-kit/index";
-import { FACILITIES, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
+import { ESCALATOR_BOTTOM, ESCALATOR_TOP, FACILITIES, HEIGHT, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
 import { createSignTexture, SIGN_FACE } from "../../assets/station-kit/signs";
 import { createFloorReflection, disposeFloorReflection } from "../../assets/station-kit/reflection";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
@@ -12,12 +12,14 @@ import { batchStation, disposeBatches, loadStationKit, type StationKit } from ".
 import { devicePosition, stationPlacements } from "./stationLayout";
 import { StationFallback } from "./StationFallback";
 import { StationStairs } from "./StationStairs";
+import { CommercialFeatures } from "./CommercialFeatures";
+import { Descent } from "./Descent";
 
-function KitSign({ kit, text, position, width = 4 }: { kit: StationKit; text: string; position: [number, number, number]; width?: number }) {
+function KitSign({ kit, text, position, width = 4, south = false }: { kit: StationKit; text: string; position: [number, number, number]; width?: number; south?: boolean }) {
   const model = useMemo(() => kit.models.get("sign-panel")!.clone(true), [kit]);
   const texture = useMemo(() => createSignTexture(text, width), [text, width]);
   useEffect(() => () => texture.dispose(), [texture]);
-  return <group position={position} rotation={[0, -Math.PI / 2, 0]} scale={[width / 2.8, 1, 1]}>
+  return <group position={position} rotation={[0, south ? 0 : -Math.PI / 2, 0]} scale={[width / 2.8, 1, 1]}>
     <primitive object={model} dispose={null} />
     <mesh position={[0, 0.25, 0.067]}><planeGeometry args={[SIGN_FACE.width, SIGN_FACE.height]} /><meshBasicMaterial map={texture} side={DoubleSide} toneMapped={false} /></mesh>
   </group>;
@@ -38,7 +40,7 @@ function FloorReflections({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-function ImportedStation({ kit, session, overview, standard }: { kit: StationKit; session: GameSession; overview: boolean; standard: boolean }) {
+function ImportedStation({ kit, session, overview, standard, reducedMotion }: { kit: StationKit; session: GameSession; overview: boolean; standard: boolean; reducedMotion: boolean }) {
   const { gl, camera, scene } = useThree();
   const gpu = useMemo(() => {
     const context = gl.getContext(), extension = context.getExtension("WEBGL_debug_renderer_info");
@@ -48,7 +50,7 @@ function ImportedStation({ kit, session, overview, standard }: { kit: StationKit
   const devices = useMemo(() => FACILITIES.map((def) => {
     const id = def.kind === "tvm" ? "ticket-machine" : def.kind === "security" ? "security-arch" : "fare-gate";
     const model = kit.models.get(id)!.clone(true); model.name = def.id;
-    model.position.set(...devicePosition(def.kind, def.pos.x, def.pos.y)); model.rotation.y = -Math.PI / 2;
+    model.position.set(...devicePosition(def.kind, def.pos.x, def.pos.y)); model.rotation.y = def.kind === "tvm" ? 0 : -Math.PI / 2;
     model.userData.facilityId = def.id; model.userData.kind = def.kind; return model;
   }), [kit]);
   const statusMaterials = useMemo(() => makeMaterials(), []);
@@ -95,16 +97,18 @@ function ImportedStation({ kit, session, overview, standard }: { kit: StationKit
       {[-0.45, 0.45].map((x) => <mesh key={x} material={steel} position={[x, 0.2, 0]} castShadow><boxGeometry args={[0.07, 0.4, 0.3]} /></mesh>)}
     </group>)}
     <StationStairs material={kit.materials.get("kit.terrazzo.sage")!} />
+    <CommercialFeatures />
+    <Descent top={ESCALATOR_TOP} bottom={ESCALATOR_BOTTOM} escalator session={session} reducedMotion={reducedMotion} />
     <KitSign kit={kit} text="01  购票 / TICKETS →" position={[10.8, 2.8, 15]} width={5.2} />
     <KitSign kit={kit} text="02  安全检查 →" position={[24, 2.8, 15]} width={4.5} />
     <KitSign kit={kit} text="03  检票进站 →" position={[42, 2.8, 15]} width={4.5} />
-    <KitSign kit={kit} text="04  下楼到站台 ↓" position={[47.5, 2.8, 15]} width={4.8} />
-    <KitSign kit={kit} text="下一程，由你决定" position={[66, 0.8, 15]} width={5} />
-    {FACILITIES.map((def) => <KitSign key={def.id} kit={kit} text={def.id} position={[def.pos.x - 0.12, def.kind === "security" ? 2.6 : 2.0, def.pos.y]} width={1.1} />)}
+    <KitSign kit={kit} text="04A  楼梯到站台 · 6秒 ↓" position={[STAIRS_TOP.x - .5, 2.8, STAIRS_TOP.y]} width={4.8} />
+    <KitSign kit={kit} text="下一程，由你决定" position={[WIDTH - 4, 0.8, 15]} width={5} />
+    {FACILITIES.map((def) => <KitSign key={def.id} kit={kit} text={def.id} south={def.kind === "tvm"} position={[def.pos.x - (def.kind === "tvm" ? 0 : .12), def.kind === "security" ? 2.6 : 2.0, def.pos.y]} width={1.1} />)}
   </group>;
 }
 
-export const Station = memo(function Station({ session, overview, standard, onAssetError }: { session: GameSession; overview: boolean; standard: boolean; onAssetError: (message: string) => void }) {
+export const Station = memo(function Station({ session, overview, standard, reducedMotion = false, onAssetError }: { session: GameSession; overview: boolean; standard: boolean; reducedMotion?: boolean; onAssetError: (message: string) => void }) {
   const [kit, setKit] = useState<StationKit | null>(null);
   useEffect(() => {
     let active = true;
@@ -113,5 +117,5 @@ export const Station = memo(function Station({ session, overview, standard, onAs
     });
     return () => { active = false; };
   }, [onAssetError]);
-  return kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} /> : <StationFallback session={session} />;
+  return kit ? <ImportedStation kit={kit} session={session} overview={overview} standard={standard} reducedMotion={reducedMotion} /> : <StationFallback session={session} reducedMotion={reducedMotion} />;
 });

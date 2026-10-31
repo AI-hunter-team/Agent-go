@@ -8,7 +8,7 @@ import { PROFILES, RULES } from "./scenario";
 export function prepareCutIn(world: World, npcId: string, message: string, history: CutInDialogueRequest["history"]):
   { ok: true; request: CutInDialogueRequest } | { ok: false; text: string } {
   const p = world.player;
-  if (!p || ["service", "creative", "stairs", "done"].includes(p.activity.kind)) return { ok: false, text: "当前行动未完成，不能沟通插队" };
+  if (!p || ["service", "creative", "stairs", "escalator", "done"].includes(p.activity.kind)) return { ok: false, text: "当前行动未完成，不能沟通插队" };
   if (!message.trim() || [...message].length > 200) return { ok: false, text: "请提供 1–200 字的具体插队请求" };
   if (history.length >= 3) return { ok: false, text: "与这位乘客的三轮沟通已结束，请选择其他行动" };
   const npc = world.persons.get(npcId);

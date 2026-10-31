@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { Engine } from "../src/sim/engine";
 import { captureScene, PresentationBuffer, sampleActor } from "../src/ui/presentation";
+import { STAIRS_TOP, STAIRS_BOTTOM } from "../src/sim/layout";
 
 test("snapshots are copies, and rendering cannot change world facts", () => {
   const engine = new Engine(1);
@@ -51,7 +52,7 @@ test("jump height is a visual offset, and guard facing maps the planar axes corr
 
 test("stairs lower the displayed player to the platform without changing simulation facts", () => {
   const engine = new Engine(1);
-  engine.player.pos = { x: 48, y: 15 };
+  engine.player.pos = { ...STAIRS_TOP };
   engine.player.passedGate = true;
   expect(engine.applyAction({ type: "descend_stairs", reason: "test" }).ok).toBe(true);
   const buffer = new PresentationBuffer(engine);
@@ -66,7 +67,7 @@ test("stairs lower the displayed player to the platform without changing simulat
   sampleActor(buffer, "player", 1, pose);
   expect(pose.y).toBe(-2);
   expect(engine.status).toBe("success");
-  expect(engine.player.pos).toEqual({ x: 57, y: 15 });
+  expect(engine.player.pos).toEqual(STAIRS_BOTTOM);
 });
 
 test("queued and serving actors turn toward their facility after arriving from the side", () => {
@@ -84,7 +85,7 @@ test("queued and serving actors turn toward their facility after arriving from t
     buffer.capture(engine);
     const pose = { x: 0, y: 0, z: 0, yaw: 0 };
     sampleActor(buffer, p.id, 1, pose);
-    expect(pose.yaw).toBeCloseTo(Math.PI / 2);
+    expect(pose.yaw).toBeCloseTo(f.def.kind === "tvm" ? Math.PI : Math.PI / 2);
     expect(buffer.current.actors.get(p.id)!.motion).toBe(kind === "service" ? "interact" : "walk");
   }
 });

@@ -10,7 +10,7 @@ export const GATE_CLEAR_WIDTH = GATE_CABINET_OFFSET * 2 - GATE_CABINET_WIDTH;
 export const CONVEYOR = { x: -0.88, y: 0.55, w: 1.4, h: 0.5 } as const;
 
 export function facilitySolids(kind: FacilityKind, pos: Vec): Rect[] {
-  const local: Rect[] = kind === "tvm" ? [{ x: -0.175, y: -0.425, w: 0.789, h: 0.85 }]
+  const local: Rect[] = kind === "tvm" ? [{ x: -0.425, y: -0.614, w: 0.85, h: 0.789 }]
     : kind === "security" ? [CONVEYOR, ...[-SECURITY_POST_OFFSET, SECURITY_POST_OFFSET].map((z) => ({ x: -0.244, y: z - 0.11, w: 0.454, h: 0.22 }))]
     : [-GATE_CABINET_OFFSET, GATE_CABINET_OFFSET].map((z) => ({ x: -0.555, y: z - 0.055, w: 1.11, h: 0.11 }));
   return local.map((r) => ({ x: pos.x + r.x, y: pos.y + r.y, w: r.w, h: r.h }));

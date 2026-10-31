@@ -69,11 +69,12 @@ test.each(["normal", "luggage"] as const)("%s passenger reaches S1 from behind i
 test("a waiting passenger cannot advance onto the passenger being served", () => {
   const w = new World(1), f = w.facility("TVM-2")!;
   const a = w.addPerson("luggage", { ...f.def.head });
-  const b = w.addPerson("luggage", { x: f.def.head.x - 1.05, y: f.def.head.y });
+  const b = w.addPerson("luggage", { x: f.def.head.x, y: f.def.head.y + 1.05 });
   a.activity = { kind: "service", facility: f.def.id }; f.serving = { personId: a.id, remaining: 100, recheck: false };
   b.activity = { kind: "queued", facility: f.def.id }; f.queue = [b.id];
   for (let i = 0; i < 100; i++) w.stepPeopleAndFacilities();
   expect(b.pos.x).toBeCloseTo(w.queueStandPoint(f, 0).x);
+  expect(b.pos.y).toBeCloseTo(w.queueStandPoint(f, 0).y);
   expect(a.pos).toEqual(f.def.head);
   expect(f.queue).toEqual([b.id]);
 });
@@ -98,6 +99,18 @@ test("patrolling guards stop before a stationary passenger", async () => {
   expect(guards.guards[0].pos.y).toBeLessThanOrEqual(14.36);
   guards.step();
   expect(guards.guards[0].pos.y).toBeGreaterThan(14.3);
+});
+
+test("a walker safely crosses behind the new vertical ticket queue", () => {
+  const w = new World(1), f = w.facility("TVM-2")!;
+  for (let i = 0; i < 8; i++) {
+    const p = w.addPerson("luggage", { ...f.def.head });
+    f.queue.push(p.id); p.pos = w.queueStandPoint(f, i); p.activity = { kind: "queued", facility: f.def.id };
+  }
+  const p = w.addPerson("normal", { x: 8, y: 9 });
+  expect(w.walkTo(p, { x: 12, y: 9 }, "cross the ticket bank")).toBeNull();
+  walkThrough(w, 350);
+  expect(p.pos).toEqual({ x: 12, y: 9 });
 });
 
 test("live NPCs, spawns, service exits and guards stay separated throughout interpolated ticks", async () => {

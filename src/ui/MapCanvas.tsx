@@ -32,7 +32,7 @@ export function MapCanvas({ engineRef, optionsRef }: Props) {
       <div className="map-regions" aria-label="地图区域" style={{ gridTemplateColumns: MAP_REGIONS.map((r) => `${r.end - r.start}fr`).join(" ") }}>
         {MAP_REGIONS.map((r) => <span key={r.label} style={{ background: r.color }}>{r.label}</span>)}
       </div>
-      <canvas ref={canvasRef} className="map" aria-label="车站地图：售票厅、安检区、验票闸机、上层平台、下行楼梯和下层站台；通过闸机后需下楼梯到达站台" style={{ width: "100%", height: "auto", display: "block" }} />
+      <canvas ref={canvasRef} className="map" aria-label="车站地图：售票厅、安检区、商业大厅、验票闸机、连接区、楼梯、扶梯和下层站台；通过闸机后选择下行路线到达站台" style={{ width: "100%", height: "auto", display: "block" }} />
       <div className="facility-key">
         <div className="facility-key-security">
           <svg viewBox="0 0 40 32" aria-hidden="true"><path d="M7 27V5h26v22h-5V10H12v17Z" fill="#b9d1dd" stroke="#527e91" strokeWidth="2"/><path d="M20 12v12" stroke="#527e91" strokeWidth="2" strokeDasharray="3 2"/></svg>
@@ -44,7 +44,7 @@ export function MapCanvas({ engineRef, optionsRef }: Props) {
         </div>
         <div className="facility-key-stairs">
           <svg viewBox="0 0 40 32" aria-hidden="true"><path d="M4 6h8v6h8v6h8v7h8" fill="none" stroke="#856a4d" strokeWidth="3"/><path d="m21 5 13 13m-8 0h8v-8" fill="none" stroke="#6e8a74" strokeWidth="2.5"/></svg>
-          <span><strong>下楼梯 → 站台</strong><small>闸机后前往入口，下行约 6 秒</small></span>
+          <span><strong>楼梯 / 扶梯 → 站台</strong><small>楼梯基础 6 秒；扶梯候梯后乘坐 4 秒</small></span>
         </div>
       </div>
     </div>

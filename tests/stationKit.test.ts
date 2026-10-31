@@ -2,12 +2,12 @@ import { describe, expect, test } from "vitest";
 import { Box3, Group, Mesh, Vector3 } from "three";
 import { ASSETS, createAsset, makeMaterials, setFacilityState, setGateProgress } from "../src/assets/station-kit/index";
 import { fitRailingSpan } from "../src/assets/station-kit/railing";
-import { FACILITIES, SECURITY_BARRIERS } from "../src/sim/layout";
+import { FACILITIES, SECURITY_BARRIERS, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../src/sim/layout";
 import { GATE_CLEAR_WIDTH, facilitySolids } from "../src/sim/facilityGeometry";
 import { clearOfScenery, clearServiceExit, personRadius } from "../src/sim/movement";
 import { segmentIntersectsRect } from "../src/sim/geometry";
 import { batchStation, disposeBatches } from "../src/ui/scene/stationAssets";
-import { stationPlacements } from "../src/ui/scene/stationLayout";
+import { devicePosition, stationPlacements } from "../src/ui/scene/stationLayout";
 
 const materials = makeMaterials();
 const size = (root: Group) => new Box3().setFromObject(root).getSize(new Vector3());
@@ -50,6 +50,15 @@ describe("station railings", () => {
   });
 });
 describe("station integration contracts", () => {
+  test("south-facing ticket machine model bounds agree with the simulator collision footprint", () => {
+    for (const def of FACILITIES.filter(f => f.kind === "tvm")) {
+      const model = createAsset("ticket-machine", materials);
+      model.position.set(...devicePosition(def.kind, def.pos.x, def.pos.y));
+      const bounds = new Box3().setFromObject(model), [solid] = facilitySolids(def.kind, def.pos);
+      expect(bounds.min.x).toBeCloseTo(solid.x, 5); expect(bounds.max.x).toBeCloseTo(solid.x + solid.w, 5);
+      expect(bounds.min.z).toBeCloseTo(solid.y, 5); expect(bounds.max.z).toBeCloseTo(solid.y + solid.h, 5);
+    }
+  });
   test("normal and luggage passengers fit every service exit while ordinary walking cannot cross railings", () => {
     expect(GATE_CLEAR_WIDTH).toBeGreaterThan(personRadius("luggage") * 2 + 0.04);
     for (const def of FACILITIES) for (const kind of ["normal", "luggage"] as const) {
@@ -72,9 +81,9 @@ describe("station integration contracts", () => {
     const group = batchStation({ models, materials: new Map() }, floors);
     expect(group.children.length).toBeLessThan(floors.length / 3);
     const bounds = new Box3().setFromObject(group);
-    expect(bounds.min.x).toBeCloseTo(0, 5); expect(bounds.max.x).toBeCloseTo(70, 5);
+    expect(bounds.min.x).toBeCloseTo(0, 5); expect(bounds.max.x).toBeCloseTo(WIDTH, 5);
     expect(bounds.min.y).toBeCloseTo(-2.12, 3);
-    expect(floors.every((p) => p.position[0] < 48 || p.position[0] > 57)).toBe(true);
+    expect(floors.every((p) => p.position[0] < STAIRS_TOP.x || p.position[0] > STAIRS_BOTTOM.x)).toBe(true);
     disposeBatches(group);
   });
 });

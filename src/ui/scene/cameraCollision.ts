@@ -1,4 +1,4 @@
-import { GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, WIDTH } from "../../sim/layout";
+import { ATTRACTIONS, ESCALATOR_TOP, GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
 import { STATION_CEILING } from "./stationLayout";
 import { FRAME_HEIGHT } from "../../assets/station-kit/dimensions";
 
@@ -10,7 +10,8 @@ const CAMERA_BOXES: CameraBox[] = [
   ...[...SECURITY_BARRIERS, ...GATE_BARRIERS].map((r) => bounds(r.x + r.w / 2 - 0.08, 0, r.y, 0.16, 1.1, r.h)),
   bounds(0, -2.2, -0.41, WIDTH, STATION_CEILING + 2.2, 0.4), bounds(0, -2.2, HEIGHT + 0.01, WIDTH, STATION_CEILING + 2.2, 0.4),
   bounds(0, STATION_CEILING, 0, WIDTH, 0.12, HEIGHT),
-  ...[13, 17].flatMap((z) => Array.from({ length: 9 }, (_, i) => bounds(48 + i, -2 * (i + 1) / 9, z - 0.08, 1, 1.1 + 2 / 9, 0.16))),
+  ...ATTRACTIONS.flatMap(a => a.body ? [bounds(a.body.x, 0, a.body.y, a.body.w, a.blocksSight ? 3.1 : 1.5, a.body.h)] : []),
+  ...[STAIRS_TOP.y - 2, STAIRS_TOP.y + 2, ESCALATOR_TOP.y - 1.5, ESCALATOR_TOP.y + 1.5].flatMap((z) => Array.from({ length: 12 }, (_, i) => bounds(STAIRS_TOP.x + i * (STAIRS_BOTTOM.x - STAIRS_TOP.x) / 12, -2 * (i + 1) / 12, z - 0.08, (STAIRS_BOTTOM.x - STAIRS_TOP.x) / 12, 1.1 + 2 / 12, 0.16))),
 ];
 /** Height-aware clipping: transparent low railings do not behave like full-height walls. */
 export function cameraFraction(target: Point3, desired: Point3): number {

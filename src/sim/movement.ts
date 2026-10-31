@@ -1,15 +1,17 @@
 import type { PassengerKind, Vec } from "../shared/types";
 import { dist, moveToward, segmentIntersectsRect, type Rect } from "./geometry";
-import { FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_BARRIERS, WIDTH } from "./layout";
+import { ATTRACTIONS, ESCALATOR_TOP, FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_BARRIERS, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "./layout";
 import { facilitySolids } from "./facilityGeometry";
 
 export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
 export const personRadius = (kind: PassengerKind | "guard") => kind === "luggage" ? 0.48 : 0.32;
 const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos));
 const floorEdges: Rect[] = [
-  { x: 48, y: -1, w: 9, h: 14 }, { x: 48, y: 17, w: 9, h: HEIGHT - 16 },
+  { x: STAIRS_TOP.x, y: -1, w: STAIRS_BOTTOM.x - STAIRS_TOP.x, h: STAIRS_TOP.y - 1 },
+  { x: STAIRS_TOP.x, y: STAIRS_TOP.y + 2, w: STAIRS_BOTTOM.x - STAIRS_TOP.x, h: ESCALATOR_TOP.y - 1.5 - (STAIRS_TOP.y + 2) },
+  { x: STAIRS_TOP.x, y: ESCALATOR_TOP.y + 1.5, w: STAIRS_BOTTOM.x - STAIRS_TOP.x, h: HEIGHT + 1 - (ESCALATOR_TOP.y + 1.5) },
 ];
-const solids = [...PILLARS, ...furniture, ...floorEdges];
+const solids = [...PILLARS, ...furniture, ...floorEdges, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
 /** Shared by persistent route planning and the per-tick collision sweep. */
 export const SCENERY_OBSTACLES: readonly Rect[] = [...MOVE_BLOCKERS.slice(0, 3), ...solids];
 

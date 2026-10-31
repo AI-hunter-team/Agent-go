@@ -1,10 +1,12 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, DoubleSide, SRGBColorSpace, type Mesh, type MeshBasicMaterial } from "three";
-import { FACILITIES, QUEUE_SPACING, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_BARRIERS, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
+import { ESCALATOR_BOTTOM, ESCALATOR_TOP, FACILITIES, queueSlot, GATE_BARRIERS, GATE_X, HEIGHT, PILLARS, SECURITY_BARRIERS, SECURITY_X, STAIRS_TOP, STAIRS_BOTTOM, WIDTH, type FacilityDef } from "../../sim/layout";
 import type { GameSession } from "../gameSession";
 import { box, materials, plane, type colors } from "./resources";
 import { StationStairs } from "./StationStairs";
+import { CommercialFeatures } from "./CommercialFeatures";
+import { Descent } from "./Descent";
 
 type Color = keyof typeof colors;
 function Block({ position, scale, color = "chalk" }: { position: [number, number, number]; scale: [number, number, number]; color?: Color }) {
@@ -42,9 +44,9 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
   const [x, z] = [def.pos.x, def.pos.y];
   return <group>
     {def.kind === "tvm" ? <>
-      <Block position={[x, 0.82, z]} scale={[0.35, 1.64, 0.82]} color="ink" />
-      <Block position={[x - 0.185, 1.15, z]} scale={[0.025, 0.46, 0.6]} color="screen" />
-      <Block position={[x - 0.2, 0.63, z]} scale={[0.03, 0.06, 0.28]} color="ochre" />
+      <Block position={[x, 0.82, z]} scale={[0.82, 1.64, 0.35]} color="ink" />
+      <Block position={[x, 1.15, z + .185]} scale={[0.6, 0.46, 0.025]} color="screen" />
+      <Block position={[x, 0.63, z + .2]} scale={[0.28, 0.06, 0.03]} color="ochre" />
     </> : def.kind === "security" ? <>
       {[-0.88, 0.88].map((offset) => <Block key={offset} position={[x, 1.25, z + offset]} scale={[0.42, 2.5, 0.22]} color="ink" />)}
       <Block position={[x, 2.43, z]} scale={[0.42, 0.18, 1.9]} color="ink" />
@@ -56,16 +58,18 @@ const Device = memo(function Device({ def, session }: { def: FacilityDef; sessio
     </>}
     <mesh ref={lamp} geometry={box} material={materials.sage} position={[x - 0.23, def.kind === "security" ? 2.5 : 1.75, z]} scale={[0.08, 0.08, 0.45]} />
     <Sign text={def.id} position={[x - 0.12, def.kind === "security" ? 2.95 : 2.3, z]} width={1.3} />
-    {Array.from({ length: 6 }, (_, index) => <mesh key={index} geometry={box} material={materials.line} position={[def.head.x - index * QUEUE_SPACING, 0.006, z]} scale={[0.03, 0.01, 0.4]} receiveShadow />)}
+    {Array.from({ length: 6 }, (_, index) => { const slot = queueSlot(def, index); return <mesh key={index} geometry={box} material={materials.line} position={[slot.x, 0.006, slot.y]} scale={def.kind === "tvm" ? [.4, .01, .03] : [.03, .01, .4]} receiveShadow />; })}
   </group>;
 });
 
-export const StationFallback = memo(function StationFallback({ session }: { session: GameSession }) {
+export const StationFallback = memo(function StationFallback({ session, reducedMotion = false }: { session: GameSession; reducedMotion?: boolean }) {
   return <group>
     <Block position={[STAIRS_TOP.x / 2, -0.09, HEIGHT / 2]} scale={[STAIRS_TOP.x, 0.18, HEIGHT + 2]} color="chalk" />
     <Block position={[(STAIRS_BOTTOM.x + WIDTH) / 2, -2.09, HEIGHT / 2]} scale={[WIDTH - STAIRS_BOTTOM.x + 2, 0.18, HEIGHT + 2]} color="sage" />
     <StationStairs material={materials.sage} />
-    <Sign text="04   下楼梯 / PLATFORM  ↓" position={[47.5, 2.8, 15]} width={5.8} />
+    <Sign text="04A   楼梯 / PLATFORM  ↓" position={[STAIRS_TOP.x - .5, 2.8, STAIRS_TOP.y]} width={5.8} />
+    <Descent top={ESCALATOR_TOP} bottom={ESCALATOR_BOTTOM} escalator session={session} reducedMotion={reducedMotion} />
+    <CommercialFeatures />
     <Block position={[(SECURITY_X + GATE_X) / 2, -0.015, HEIGHT / 2]} scale={[GATE_X - SECURITY_X, 0.025, HEIGHT]} color="white" />
     <Block position={[(GATE_X + STAIRS_TOP.x) / 2, -0.012, HEIGHT / 2]} scale={[STAIRS_TOP.x - GATE_X, 0.025, HEIGHT]} color="sage" />
     {Array.from({ length: Math.floor(STAIRS_TOP.x / 3) + 1 }, (_, i) => <mesh key={`x${i}`} geometry={box} material={materials.line} position={[i * 3, 0.002, HEIGHT / 2]} scale={[0.015, 0.005, HEIGHT]} />)}
@@ -83,7 +87,7 @@ export const StationFallback = memo(function StationFallback({ session }: { sess
     <Sign text="01   购票 / TICKETS  →" position={[10.8, 3.15, 15]} width={6.2} />
     <Sign text="02   安检 / SECURITY  →" position={[24, 3.25, 15]} width={5.5} />
     <Sign text="03   进站 / DEPARTURES  →" position={[42, 3.2, 15]} width={5.8} />
-    <Sign text="下一程，由你决定" position={[65, 0.5, 15]} width={6} dark={false} />
+    <Sign text="下一程，由你决定" position={[WIDTH - 4, 0.5, 15]} width={6} dark={false} />
     {FACILITIES.map((def) => <Device key={def.id} def={def} session={session} />)}
     {[7, 20, 31, 39].map((x) => <group key={`arrow${x}`} position={[x, 0.012, 15]}>
       <mesh geometry={box} material={materials.ochre} scale={[0.9, 0.008, 0.06]} />

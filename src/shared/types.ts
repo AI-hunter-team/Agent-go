@@ -21,6 +21,8 @@ export type AgentAction =
   | { type: "leave_queue"; reason: string }
   | { type: "wait"; seconds: number; reason: string }
   | { type: "descend_stairs"; reason: string }
+  | { type: "take_escalator"; reason: string }
+  | { type: "inspect_attraction"; attraction: string; mode: "glance" | "linger"; reason: string }
   | { type: "request_cut_in"; npcId: string; message: string; reason: string }
   | { type: "attempt_creative"; intent: string; reason: string };
 
@@ -59,6 +61,7 @@ export type TriggerKind =
   | "queue_closed"
   | "creative_done"
   | "periodic"
+  | "attraction_seen"
   | "fallback";
 
 export interface Trigger {
@@ -108,6 +111,30 @@ export interface Observation {
   self: SelfObservation;
   facilities: FacilityObservation[];
   guards: GuardObservation[];
+  /** Optional for recordings made before the commercial hall iteration. */
+  attractions?: AttractionObservation[];
+  routes?: RouteObservation[];
+}
+
+export interface AttractionObservation {
+  id: string;
+  label: string;
+  cue: string;
+  distance: number;
+  approach: Vec;
+  canLinger: boolean;
+}
+
+export interface RouteObservation {
+  id: "stairs" | "escalator";
+  label: string;
+  node: string;
+  position: Vec;
+  distance: number;
+  travelSeconds: number;
+  /** Visible waiting passengers only; never a hidden global count. */
+  queueLength: number;
+  boardingInterval: number;
 }
 
 /** One decision request: what changed, how the last action went, and what is visible now. */
@@ -232,6 +259,8 @@ export interface TimeBreakdown {
   creative: number;
   idle: number;
   stairs?: number;
+  escalator?: number;
+  distraction?: number;
 }
 
 export interface TrailPoint extends Vec {

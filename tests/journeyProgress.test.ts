@@ -10,11 +10,11 @@ function render(engine: Engine) {
 
 test("the normal journey explicitly includes a gate step before entering the platform", () => {
   const html = render(new Engine(1));
-  const labels = ["买票", "安检", "过闸机", "下楼梯", "进入站台"];
+  const labels = ["买票", "安检", "过闸机", "下行到站台", "进入站台"];
   for (const label of labels) expect(html).toContain(label);
   expect(html.indexOf("过闸机")).toBeLessThan(html.indexOf("进入站台"));
-  expect(html.indexOf("过闸机")).toBeLessThan(html.indexOf("下楼梯"));
-  expect(html.indexOf("下楼梯")).toBeLessThan(html.indexOf("进入站台"));
+  expect(html.indexOf("过闸机")).toBeLessThan(html.indexOf("下行到站台"));
+  expect(html.indexOf("下行到站台")).toBeLessThan(html.indexOf("进入站台"));
   expect(html).toContain("当前阶段：买票");
 });
 
@@ -36,9 +36,9 @@ test("passing a gate completes only the gate step and advances to stairs", () =>
   Object.assign(engine.player, { hasTicket: true, screened: true, passedGate: true });
   let html = render(engine);
   expect(html).toContain('aria-label="过闸机：已完成"');
-  expect(html).toContain('aria-label="下楼梯：进行中"');
+  expect(html).toContain('aria-label="下行到站台：进行中"');
   expect(html).toContain('aria-label="进入站台：待开始"');
-  expect(html).toContain("当前阶段：下楼梯");
+  expect(html).toContain("当前阶段：下行到站台");
   engine.player.activity = { kind: "stairs", remaining: 3, start: { x: 48, y: 15 } };
   html = render(engine);
   expect(html).toContain("正在下楼梯");
@@ -53,7 +53,7 @@ test("only platform arrival completes the stairs and platform steps", () => {
   engine.status = "success";
   const html = render(engine);
   expect(html).toContain('aria-label="过闸机：已完成"');
-  expect(html).toContain('aria-label="下楼梯：已完成"');
+  expect(html).toContain('aria-label="下行到站台：已完成"');
   expect(html).toContain("当前阶段：进入站台");
 });
 

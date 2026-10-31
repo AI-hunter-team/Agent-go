@@ -29,7 +29,7 @@ export function SetupPanel(p: SetupProps) {
     <section className="card setup" aria-busy={p.busy !== null}>
       <h2>出发之前</h2>
       <p className="muted setup-goal">
-        {`唯一目标：限时 ${p.settings.timeLimitSeconds} 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台；角色依据你的指导自主选择方案，结果由环境判定。`}
+        {`唯一目标：限时 ${p.settings.timeLimitSeconds} 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、穿过商业大厅、刷票过闸，再选择楼梯或扶梯下行；角色依据你的指导自主选择方案，结果由环境判定。`}
       </p>
 
       <div className="field">

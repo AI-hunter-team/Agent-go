@@ -195,7 +195,7 @@ export function App() {
           <div className={styles.events} aria-label="最近事件">{recent.map((event, index) => <div key={`${event.t}-${index}`}><time>{event.t.toFixed(1)}s</time><span>{event.text}</span></div>)}</div>
           <div className={`${styles.phaseChip} ${runner?.phase === "thinking" ? styles.thinking : ""}`} role="status"><i />{runner?.phase === "thinking" ? "角色思考中 · 世界暂停" : session.paused ? "已暂停" : "角色自主行动中"}</div>
         </div>}
-        {!playing && !ended && <div className={styles.introCaption}><h1>你的指导，<br />它的下一程。</h1><p>买票、安检、过闸、下楼到站台。<br />把计划交给角色，观看它如何应对现场。</p></div>}
+        {!playing && !ended && <div className={styles.introCaption}><h1>你的指导，<br />它的下一程。</h1><p>穿过商业大厅，选择楼梯或扶梯到站台。<br />把计划交给角色，观看它如何应对现场。</p></div>}
         {ended && <div className={styles.endCaption}><h2>{session.engine.status === "success" ? "这一次，顺利抵达。" : "每次出发，都有新的答案。"}</h2><p>查看本次行程记录，再试一种思路。</p></div>}
       </section>
       <aside className={styles.sidebar} aria-label="对局面板">

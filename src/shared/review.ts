@@ -6,6 +6,7 @@ export interface WorldReviewSnapshot {
   player: Vec;
   facilities: { id: string; status: FacilityStatus; queue: string[]; serving: { personId: string; remaining: number } | null }[];
   guards: { id: string; position: Vec; facing: number }[];
+  transit?: { queue: string[]; riders: { id: string; remaining: number }[] };
 }
 export interface ReviewInput {
   status: "failed";
@@ -79,7 +80,9 @@ export function validateReviewInput(value: unknown): asserts value is ReviewInpu
   if (!value.worldSnapshots.every(s => object(s) && within(s.t) && point(s.player)
     && list(s.facilities, 30) && s.facilities.every(f => object(f) && text(f.id, 80) && ["open", "closed", "broken"].includes(String(f.status))
       && list(f.queue, 200) && f.queue.every(p => text(p, 100)) && (f.serving === null || (object(f.serving) && text(f.serving.personId, 80) && finite(f.serving.remaining))))
-    && list(s.guards, 20) && s.guards.every(g => object(g) && text(g.id, 80) && point(g.position) && typeof g.facing === "number" && Number.isFinite(g.facing)))) return fail();
+    && list(s.guards, 20) && s.guards.every(g => object(g) && text(g.id, 80) && point(g.position) && typeof g.facing === "number" && Number.isFinite(g.facing))
+    && (s.transit === undefined || (object(s.transit) && list(s.transit.queue, 100) && s.transit.queue.every(id => text(id, 100))
+      && list(s.transit.riders, 100) && s.transit.riders.every(r => object(r) && text(r.id, 100) && finite(r.remaining)))))) return fail();
 }
 
 export function validateStrategies(value: unknown): asserts value is ReviewStrategy[] {

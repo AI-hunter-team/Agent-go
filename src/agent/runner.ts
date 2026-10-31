@@ -382,6 +382,8 @@ export class GameRunner {
         creative: round(tb.creative),
         idle: round(tb.idle),
         stairs: round(tb.stairs ?? 0),
+        escalator: round(tb.escalator ?? 0),
+        distraction: round(tb.distraction ?? 0),
       },
       violations: e.creative.violations.map((v) => ({ ...v })),
       decisions: this.decisions,

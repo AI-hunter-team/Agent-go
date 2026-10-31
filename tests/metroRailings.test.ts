@@ -9,7 +9,7 @@ import {
 import { exportGlb } from "../scripts/station-kit/glb";
 import { batchStation, disposeBatches, placedModel } from "../src/ui/scene/stationAssets";
 import { stationPlacements } from "../src/ui/scene/stationLayout";
-import { GATE_BARRIERS, SECURITY_BARRIERS } from "../src/sim/layout";
+import { GATE_BARRIERS, SECURITY_BARRIERS, STAIRS_BOTTOM, STAIRS_TOP } from "../src/sim/layout";
 
 const materials = makeRailingMaterials();
 const dimensions = (root: Parameters<Box3["setFromObject"]>[0]) => new Box3().setFromObject(root).getSize(new Vector3());
@@ -125,17 +125,17 @@ test("formal placement uses A for security/gates and B for landing/stairs withou
   const kit = { models: models as Map<string, Group>, materials: new Map() };
   const rails = stationPlacements().filter((placement) => /^(metal|glass)-/.test(placement.id));
   expect(rails.filter((p) => p.id === "metal-straight")).toHaveLength(SECURITY_BARRIERS.length + GATE_BARRIERS.length);
-  expect(rails.filter((p) => p.id === "glass-straight")).toHaveLength(2);
+  expect(rails.filter((p) => p.id === "glass-straight")).toHaveLength(3);
   for (const placement of rails.filter((p) => p.id === "glass-stairs")) {
     const root = placedModel(kit, placement);
     expect(dimensions(root).y).toBeCloseTo(3.1, 5);
     expect(root.getObjectByName("anchor_end")!.getWorldPosition(new Vector3()).y).toBeCloseTo(-2, 5);
-    expect(root.getObjectByName("anchor_start")!.getWorldPosition(new Vector3()).x).toBeCloseTo(48, 5);
-    expect(root.getObjectByName("anchor_end")!.getWorldPosition(new Vector3()).x).toBeCloseTo(57, 5);
-    expect(root.children.filter((node) => node.name === "post")).toHaveLength(7);
+    expect(root.getObjectByName("anchor_start")!.getWorldPosition(new Vector3()).x).toBeCloseTo(STAIRS_TOP.x, 5);
+    expect(root.getObjectByName("anchor_end")!.getWorldPosition(new Vector3()).x).toBeCloseTo(STAIRS_BOTTOM.x, 5);
+    expect(root.children.filter((node) => node.name === "post")).toHaveLength(9);
     for (const post of root.children.filter((node) => node.name === "post")) {
       const position = post.getWorldPosition(new Vector3());
-      const step = Math.ceil((position.x - 48) / 0.45 - 0.000001);
+      const step = Math.ceil((position.x - STAIRS_TOP.x) / ((STAIRS_BOTTOM.x - STAIRS_TOP.x) / 20) - 0.000001);
       expect(position.y).toBeCloseTo(-step * 0.1, 5);
     }
   }

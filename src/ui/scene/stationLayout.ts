@@ -1,4 +1,4 @@
-import { FACILITIES, GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
+import { ESCALATOR_TOP, FACILITIES, GATE_BARRIERS, HEIGHT, PILLARS, SECURITY_BARRIERS, STAIRS_BOTTOM, STAIRS_TOP, WIDTH } from "../../sim/layout";
 import { TVM_MODEL_OFFSET_X } from "../../sim/facilityGeometry";
 import { BASE_WALL_HEIGHT, FRAME_HEIGHT, STATION_CEILING } from "../../assets/station-kit/dimensions";
 
@@ -9,7 +9,7 @@ export interface Placement {
   railStartPost?: boolean;
 }
 export function devicePosition(kind: string, x: number, z: number): [number, number, number] {
-  return [x + (kind === "tvm" ? TVM_MODEL_OFFSET_X : 0), 0, z];
+  return [x, 0, z - (kind === "tvm" ? TVM_MODEL_OFFSET_X : 0)];
 }
 export function stationPlacements(): Placement[] {
   const result: Placement[] = [];
@@ -43,12 +43,12 @@ export function stationPlacements(): Placement[] {
   for (const r of [...SECURITY_BARRIERS, ...GATE_BARRIERS]) {
     result.push({ id: "metal-straight", position: [r.x + r.w / 2, 0, r.y + r.h / 2], yaw: -Math.PI / 2, scale: [1, 1, 1], railLength: r.h });
   }
-  for (const [start, end] of [[0, 13], [17, HEIGHT]]) {
+  for (const [start, end] of [[0, STAIRS_TOP.y - 2], [STAIRS_TOP.y + 2, ESCALATOR_TOP.y - 1.5], [ESCALATOR_TOP.y + 1.5, HEIGHT]]) {
     result.push({ id: "glass-straight", position: [STAIRS_TOP.x, 0, (start + end) / 2], yaw: -Math.PI / 2, scale: [1, 1, 1], railLength: end - start + 0.16 });
   }
-  for (const z of [13, 17]) result.push({ id: "glass-stairs", position: [(STAIRS_TOP.x + STAIRS_BOTTOM.x) / 2, 0, z], yaw: 0, scale: [1, 1, 1], railLength: STAIRS_BOTTOM.x - STAIRS_TOP.x + 0.16, railStartPost: false, slope: -2 });
-  for (const def of FACILITIES) add("marking-queue", def.head.x, 0.012, def.head.y, -Math.PI / 2);
-  for (const [start, end, elevation] of [[3, 23, 0], [29, 32, 0], [38, 44, 0], [60, 66, -2]]) {
+  for (const z of [STAIRS_TOP.y - 2, STAIRS_TOP.y + 2]) result.push({ id: "glass-stairs", position: [(STAIRS_TOP.x + STAIRS_BOTTOM.x) / 2, 0, z], yaw: 0, scale: [1, 1, 1], railLength: STAIRS_BOTTOM.x - STAIRS_TOP.x + 0.16, railStartPost: false, slope: -2 });
+  for (const def of FACILITIES) add("marking-queue", def.head.x, 0.012, def.head.y, def.kind === "tvm" ? 0 : -Math.PI / 2);
+  for (const [start, end, elevation] of [[3, 23, 0], [29, 32, 0], [38, 55, 0], [STAIRS_BOTTOM.x + 2, WIDTH - 3, -2]]) {
     for (let x = start; x < end; x += 3) add("route-straight", x, elevation + 0.003, 15, -Math.PI / 2);
   }
   add("route-split", 20, 0.004, 15, -Math.PI / 2);

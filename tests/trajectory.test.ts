@@ -30,8 +30,8 @@ describe("trajectory recording", () => {
   });
 
   test("completed runs retain the final platform position and world time", async () => {
-    // Use the verified success seed after correcting crowd detours around fixtures.
-    const runner = new GameRunner(new Engine(27), new HeuristicAgent(), offlineClassifier);
+    // Verified on the expanded map, with current collision and queue rules.
+    const runner = new GameRunner(new Engine(22), new HeuristicAgent(), offlineClassifier);
     await runner.runToEnd();
     const report = runner.report();
     expect(report.status).toBe("success");

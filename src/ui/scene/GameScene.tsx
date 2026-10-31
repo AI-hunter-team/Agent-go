@@ -82,7 +82,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     if (active instanceof PerspectiveCamera) active.aspect = size.width / Math.max(1, size.height);
     else {
       const aspect = size.width / Math.max(1, size.height);
-      const halfHeight = Math.max(26, 40 / aspect); const halfWidth = halfHeight * aspect;
+      const halfHeight = Math.max(26, (WIDTH / 2 + 9) / aspect); const halfWidth = halfHeight * aspect;
       active.left = -halfWidth; active.right = halfWidth; active.top = halfHeight; active.bottom = -halfHeight;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
@@ -241,7 +241,7 @@ function Contents(props: SceneProps) {
     <color attach="background" args={["#e9e1cf"]} />
     <StationLighting standard={props.quality === "standard"} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} />
-    <Station session={session} overview={props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
+    <Station session={session} reducedMotion={props.reducedMotion} overview={props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
     {props.simpleCrowd && <SimpleCrowd key={session.generation} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={session.generation} session={session} vision={props.showVision} trail={props.showTrail} />
