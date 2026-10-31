@@ -97,7 +97,10 @@ export function createApp({ llm, sessions, debugLogger = new DebugLogger(false),
   app.post("/api/model/enable", wrap(async (req, res) => {
     const token = req.get("x-model-config");
     if (!token) throw new ModelConfigError("请先验证 API 配置");
-    res.json(await modelConfigs.enable(token, req.body?.model));
+    const { value } = await traceOperation({ operation: "decide", runId: null, sessionId: null },
+      { purpose: "model_verification", model: req.body?.model }, debugLogger,
+      () => modelConfigs.enable(token, req.body?.model));
+    res.json(value);
   }));
   app.delete("/api/model/config", (req, res) => {
     modelConfigs.delete(req.get("x-model-config") || "");

@@ -5,6 +5,10 @@ import { ModelConfigStore } from "../server/modelConfig";
 import { createApp } from "../server/app";
 import { SessionStore } from "../server/sessions";
 import { Engine } from "../src/sim/engine";
+import { DebugLogger } from "../server/debug";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const secret = "user-private-key";
 const completion = () => Response.json({ choices: [{ finish_reason: "tool_calls", message: {
@@ -16,9 +20,9 @@ const list = () => Response.json({ data: [{ id: "model-b" }, { id: "model-a" }, 
 let server: Server | null = null;
 afterEach(() => { server?.close(); server = null; vi.useRealTimers(); });
 
-async function start(fetcher: typeof fetch) {
+async function start(fetcher: typeof fetch, debugLogger?: DebugLogger) {
   const modelConfigs = new ModelConfigStore(fetcher);
-  server = createApp({ llm: null, sessions: new SessionStore(), modelConfigs }).listen(0, "127.0.0.1");
+  server = createApp({ llm: null, sessions: new SessionStore(), modelConfigs, debugLogger }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server!.once("listening", resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const call = async (path: string, body?: unknown, token?: string, method = body === undefined ? "GET" : "POST") => {
@@ -78,6 +82,34 @@ describe("browser model configuration", () => {
     const { token } = await store.verify("https://gateway.test", secret);
     await expect(store.enable(token, "model-a")).rejects.toThrow("模型验证失败");
     expect(store.get(token).llm).toBeNull();
+  });
+
+  test("explains an advertised but unavailable model, logs its probe safely and allows selecting another model", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "model-probe-"));
+    const fetcher = vi.fn(async (input, init) => {
+      if (String(input).endsWith("/models")) return list();
+      const model = JSON.parse(String(init?.body)).model;
+      return model === "model-a" ? Response.json({ error: { type: "invalid_request_error",
+        message: `The model is not supported when using Codex with a ChatGPT account. ${secret}`,
+      } }, { status: 400, headers: { "x-request-id": "failed-probe" } }) : completion();
+    });
+    try {
+      const { call } = await start(fetcher, new DebugLogger(true, directory));
+      const verified = await call("/api/model/verify", { baseUrl: "https://gateway.test", apiKey: secret });
+      const token = verified.body.token;
+      const rejected = await call("/api/model/enable", { model: "model-a" }, token);
+      expect(rejected.status).toBe(422);
+      expect(rejected.body.error).toContain("当前上游账号不支持此模型");
+      expect(fetcher).toHaveBeenCalledTimes(2); // Discovery + one probe, without hidden retry.
+      const logs = (await Promise.all((await readdir(directory)).map((name) => readFile(join(directory, name), "utf8")))).join("");
+      expect(logs).not.toContain(secret);
+      const record = JSON.parse(logs.trim());
+      expect(record.input).toEqual({ purpose: "model_verification", model: "model-a" });
+      expect(record.debug).toMatchObject({ operation: "decide", error: expect.stringContaining("当前上游账号不支持此模型") });
+      expect(record.debug.calls[0]).toMatchObject({ status: 400, providerRequestId: "failed-probe" });
+      expect((await call("/api/health", undefined, token)).status).toBe(409);
+      expect((await call("/api/model/enable", { model: "model-b" }, token)).body).toEqual({ llm: true, model: "model-b" });
+    } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
   test("expires idle credentials and clears discarded credentials", async () => {
