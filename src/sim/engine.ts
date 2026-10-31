@@ -19,6 +19,7 @@ import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
 import { findPath, nodeById } from "./nav";
 import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
+import { NpcBrain } from "./npcBrain";
 import { buildObservation, visibleFacilities } from "./observation";
 import { DT, GUARDS, SECURITY_STAFF, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
 import { World, round1, type Person } from "./world";
@@ -36,6 +37,7 @@ export class Engine {
   readonly perception: PerceptionSystem;
   readonly alerts: AlertSystem;
   readonly npcs: NpcDirector;
+  readonly npcBrain: NpcBrain;
   readonly creative: CreativeSystem;
   readonly player: Person;
 
@@ -58,6 +60,7 @@ export class Engine {
     this.npcs = new NpcDirector(this.world, scenarioOverride ?? buildScenario(seed, this.settings));
     this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id));
     this.alerts = new AlertSystem(this.events, (id) => this.guards.guards.find((g) => g.def.id === id)?.role ?? (this.world.persons.has(id) && id !== "player" ? "npc" : undefined), () => this.t);
+    this.npcBrain = new NpcBrain(this.world, this.guards, this.events, this.alerts);
     this.creative = new CreativeSystem(this.world, this.guards, this.events, () => this.resolveInteractions(0));
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
     this.recordTrail();
@@ -81,6 +84,7 @@ export class Engine {
       const subject = this.world.persons.get(b) ?? this.guards.guards.find((g) => g.def.id === b);
       return Boolean(observer && subject && this.perception.canSee(observer, subject.pos));
     }, dt, (id) => (observers.find((o) => o.id === id)?.incapacitated ?? 0) > 0);
+    this.npcBrain.perceive(percepts);
     this.guards.respond(percepts, this.alerts, this.events);
     for (const record of this.alerts.records.values()) {
       const guard = this.guards.guards.find((g) => g.def.id === record.observerId);
@@ -106,6 +110,7 @@ export class Engine {
     w.t = round1(w.t + DT);
 
     this.npcs.step();
+    this.npcBrain.step();
     w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, radius: personRadius("guard") }));
     w.stepPeopleAndFacilities();
     this.guards.step([...w.persons.values()].map((p) => ({ id: p.id, pos: p.pos, from: w.tickStarts.get(p.id), radius: personRadius(p.kind) })), (id) => w.persons.get(id), w.t);

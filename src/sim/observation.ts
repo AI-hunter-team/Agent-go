@@ -72,6 +72,8 @@ export function describeActivity(world: World, p: Person): string {
       return a.mechanic === "jump_gate" ? "正在翻越闸机" : `正在插队到 ${a.facility}`;
     case "stairs":
       return `正在下楼梯（剩余 ${round1(a.remaining)} 秒）`;
+    case "reacting":
+      return ({ glance: "看了一眼", murmur: "小声议论", complain: "抱怨", argue: "争执", expel: "驱赶插队者", keep_distance: "向旁边让开", flee: "惊慌后退", confront: "上前阻拦", report: "朝保安走去" } as Record<string,string>)[a.reaction] ?? "停下观察";
     case "done":
       return "已进入站台";
   }
@@ -98,6 +100,12 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       timeLeft: round1(Math.max(0, world.timeLimitSeconds - world.t)),
     },
     items: world.items.visibleItems(p.pos),
+    people: [...world.persons.values()].filter((other) => !other.isPlayer && playerCanSee(p.pos,other.pos)).map((other) => ({
+      id: other.id, look: other.persona ? `${other.persona.look.build}，${other.persona.look.outfit}，${other.persona.look.manner}` : traitOf(other),
+      distance: round1(dist(p.pos,other.pos)), doing: other.incapacitated ? "倒地不动" : describeActivity(world,other),
+      towardYou: other.activity.kind === "reacting" && other.activity.subjectId === p.id ? describeActivity(world,other) : null,
+      holding: world.items.holdings(other.id).filter((i) => world.items.slot(i) === "hand").map((i) => i.kind),
+    })),
     facilities: visibleFacilities(world, p.pos).map((f) => observeFacility(world, f, p.pos)),
     guards: guards.guards
       .filter((g) => playerCanSee(p.pos, g.pos))

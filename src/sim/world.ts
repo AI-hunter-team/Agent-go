@@ -18,6 +18,7 @@ export type Activity =
   | { kind: "service"; facility: string }
   | { kind: "waiting"; remaining: number }
   | { kind: "stairs"; remaining: number; start: Vec }
+  | { kind: "reacting"; reaction: string; subjectId: string }
   | { kind: "creative"; mechanic: "cut_in_line" | "jump_gate"; remaining: number; facility: string; dest: Vec }
   | { kind: "done" };
 
@@ -410,6 +411,7 @@ export class World {
       f.queue.shift();
       return;
     }
+    if (head.incapacitated > 0 || head.activity.kind === "reacting") return;
     if (dist(head.pos, f.def.head) > 0.2) return;
 
     if (f.def.kind === "gate" && !head.hasTicket) {

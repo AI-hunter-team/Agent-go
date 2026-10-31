@@ -60,7 +60,7 @@ export class NpcDirector {
     while (this.events.length && this.events[0].t <= w.t) this.apply(this.events.shift()!);
 
     for (const p of [...w.persons.values()]) {
-      if (p.isPlayer || p.activity.kind !== "idle") continue;
+      if (p.isPlayer || p.incapacitated > 0 || p.activity.kind !== "idle") continue;
       this.decide(p);
     }
   }
