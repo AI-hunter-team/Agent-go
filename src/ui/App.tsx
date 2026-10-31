@@ -219,51 +219,53 @@ export function App() {
           className={`${styles.scene} ${flow.stage === "lobby" && sceneIndex === 1 ? styles.scenePlaceholder : ""}`}
           aria-label="三维地铁站场景"
         >
-          {renderer === "2d" ? (
-            <MapCanvas engineRef={engineRef} optionsRef={optionsRef} />
-          ) : sceneError ? (
-            fallback
-          ) : (
-            <SceneBoundary key={sceneAttempt} onError={() => onSceneError()}>
-              <Suspense
-                fallback={
-                  <div className={styles.loading}>正在搭建你的旅程…</div>
-                }
-              >
-                <GameScene
-                  session={session}
-                  camera={j.camera}
-                  quality={display.quality}
-                  targetFps={display.targetFps}
-                  simpleCrowd={display.simpleCrowd}
-                  reducedMotion={reducedMotion}
-                  assetUrl={
-                    characterId === "custom" ? avatar.url : character.url
+          <div key={renderer} className={styles.sceneLayer}>
+            {renderer === "2d" ? (
+              <MapCanvas engineRef={engineRef} optionsRef={optionsRef} />
+            ) : sceneError ? (
+              fallback
+            ) : (
+              <SceneBoundary key={sceneAttempt} onError={() => onSceneError()}>
+                <Suspense
+                  fallback={
+                    <div className={styles.loading}>正在搭建你的旅程…</div>
                   }
-                  assetRotation={
-                    (characterId === "custom" ? avatar.rotation : 0) +
-                    (["character", "guidance", "planning", "plan"].includes(
-                      flow.stage,
-                    )
-                      ? 180
-                      : 0)
-                  }
-                  guardAssetUrl={guardAvatar.url}
-                  guardAssetRotation={guardAvatar.rotation}
-                  onAssetError={onAssetError}
-                  onGuardAssetError={guardAvatar.onError}
-                  onStationAssetError={onAssetError}
-                  onFailure={onSceneError}
-                  metrics={metrics}
-                  showVision={showVision}
-                  showTrail={showTrail}
-                  thought={thought}
-                  messageMode={messageMode}
-                  onCameraReady={j.onCameraReady}
-                />
-              </Suspense>
-            </SceneBoundary>
-          )}
+                >
+                  <GameScene
+                    session={session}
+                    camera={j.camera}
+                    quality={display.quality}
+                    targetFps={display.targetFps}
+                    simpleCrowd={display.simpleCrowd}
+                    reducedMotion={reducedMotion}
+                    assetUrl={
+                      characterId === "custom" ? avatar.url : character.url
+                    }
+                    assetRotation={
+                      (characterId === "custom" ? avatar.rotation : 0) +
+                      (["character", "guidance", "planning", "plan"].includes(
+                        flow.stage,
+                      )
+                        ? 180
+                        : 0)
+                    }
+                    guardAssetUrl={guardAvatar.url}
+                    guardAssetRotation={guardAvatar.rotation}
+                    onAssetError={onAssetError}
+                    onGuardAssetError={guardAvatar.onError}
+                    onStationAssetError={onAssetError}
+                    onFailure={onSceneError}
+                    metrics={metrics}
+                    showVision={showVision}
+                    showTrail={showTrail}
+                    thought={thought}
+                    messageMode={messageMode}
+                    onCameraReady={j.onCameraReady}
+                  />
+                </Suspense>
+              </SceneBoundary>
+            )}
+          </div>
         </div>
         {!watching && !ended && flow.stage !== "lobby" && (
           <div className={styles.topLeft}>
@@ -463,7 +465,7 @@ export function App() {
               >
                 <span aria-hidden="true">‹</span>
               </button>
-              <div className={styles.sceneCards}>
+              <div key={sceneIndex} className={styles.sceneCards}>
                 {[0, 1].map((index) => (
                 <button
                   key={index}
@@ -499,7 +501,7 @@ export function App() {
           </section>
         )}
         {flow.stage === "character" && (
-          <section className={`${styles.preparation} ${styles.character}`}>
+          <section key="character" className={`${styles.preparation} ${styles.character}`}>
             <span className={styles.eyebrow}>选择你想看谁行动</span>
             <h1>选择角色</h1>
             <h2>{character.name}</h2>
@@ -538,7 +540,7 @@ export function App() {
           </section>
         )}
         {flow.stage === "guidance" && (
-          <section className={`${styles.preparation} ${styles.panel}`}>
+          <section key="guidance" className={`${styles.preparation} ${styles.panel}`}>
             <span className={styles.eyebrow}>给角色一个方向</span>
             <h1>这一次，怎么走？</h1>
             <p>目标：{settings.timeLimitSeconds} 秒内抵达下层站台。</p>
@@ -606,6 +608,7 @@ export function App() {
         )}
         {(flow.stage === "planning" || flow.stage === "plan") && (
           <section
+            key={flow.stage}
             className={`${styles.preparation} ${styles.panel}`}
             aria-live="polite"
           >
@@ -672,7 +675,7 @@ export function App() {
           </section>
         )}
         {flow.stage === "launch" && (
-          <section className={styles.launch} role="status">
+          <section key="launch" className={styles.launch} role="status">
             <strong>Agent Go</strong>
             <span>正在就位，尚未开始计时…</span>
             <button onClick={() => j.navigate("guidance")}>取消出发</button>
@@ -685,7 +688,7 @@ export function App() {
                 ◖ 现场播报：{broadcast}
               </div>
             )}
-            <section className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录">
+            <section key={`action-${session.generation}`} className={`${styles.action} ${styles.panel} ${recordExpanded ? "" : styles.actionCollapsed}`} aria-label="行程记录">
               <button className={styles.recordToggle} aria-expanded={recordExpanded} aria-controls="journey-record-content"
                 onClick={() => setCollapsedRecordGeneration(recordExpanded ? session.generation : null)}>
                 <span>{recordExpanded ? "收起行程记录" : "展开行程记录"}</span>
@@ -736,7 +739,7 @@ export function App() {
               </Modal>
               </div>
             </section>
-            <section className={`${styles.timer} ${styles.panel}`}>
+            <section key={`timer-${session.generation}`} className={`${styles.timer} ${styles.panel}`}>
               <span className={styles.eyebrow}>剩余时间</span>
               <strong>{clock}</strong>
               <progress max={settings.timeLimitSeconds} value={remaining} />

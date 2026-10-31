@@ -1,5 +1,8 @@
 .drawer-overlay { position: fixed; inset: 0; background: #14203328; z-index: 100; }
-.settings-drawer { position: fixed; inset: 12px auto 12px 12px; width: min(430px, calc(100vw - 24px)); background: #fff; border-radius: 28px; z-index: 101; display: flex; flex-direction: column; box-shadow: 12px 0 70px #14203326; animation: drawer-in .22s ease-out; }
+.drawer-overlay[data-state=open] { animation: dialog-overlay-in .22s ease-out both; }
+.drawer-overlay[data-state=closed] { animation: dialog-overlay-out .18s ease-in both; }
+.settings-drawer { position: fixed; inset: 12px auto 12px 12px; width: min(430px, calc(100vw - 24px)); background: #fff; border-radius: 28px; z-index: 101; display: flex; flex-direction: column; box-shadow: 12px 0 70px #14203326; animation: drawer-in .32s cubic-bezier(.22,.8,.26,1) both; }
+.settings-drawer[data-state=closed] { animation: drawer-out .18s ease-in both; }
 .settings-drawer > .muted { padding: 0 24px; }
 .drawer-body { min-height: 0; overflow: auto; padding: 0 24px 24px; }
 .drawer-body > details { border-bottom: 1px solid #e3e8ef; padding: 10px 0; }
@@ -11,6 +14,9 @@
 .thought-bubble i:nth-child(3), .thinking-dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes thought-dot { 50% { transform: translateY(-4px); opacity: .5; } }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes drawer-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-20px); } }
+@keyframes dialog-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialog-overlay-out { from { opacity: 1; } to { opacity: 0; } }
 :root {
   --paper: #f1f4f7; --bg: #f1f4f7; --card: #ffffff; --surface: #ffffff;
   --surface-muted: #f2f5f8; --ink: #142033; --ink-soft: #5b687b; --muted: #5b687b;
@@ -130,6 +136,10 @@ summary:hover { color: var(--blue); }
 .timeline em { font-style: normal; font-size: 12px; }
 .dialog-overlay { position: fixed; inset: 0; background: #1b211ab8; z-index: 100; }
 .dialog-content { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; background: var(--card); z-index: 101; box-shadow: 0 20px 80px #0004; border-radius: var(--radius); }
+.dialog-content[data-state=open] { animation: dialog-content-in .32s cubic-bezier(.22,.8,.26,1) both; }
+.dialog-content[data-state=closed] { animation: dialog-content-out .18s ease-in both; }
+@keyframes dialog-content-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 24px)) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes dialog-content-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(.98); } }
 .dialog-wide { width: min(880px, calc(100vw - 48px)); }
 .dialog-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
 .dialog-heading h2 { margin: 0; font-size: 22px; }
