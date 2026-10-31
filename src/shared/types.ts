@@ -89,6 +89,8 @@ export interface SelfObservation {
   hasTicket: boolean;
   screened: boolean;
   passedGate?: boolean;
+  onPlatform?: boolean;
+  onTrain?: boolean;
   queue: { facility: string; position: number; length: number } | null;
   elapsed: number;
   timeLeft: number;
@@ -129,6 +131,8 @@ export interface Observation {
   /** Optional for recordings made before the commercial hall iteration. */
   attractions?: AttractionObservation[];
   routes?: RouteObservation[];
+  /** Only doors currently visible from the lower platform. */
+  trainDoors?: { id: string; label: string; position: Vec; distance: number }[];
   /** Explicitly actionable station blackout switch state. */
   blackout?: { active: boolean; remaining: number; switchDistance: number; canOperate: boolean };
 }
@@ -311,7 +315,9 @@ export interface GameReport {
   guidance: string;
   normalizedGuidance: NormalizedGuidance | null;
   status: GameStatus;
-  /** Arrival time at the lower platform in world seconds; null when the run failed. */
+  /** Absent on older reports whose finish line was the platform. */
+  goal?: "board_train";
+  /** Completed boarding time in world seconds; null when the run failed. */
   score: number | null;
   failReason: string | null;
   elapsed: number;

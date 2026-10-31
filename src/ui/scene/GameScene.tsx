@@ -20,6 +20,7 @@ import { cameraFraction } from "./cameraCollision";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 import { getScenePerformance } from "./scenePerformance";
 import { VictoryCamera } from "./victoryCamera";
+import { constrainCabinCamera } from "./trainCabin";
 import type { HeadMessageMode } from "../headMessages";
 
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
@@ -114,9 +115,12 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
   const previousSettings = useRef(settings);
   // 模式按钮或回正明确表示手动接管，尺寸变化和画质重建不打断运镜。
   useEffect(() => {
-    if (previousSettings.current.command !== settings.command || previousSettings.current.reset !== settings.reset) performanceState.dismissCamera();
+    if (previousSettings.current.command !== settings.command || previousSettings.current.reset !== settings.reset) {
+      if (session.engine.player.onTrain) performanceState.restoreCamera();
+      else performanceState.dismissCamera();
+    }
     previousSettings.current = settings;
-  }, [settings, performanceState]);
+  }, [settings, performanceState, session]);
   useEffect(() => {
     const active = cameras[cinematic ? "follow" : settings.mode];
     const current = get().camera;
@@ -194,7 +198,7 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
         victory.capture(state.camera.position, state.camera.getWorldDirection(direction), performanceState.victoryTime, (state.camera as PerspectiveCamera).fov ?? 45, focusDistance);
         activeVictory.current = victory;
       }
-      victory.update(pose.current, performanceState.victoryTime, size.width / Math.max(1, size.height), reducedMotion, assetRotation);
+      victory.update(pose.current, performanceState.victoryTime, size.width / Math.max(1, size.height), reducedMotion, assetRotation, session.engine.player.onTrain, size.height);
       const camera = state.camera as PerspectiveCamera;
       if (Math.abs(camera.fov - victory.fov) > 0.001) { camera.fov = victory.fov; camera.updateProjectionMatrix(); }
       camera.position.copy(victory.position); camera.lookAt(victory.target); return;
@@ -223,6 +227,10 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
       desired.set(manualTarget.x - Math.sin(yaw) * horizontal,
         Math.max(pose.current.y + 0.25, manualTarget.y + Math.sin(orbit.current.pitch) * orbit.current.distance),
         manualTarget.z - Math.cos(yaw) * horizontal);
+      if (session.engine.player.onTrain) {
+        constrainCabinCamera(desired, pose.current);
+        state.camera.position.copy(desired); state.camera.lookAt(manualTarget); return;
+      }
       desired.y = Math.max(desired.y, platformElevation(desired.x) + 0.25);
       // 新站台边缘外是列车与轨道，自由缩放也不把镜头推进车体内。
       const edgeFraction = desired.x > WIDTH - 0.3 ? (WIDTH - 0.3 - manualTarget.x) / (desired.x - manualTarget.x) : 1;

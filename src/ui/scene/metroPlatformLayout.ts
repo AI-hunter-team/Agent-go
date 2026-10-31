@@ -1,10 +1,11 @@
 import { BoxGeometry, BufferGeometry, Group, Mesh, MeshStandardMaterial, type Object3D } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { METRO_PROFILE } from "../../shared/metro";
 
 /** A parked, full-scale leading car; this is presentation, not a boarding rule. */
 export function metroPlatformLayout(edgeX: number, length: number, floorY = -2) {
   if (![edgeX, length, floorY].every(Number.isFinite) || length < 24) throw new Error("Invalid metro platform dimensions");
-  const halfWidth = 1.5465, gap = 0.16;
+  const halfWidth = METRO_PROFILE.exteriorHalfWidth, gap = METRO_PROFILE.platformGap;
   return { edgeX, length, floorY, halfWidth, gap, trackX: edgeX + halfWidth + gap, railY: floorY - 1.1, centreZ: length / 2,
     trainYaw: Math.PI / 2, platformSide: -1 } as const;
 }
@@ -76,16 +77,16 @@ export function createMetroTrack(layout: MetroPlatformLayout) {
   for (let z = -1.5; z < length + 2; z += 0.65) box([2.4, 0.12, 0.22], [trackX, railY - 0.21, z], materials.concrete);
   for (const z of [-1.8, length + 1.8]) {
     // Tunnel portals remain beyond the walkable platform and frame the visible track segment.
-    box([3.7, 4.9, 0.24], [trackX, railY + 2.0, z], materials.dark);
-    for (const dx of [-1.87, 1.87]) box([0.18, 4.95, 0.45], [trackX + dx, railY + 2.0, z], materials.concrete);
-    box([3.9, 0.18, 0.5], [trackX, railY + 4.5, z], materials.concrete);
+    box([4.4, 4.9, 0.24], [trackX, railY + 2.0, z], materials.dark);
+    for (const dx of [-2.2, 2.2]) box([0.18, 4.95, 0.45], [trackX + dx, railY + 2.0, z], materials.concrete);
+    box([4.6, 0.18, 0.5], [trackX, railY + 4.5, z], materials.concrete);
   }
   for (const [material, geometries] of buckets) {
     const geometry = mergeGeometries(geometries)!; geometries.forEach((item) => item.dispose());
     const mesh = new Mesh(geometry, material); mesh.name = `metro-track-${material.uuid}`; mesh.receiveShadow = true; root.add(mesh);
   }
   const canopy = new Group(); canopy.name = "metro-track-canopy";
-  const roof = new Mesh(new BoxGeometry(3.9, 0.16, length + 4), materials.concrete); roof.position.set(trackX, floorY + 3.6, centreZ); canopy.add(roof);
+  const roof = new Mesh(new BoxGeometry(4.6, 0.16, length + 4), materials.concrete); roof.position.set(trackX, floorY + 3.6, centreZ); canopy.add(roof);
   for (const dx of [-1.1, 1.1]) {
     const light = new Mesh(new BoxGeometry(0.08, 0.025, length - 2), materials.light); light.position.set(trackX + dx, floorY + 3.5, centreZ); canopy.add(light);
   }

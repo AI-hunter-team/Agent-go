@@ -31,7 +31,7 @@ export function SetupPanel(p: SetupProps) {
     <section className="card setup" aria-busy={p.busy !== null}>
       <h2>出发之前</h2>
       <p className="muted setup-goal">
-        {`唯一目标：限时 ${p.settings.timeLimitSeconds} 秒内进入站台，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台；角色依据你的指导自主选择方案，结果由环境判定。`}
+        {`唯一目标：限时 ${p.settings.timeLimitSeconds} 秒内登上地铁，尽可能缩短路径和总用时。常规路线是买票、安检、刷票过闸、下楼到站台并走向车门登车；角色依据你的指导自主选择方案，结果由环境判定。`}
       </p>
 
       <label className="check"><input type="checkbox" checked={p.backpack ?? true} disabled={p.busy !== null} onChange={e => p.onBackpack?.(e.target.checked)} />携带背包（容量 4，安检增加 2 秒；可途中丢弃）</label>
@@ -102,7 +102,7 @@ export function SetupPanel(p: SetupProps) {
 
 /** 展示原始指导及整理结果，供开局确认与复盘阅读。 */
 export function GuidanceCard({ guidance, normalized }: { guidance: string; normalized: NormalizedGuidance | null }) {
-  if (!guidance.trim()) return <p className="muted">未填写额外策略：以到达站台为目标，角色按所选模式规划路线。</p>;
+  if (!guidance.trim()) return <p className="muted">未填写额外策略：以登上地铁为目标，角色按所选模式规划路线。</p>;
   if (!normalized) return <p className="quote">「{guidance}」</p>;
   // 仅为有内容的策略分组生成标题和列表。
   const list = (title: string, items: string[]) =>

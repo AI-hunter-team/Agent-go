@@ -58,7 +58,8 @@ describe("escalator admission", () => {
     expect(e.player.onPlatform).toBe(false);
     advance(e, .1);
     expect(e.player.onPlatform).toBe(true);
-    expect(e.status).toBe("success");
+    expect(e.status).toBe("running");
+    expect(e.player.onTrain).toBe(false);
     expect(e.timeBreakdown.escalator).toBeCloseTo(ESCALATOR_SECONDS);
   });
   test("FIFO admits one person per second; queueing can be cancelled and loses the place", () => {

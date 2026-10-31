@@ -85,7 +85,8 @@ test("stairs lower the displayed player to the platform without changing simulat
   buffer.capture(engine);
   sampleActor(buffer, "player", 1, pose);
   expect(pose.y).toBe(-2);
-  expect(engine.status).toBe("success");
+  expect(engine.status).toBe("running");
+  expect(engine.player.onTrain).toBe(false);
   expect(engine.player.pos).toEqual(STAIRS_BOTTOM);
 });
 

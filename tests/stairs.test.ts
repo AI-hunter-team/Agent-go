@@ -54,8 +54,9 @@ describe("stairs after the gate", () => {
     for (let i = 0; i < 30; i++) e.step();
     expect(e.player.pos).toEqual(STAIRS_BOTTOM);
     expect(e.player.onPlatform).toBe(true);
-    expect(e.status).toBe("success");
-    expect(e.score).toBe(6);
+    expect(e.status).toBe("running");
+    expect(e.score).toBeNull();
+    expect(e.player.onTrain).toBe(false);
     expect(e.timeBreakdown.stairs).toBeCloseTo(6);
   });
 

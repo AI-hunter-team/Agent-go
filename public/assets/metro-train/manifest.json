@@ -1,7 +1,7 @@
 {
-  "version": 1,
-  "title": "Agent Go · 青绿线地铁外观小样",
-  "status": "design-prototype",
+  "version": 2,
+  "title": "Agent Go · 青绿线精细车厢",
+  "status": "game-integrated-cabin",
   "units": "metres",
   "upAxis": "Y",
   "forward": "+X",
@@ -9,10 +9,10 @@
   "passengerFloor": 1.1,
   "nominal": {
     "length": 22.8,
-    "width": 3,
+    "width": 3.6,
     "floor": 1.1,
     "doorWidth": 1.3,
-    "doorHeight": 2.05,
+    "doorHeight": 2.4189999999999996,
     "lineColor": "#247f76"
   },
   "doorMotion": {
@@ -28,27 +28,27 @@
     {
       "kind": "head",
       "file": "metro-head-car.glb",
-      "bytes": 2366260,
-      "sha256": "6fafef8c0d1299dad1bf9de2d79c98a7107268c1c7e78891031ffe22922f6a21",
+      "bytes": 4882772,
+      "sha256": "8edec0bd77edbe41fca373a026a460ebe137bbd49615436a178fedee58264174",
       "bounds": {
         "min": [
           -11.649999618530273,
           -1.1920929132713809e-8,
-          -1.5464999675750732
+          -1.8558000326156616
         ],
         "max": [
           11.46679973602295,
-          3.9130001068115234,
-          1.5464999675750732
+          4.419340133666992,
+          1.8558000326156616
         ],
         "size": [
           23.116799354553223,
-          3.9130001187324526,
-          3.0929999351501465
+          4.419340145587921,
+          3.7116000652313232
         ]
       },
-      "meshes": 114,
-      "triangles": 23619,
+      "meshes": 116,
+      "triangles": 91573,
       "doorLeaves": 20,
       "materialSlots": [
         "metro.shell.silver",
@@ -56,23 +56,41 @@
         "metro.glass.window",
         "metro.line.jade",
         "metro.light.amber",
-        "metro.roof.satin",
-        "metro.steel.brushed",
-        "metro.line.seat",
-        "metro.interior.ivory",
-        "metro.light.warm",
-        "metro.floor.speckle",
         "metro.chassis.dark",
+        "metro.steel.brushed",
+        "metro.roof.satin",
+        "metro.interior.ivory",
         "metro.glass.cab",
-        "metro.light.tail"
+        "metro.light.warm",
+        "metro.light.tail",
+        "metro.floor.speckle",
+        "metro.interior.joints",
+        "metro.line.seat",
+        "metro.screen.bluegreen"
       ],
+      "cabin": {
+        "version": 2,
+        "clearWidth": 3.38,
+        "clearHeight": 2.6903999999999995,
+        "seatHeight": 0.46,
+        "mouldedSeats": 32,
+        "doorBays": 5
+      },
       "anchors": [
+        {
+          "name": "anchor_coupler_-1",
+          "position": [
+            -11.4,
+            0.68,
+            0
+          ]
+        },
         {
           "name": "anchor_door_-1_0",
           "position": [
             -8,
             1.1,
-            -1.5
+            -1.7999999999999998
           ]
         },
         {
@@ -80,7 +98,7 @@
           "position": [
             -4.45,
             1.1,
-            -1.5
+            -1.7999999999999998
           ]
         },
         {
@@ -88,7 +106,7 @@
           "position": [
             -0.9,
             1.1,
-            -1.5
+            -1.7999999999999998
           ]
         },
         {
@@ -96,7 +114,7 @@
           "position": [
             2.65,
             1.1,
-            -1.5
+            -1.7999999999999998
           ]
         },
         {
@@ -104,7 +122,7 @@
           "position": [
             6.2,
             1.1,
-            -1.5
+            -1.7999999999999998
           ]
         },
         {
@@ -112,7 +130,7 @@
           "position": [
             -8,
             1.1,
-            1.5
+            1.7999999999999998
           ]
         },
         {
@@ -120,7 +138,7 @@
           "position": [
             -4.45,
             1.1,
-            1.5
+            1.7999999999999998
           ]
         },
         {
@@ -128,7 +146,7 @@
           "position": [
             -0.9,
             1.1,
-            1.5
+            1.7999999999999998
           ]
         },
         {
@@ -136,7 +154,7 @@
           "position": [
             2.65,
             1.1,
-            1.5
+            1.7999999999999998
           ]
         },
         {
@@ -144,15 +162,7 @@
           "position": [
             6.2,
             1.1,
-            1.5
-          ]
-        },
-        {
-          "name": "anchor_coupler_-1",
-          "position": [
-            -11.4,
-            0.68,
-            0
+            1.7999999999999998
           ]
         },
         {
@@ -178,33 +188,57 @@
             1.1,
             0
           ]
+        },
+        {
+          "name": "anchor_cabin-seat-top",
+          "position": [
+            -6.225,
+            1.56,
+            1.19
+          ]
+        },
+        {
+          "name": "anchor_cabin-ceiling",
+          "position": [
+            0,
+            3.7903999999999995,
+            0
+          ]
+        },
+        {
+          "name": "anchor_cabin-aisle-edge",
+          "position": [
+            0,
+            1.1,
+            1.13
+          ]
         }
       ]
     },
     {
       "kind": "trailer",
       "file": "metro-trailer-car.glb",
-      "bytes": 2496692,
-      "sha256": "91d587f819b285197877176fdf1cd3fc42105d9aba7a30438e7a61bc8fa7b9e8",
+      "bytes": 4902212,
+      "sha256": "fbe969ac43e244455e5803b228308319f4e06d8ac05f0c5ce09c3390ab951591",
       "bounds": {
         "min": [
           -11.649999618530273,
           -1.1920929132713809e-8,
-          -1.5464999675750732
+          -1.8558000326156616
         ],
         "max": [
           11.649999618530273,
-          4.627500057220459,
-          1.5464999675750732
+          5.262450218200684,
+          1.8558000326156616
         ],
         "size": [
           23.299999237060547,
-          4.627500069141388,
-          3.0929999351501465
+          5.262450230121613,
+          3.7116000652313232
         ]
       },
-      "meshes": 112,
-      "triangles": 24996,
+      "meshes": 115,
+      "triangles": 90782,
       "doorLeaves": 20,
       "materialSlots": [
         "metro.shell.silver",
@@ -212,95 +246,26 @@
         "metro.glass.window",
         "metro.line.jade",
         "metro.light.amber",
-        "metro.roof.satin",
+        "metro.chassis.dark",
         "metro.steel.brushed",
-        "metro.line.seat",
+        "metro.roof.satin",
         "metro.interior.ivory",
-        "metro.light.warm",
         "metro.floor.speckle",
-        "metro.chassis.dark"
+        "metro.interior.joints",
+        "metro.line.seat",
+        "metro.screen.bluegreen",
+        "metro.light.warm",
+        "metro.light.tail"
       ],
+      "cabin": {
+        "version": 2,
+        "clearWidth": 3.38,
+        "clearHeight": 2.6903999999999995,
+        "seatHeight": 0.46,
+        "mouldedSeats": 32,
+        "doorBays": 5
+      },
       "anchors": [
-        {
-          "name": "anchor_door_-1_0",
-          "position": [
-            -8.1,
-            1.1,
-            -1.5
-          ]
-        },
-        {
-          "name": "anchor_door_-1_1",
-          "position": [
-            -4.05,
-            1.1,
-            -1.5
-          ]
-        },
-        {
-          "name": "anchor_door_-1_2",
-          "position": [
-            0,
-            1.1,
-            -1.5
-          ]
-        },
-        {
-          "name": "anchor_door_-1_3",
-          "position": [
-            4.05,
-            1.1,
-            -1.5
-          ]
-        },
-        {
-          "name": "anchor_door_-1_4",
-          "position": [
-            8.1,
-            1.1,
-            -1.5
-          ]
-        },
-        {
-          "name": "anchor_door_1_0",
-          "position": [
-            -8.1,
-            1.1,
-            1.5
-          ]
-        },
-        {
-          "name": "anchor_door_1_1",
-          "position": [
-            -4.05,
-            1.1,
-            1.5
-          ]
-        },
-        {
-          "name": "anchor_door_1_2",
-          "position": [
-            0,
-            1.1,
-            1.5
-          ]
-        },
-        {
-          "name": "anchor_door_1_3",
-          "position": [
-            4.05,
-            1.1,
-            1.5
-          ]
-        },
-        {
-          "name": "anchor_door_1_4",
-          "position": [
-            8.1,
-            1.1,
-            1.5
-          ]
-        },
         {
           "name": "anchor_coupler_-1",
           "position": [
@@ -318,6 +283,86 @@
           ]
         },
         {
+          "name": "anchor_door_-1_0",
+          "position": [
+            -8.1,
+            1.1,
+            -1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_-1_1",
+          "position": [
+            -4.05,
+            1.1,
+            -1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_-1_2",
+          "position": [
+            0,
+            1.1,
+            -1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_-1_3",
+          "position": [
+            4.05,
+            1.1,
+            -1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_-1_4",
+          "position": [
+            8.1,
+            1.1,
+            -1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_1_0",
+          "position": [
+            -8.1,
+            1.1,
+            1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_1_1",
+          "position": [
+            -4.05,
+            1.1,
+            1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_1_2",
+          "position": [
+            0,
+            1.1,
+            1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_1_3",
+          "position": [
+            4.05,
+            1.1,
+            1.7999999999999998
+          ]
+        },
+        {
+          "name": "anchor_door_1_4",
+          "position": [
+            8.1,
+            1.1,
+            1.7999999999999998
+          ]
+        },
+        {
           "name": "anchor_floor",
           "position": [
             0,
@@ -331,6 +376,30 @@
             -11.4,
             1.1,
             0
+          ]
+        },
+        {
+          "name": "anchor_cabin-seat-top",
+          "position": [
+            -6.074999999999999,
+            1.56,
+            1.19
+          ]
+        },
+        {
+          "name": "anchor_cabin-ceiling",
+          "position": [
+            0,
+            3.7903999999999995,
+            0
+          ]
+        },
+        {
+          "name": "anchor_cabin-aisle-edge",
+          "position": [
+            0,
+            1.1,
+            1.13
           ]
         }
       ]

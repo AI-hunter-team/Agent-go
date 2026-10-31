@@ -1,13 +1,14 @@
 import "./style.css";
 import {
   ACESFilmicToneMapping, AmbientLight, Box3, BoxGeometry, Color, DirectionalLight, Group, HemisphereLight,
-  Mesh, MeshStandardMaterial, PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, Scene, SRGBColorSpace,
+  Mesh, MeshStandardMaterial, PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, PointLight, Scene, SRGBColorSpace,
   PMREMGenerator, Vector3, WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { setMetroDoorProgress, setMetroLineColor } from "../../src/assets/metro-train/index";
+import { METRO_PROFILE } from "../../src/shared/metro";
 
 const host = document.querySelector<HTMLDivElement>("#canvas")!, status = document.querySelector<HTMLSpanElement>("#status")!;
 const scene = new Scene(); scene.background = new Color("#e5e9e3");
@@ -17,6 +18,7 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = PCFSoftShadowMap; h
 const environment = new RoomEnvironment(), pmrem = new PMREMGenerator(renderer), environmentMap = pmrem.fromScene(environment, 0.04);
 scene.environment = environmentMap.texture; scene.environmentIntensity = 0.65; environment.dispose(); pmrem.dispose();
 const camera = new PerspectiveCamera(36, 1, 0.1, 300), controls = new OrbitControls(camera, renderer.domElement);
+for (const x of [-8,-4.45,-.9,2.65,6.2]) { const light=new PointLight("#fff4df",6,6,2); light.position.set(x,METRO_PROFILE.ceiling-.12,0); scene.add(light); }
 controls.minDistance = 3; controls.maxDistance = 135; controls.maxPolarAngle = Math.PI / 2 + 0.03;
 scene.add(new HemisphereLight("#f2f7ff", "#b4b8a3", 1.7), new AmbientLight("#ffffff", 0.4));
 const key = new DirectionalLight("#fff6e7", 2.2); key.position.set(12, 24, 12); key.castShadow = true;
@@ -37,18 +39,21 @@ function render() {
 }
 function setView(view: string) {
   viewMode = view;
+  camera.fov=view === "interior" ? 58 : 36; camera.updateProjectionMatrix();
   const isConsist = carMode === "consist", offset = isConsist ? 23.0 : 0;
   const choices: Record<string, { position: number[]; target: number[] }> = {
     perspective: { position: isConsist ? [54, 24, 61] : [22, 9.5, 24], target: [0, 1.8, 0] },
     front: { position: [offset + 19, 4.2, 5.7], target: [offset + 9, 2.15, 0] },
     side: { position: [0, 4.7, isConsist ? 99 : 35], target: [0, 1.9, 0] },
     roof: { position: isConsist ? [38, 64, 44] : [15, 22, 17], target: [0, 1.6, 0] },
+    interior: { position: [1.2, METRO_PROFILE.floor+1.35, .32], target: [5.4, METRO_PROFILE.floor+1.1, .32] },
   };
   const choice = choices[view] ?? choices.perspective;
   camera.position.fromArray(choice.position); controls.target.fromArray(choice.target);
-  if (view !== "front") camera.position.sub(controls.target).multiplyScalar(Math.max(1, 1.15 / camera.aspect)).add(controls.target);
+  controls.minDistance=view === "interior" ? .5 : 3;
+  if (view !== "front" && view !== "interior") camera.position.sub(controls.target).multiplyScalar(Math.max(1, 1.15 / camera.aspect)).add(controls.target);
   controls.update();
-  if (view !== "front" && train.children.length) {
+  if (view !== "front" && view !== "interior" && train.children.length) {
     const bounds = new Box3().setFromObject(train);
     for (let pass = 0; pass < 5; pass++) {
       camera.updateMatrixWorld(); let factor = 1;
@@ -94,7 +99,7 @@ document.querySelector<HTMLButtonElement>("#doors")!.addEventListener("click", (
 });
 async function loadModels() { try {
   const entries = await Promise.all(["head", "trailer"].map(async (kind) => {
-    const gltf = await loader.loadAsync(`/assets/metro-train/metro-${kind}-car.glb`);
+    const gltf = await loader.loadAsync(`/assets/metro-train/metro-${kind}-car.glb?v=2`);
     gltf.scene.traverse((node) => { if (node instanceof Mesh) { node.castShadow = !node.material || !(node.material instanceof MeshStandardMaterial) || !node.material.transparent; node.receiveShadow = true; } });
     return [kind, gltf.scene] as const;
   }));

@@ -1,5 +1,6 @@
 import type { FacilityKind, ItemSpot, Vec } from "../shared/types";
 import type { Rect } from "./geometry";
+import { METRO_PROFILE } from "../shared/metro";
 
 // Station layout, in metres. See docs/MVP技术方案.md §5.2.
 //
@@ -19,6 +20,14 @@ export const PLATFORM_X = 72;
 // before they can block the stairs or the platform approach.
 export const TRAIN_BOARDING_X = PLATFORM_X + 2.5;
 export const TRAIN_DOOR_Z = [7, 10.55, 14.1, 17.65, 21.2] as const;
+/** Player boarding uses the actual parked head-car door centres (yaw +90°).
+ * NPC crowd exits above remain independent to preserve the existing traffic. */
+export const TRAIN_CENTRE_X = WIDTH + METRO_PROFILE.exteriorHalfWidth + METRO_PROFILE.platformGap;
+/** Stand slightly off the centre poles, while staying in the clear aisle. */
+export const TRAIN_AISLE_X = TRAIN_CENTRE_X - 0.32;
+export const PLAYER_TRAIN_DOORS = [8.8, 12.35, 15.9, 19.45, 23].map((y, index) => ({
+  id: `TRAIN_${index + 1}`, label: `${index + 1}号地铁车门`, pos: { x: WIDTH - 0.9, y },
+}));
 export const STAIRS_TOP: Vec = { x: 61, y: 9 };
 export const STAIRS_BOTTOM: Vec = { x: 73, y: 9 };
 export const ESCALATOR_TOP: Vec = { x: 61, y: 22 };
@@ -188,6 +197,10 @@ export const NAV_NODES: NavNode[] = [
   { id: "STAIRS_TOP", label: "下楼梯入口（上层平台）", pos: STAIRS_TOP },
   { id: "ESCALATOR_TOP", label: "下行扶梯入口侧边", pos: ESCALATOR_APPROACH },
   { id: "PLATFORM", label: "下层站台", pos: STAIRS_BOTTOM },
+  { id: "PLATFORM_C", label: "站台候车区", pos: { x: 82, y: 15 } },
+  { id: "PLATFORM_N", label: "站台北侧候车区", pos: { x: 82, y: 9 } },
+  { id: "PLATFORM_S", label: "站台南侧候车区", pos: { x: 82, y: 22 } },
+  ...PLAYER_TRAIN_DOORS,
   { id: "BLACKOUT_SWITCH", label: "墙边电闸", pos: BLACKOUT_SWITCH },
   ...ATTRACTIONS.map(a => ({ id: a.id, label: a.label, pos: a.approach })),
 ];

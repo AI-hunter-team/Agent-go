@@ -32,7 +32,7 @@ export function MapCanvas({ engineRef, optionsRef }: Props) {
       <div className="map-regions" aria-label="地图区域" style={{ gridTemplateColumns: MAP_REGIONS.map((r) => `${r.end - r.start}fr`).join(" ") }}>
         {MAP_REGIONS.map((r) => <span key={r.label} style={{ background: r.color }}>{r.label}</span>)}
       </div>
-      <canvas ref={canvasRef} className="map" aria-label="车站地图：售票厅、安检区、验票闸机、上层平台、下行楼梯和下层站台；通过闸机后需下楼梯到达站台" style={{ width: "100%", height: "auto", display: "block" }} />
+      <canvas ref={canvasRef} className="map" aria-label="车站地图：售票厅、安检区、验票闸机、下行楼梯、下层站台和地铁车门；到站台后还需登上地铁" style={{ width: "100%", height: "auto", display: "block" }} />
       <div className="facility-key">
         <div className="facility-key-security">
           <svg viewBox="0 0 40 32" aria-hidden="true"><path d="M7 27V5h26v22h-5V10H12v17Z" fill="#b9d1dd" stroke="#527e91" strokeWidth="2"/><path d="M20 12v12" stroke="#527e91" strokeWidth="2" strokeDasharray="3 2"/></svg>

@@ -32,6 +32,12 @@ export class HeuristicAgent implements Agent {
 
   private choose(turn: AgentTurn): AgentAction {
     const { self, facilities } = turn.observation;
+    if (self.onPlatform) {
+      if (self.activity.startsWith("正在登车")) return { type: "wait", seconds: 20, reason: "继续走入车厢，登车后才完成旅程" };
+      const doors = turn.observation.trainDoors ?? [];
+      const nearest = doors.reduce<typeof doors[number] | undefined>((best, door) => !best || door.distance < best.distance ? door : best, undefined);
+      return { type: "move_to", target: nearest?.id ?? (self.position.y <= 15 ? "PLATFORM_N" : "PLATFORM_S"), reason: nearest ? "走向可见的地铁车门并登车" : "已到站台，沿当前一侧前往候车区寻找车门" };
+    }
     if (self.passedGate) {
       if (self.activity.startsWith("正在下楼梯") || self.activity.startsWith("正在乘扶梯")) return { type: "wait", seconds: 3, reason: "正在下行，等到达下层站台" };
       if (self.activity.startsWith("正在走向扶梯队尾")) return { type: "wait", seconds: 2, reason: "继续走到扶梯队尾" };

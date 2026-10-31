@@ -2,10 +2,12 @@ import {
   BoxGeometry, BufferGeometry, Color, CylinderGeometry, DoubleSide, ExtrudeGeometry,
   Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Object3D, Path, Shape, ShapeGeometry, Vector3,
 } from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { METRO_PROFILE } from "../../shared/metro";
+import { createMetroInterior } from "./interior";
 
 export type MetroCarKind = "head" | "trailer";
-export const METRO = { length: 22.8, width: 3, floor: 1.1, doorWidth: 1.3, doorHeight: 2.05, lineColor: "#247f76" } as const;
+export const METRO = { length: 22.8, width: METRO_PROFILE.width, floor: METRO_PROFILE.floor, doorWidth: 1.3, doorHeight: 2.05 * METRO_PROFILE.upperHeightFactor, lineColor: "#247f76" } as const;
 
 export function metroMaterials() {
   const mat = (name: string, color: string, roughness: number, metalness = 0) => {
@@ -16,11 +18,14 @@ export function metroMaterials() {
     line: mat("line.jade", METRO.lineColor, 0.36, 0.25), rubber: mat("rubber.graphite", "#202c31", 0.79),
     glass: mat("glass.window", "#6b9aab", 0.16, 0.1), windshield: mat("glass.cab", "#112c38", 0.18, 0.35),
     steel: mat("steel.brushed", "#92a4ac", 0.34, 0.78), chassis: mat("chassis.dark", "#33434c", 0.67, 0.52),
-    interior: mat("interior.ivory", "#e9e8df", 0.79), floor: mat("floor.speckle", "#6a787c", 0.92),
-    seat: mat("line.seat", "#5caaa1", 0.53, 0.08), light: mat("light.warm", "#fff5d7", 0.25),
+    interior: mat("interior.ivory", "#ece9df", 0.68), floor: mat("floor.speckle", "#acb5b3", 0.82),
+    seat: mat("line.seat", "#368f88", 0.42, 0.1), light: mat("light.warm", "#fff5df", 0.25),
+    joint: mat("interior.joints", "#a4aaa6", 0.75, 0.18), screen: mat("screen.bluegreen", "#234c50", 0.4),
     red: mat("light.tail", "#ed6958", 0.3), amber: mat("light.amber", "#efb85c", 0.4),
   };
   result.glass.transparent = true; result.glass.opacity = 0.3; result.glass.depthWrite = false; result.glass.side = DoubleSide;
+  result.floor.userData.maps = { color: "cabin-floor-color.png", normal: "cabin-floor-normal.png", roughness: "cabin-floor-roughness.png" };
+  result.floor.normalScale.set(.12, .12);
   result.windshield.side = DoubleSide;
   result.light.emissive = new Color("#fff5d7"); result.light.emissiveIntensity = 0.8;
   result.red.emissive = new Color("#d74936"); result.red.emissiveIntensity = 0.35;
@@ -74,7 +79,7 @@ function makeDoor(parent: Object3D, x: number, side: number, index: number, pale
     root.position.x = x + direction * METRO.doorWidth / 4;
     root.userData = { role: "metroDoor", closedX: root.position.x, travel: direction * 0.665, side, index };
     parent.add(root);
-    const w = 0.642, y = METRO.floor + 0.022, h = METRO.doorHeight - 0.03, z = side * 1.493;
+    const w = 0.642, y = METRO.floor + 0.022, h = 2.05 - 0.03, z = side * 1.493;
     const skin = rectangle(-w / 2, y, w, h, 0.035); hole(skin, -0.224, y + 0.88, 0.448, 0.92, 0.08);
     panel(root, "door_skin", skin, z - 0.023, palette.shell, 0.046);
     frame(root, "door_window", -0.224, y + 0.88, 0.448, 0.92, z + side * 0.028, palette);
@@ -110,27 +115,7 @@ export function createMetroCar(kind: MetroCarKind, palette = metroMaterials()): 
       makeDoor(root, x, side, i, palette); anchor(root, `door_${side}_${i}`, [x, 1.1, side * 1.5]);
       box(root, "door_header", [1.4, 0.09, 0.025], [x, 3.215, side * 1.51], palette.rubber);
       box(root, "door_status", [0.17, 0.04, 0.033], [x, 3.221, side * 1.53], palette.amber);
-      box(root, "threshold", [1.35, 0.035, 0.14], [x, 1.09, side * 1.46], palette.steel);
-      for (const dx of [-0.77, 0.77]) bar(root, "door_grab", [x + dx, 1.13, side * 1.25], [x + dx, 3.12, side * 1.25], 0.018, palette.steel);
     });
-    for (const { x, w } of windows) {
-      box(root, "seat_base", [w + 0.02, 0.17, 0.43], [x, 1.5, side * 1.17], palette.seat);
-      const back = box(root, "seat_back", [w + 0.02, 0.46, 0.1], [x, 1.81, side * 1.38], palette.seat); back.rotation.x = -side * 0.09;
-      for (let i = 1; i < 4; i++) box(root, "seat_division", [0.014, 0.012, 0.37], [x - w / 2 + w * i / 4, 1.591, side * 1.17], palette.steel);
-    }
-    bar(root, "overhead_handhold", [-10.5, 3.02, side * 0.83], [bodyEnd - 0.2, 3.02, side * 0.83], 0.018, palette.steel);
-    for (let x = -9.7; x < bodyEnd; x += 1.1) {
-      bar(root, "strap", [x, 3.02, side * 0.83], [x, 2.78, side * 0.83], 0.012, palette.rubber);
-      for (const dx of [-0.068, 0.068]) bar(root, "strap_handle", [x + dx, 2.78, side * 0.83], [x + dx, 2.68, side * 0.83], 0.014, palette.interior);
-      bar(root, "strap_bottom", [x - 0.068, 2.68, side * 0.83], [x + 0.068, 2.68, side * 0.83], 0.014, palette.interior);
-    }
-    box(root, "cabin_light", [bodyEnd + 10.6, 0.025, 0.08], [(bodyEnd - 10.6) / 2, 3.32, side * 0.83], palette.light);
-  }
-  box(root, "floor", [bodyEnd + 11.15, 0.1, 2.9], [(bodyEnd - 11.15) / 2, 1.05, 0], palette.floor);
-  box(root, "interior_ceiling", [bodyEnd + 11.12, 0.045, 2.75], [(bodyEnd - 11.12) / 2, 3.38, 0], palette.interior);
-  for (const x of doorXs) {
-    bar(root, "centre_pole", [x, 1.12, 0], [x, 3.35, 0], 0.023, palette.steel);
-    for (const z of [-0.65, 0.65]) bar(root, "pole_branch", [x, 2.95, 0], [x, 3.09, z], 0.019, palette.steel);
   }
   const roofRing = (x: number) => Array.from({ length: 25 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 24; return [x, 3.25 + Math.cos(a) * 0.48, Math.sin(a) * 1.5]; });
   // Ring winding is outward; the roof has a separate interior ceiling.
@@ -216,6 +201,18 @@ export function createMetroCar(kind: MetroCarKind, palette = metroMaterials()): 
     box(root, "pantograph_contact", [0.18, 0.055, 1.55], [8.25, 4.6, 0], palette.chassis);
   }
   anchor(root, "floor", [0, 1.1, 0]); anchor(root, "rear", [-11.4, 1.1, 0]);
+  // Widen the body and raise its upper shell around the unchanged passenger floor.
+  // Running gear keeps its rail gauge; seats and handholds are newly authored below.
+  const envelope = new Group(); envelope.name = "metro-body-envelope";
+  for (const node of [...root.children]) {
+    if (/^(underfloor|bogie|axle|wheel|air_spring|coupler|anchor_coupler)/.test(node.name)) continue;
+    envelope.add(node);
+  }
+  envelope.scale.set(1, METRO_PROFILE.upperHeightFactor, METRO_PROFILE.widthFactor);
+  envelope.position.y = METRO.floor * (1 - METRO_PROFILE.upperHeightFactor);
+  root.add(envelope);
+  root.add(createMetroInterior(bodyEnd, doorXs, windows, palette));
+  root.userData.cabin = { version: 2, clearWidth: METRO_PROFILE.interiorHalfWidth * 2, clearHeight: METRO_PROFILE.ceiling - METRO.floor, seatHeight: METRO_PROFILE.seatHeight, mouldedSeats: windows.length * 8, doorBays: doorXs.length };
   return root;
 }
 
@@ -248,7 +245,8 @@ export function batchMetroCar(root: Group) {
     for (const [material, geometries] of buckets) {
       const merged = mergeGeometries(geometries); geometries.forEach((geo) => geo.dispose());
       if (!merged) throw new Error(`Unable to batch ${material.name}`);
-      mesh(target, `${target.name}_${material.name}`, merged, material);
+      const compact = mergeVertices(merged, .00001); merged.dispose();
+      mesh(target, `${target.name}_${material.name}`, compact, material);
     }
     remove.forEach((node) => node.geometry.dispose());
   };

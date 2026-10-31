@@ -1,10 +1,11 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { Box3, Group, Mesh, Vector3 } from "three";
-import { HEIGHT, WIDTH } from "../../sim/layout";
+import { HEIGHT, WIDTH, PLAYER_TRAIN_DOORS, TRAIN_CENTRE_X } from "../../sim/layout";
 import { createMetroTrack, createParkedMetro, disposeMetroGeometry, disposeMetroTrack, metroPlatformLayout } from "./metroPlatformLayout";
 import { loadMetroTrain } from "./metroTrainAssets";
 import { Sign } from "./Sign";
+import { METRO_PROFILE } from "../../shared/metro";
 
 /** Parked metro scenery is independent of the simulation and the station-kit load. */
 export const MetroPlatform = memo(function MetroPlatform({ overview, standard, onAssetError }: {
@@ -18,7 +19,7 @@ export const MetroPlatform = memo(function MetroPlatform({ overview, standard, o
   useEffect(() => () => { if (train) disposeMetroGeometry(train); }, [train]);
   useEffect(() => {
     let active = true;
-    const url = new URL(`${import.meta.env.BASE_URL}assets/metro-train/metro-head-car.glb`, location.origin).href;
+    const url = new URL(`${import.meta.env.BASE_URL}assets/metro-train/metro-head-car.glb?v=2`, location.origin).href;
     loadMetroTrain(url).then((model) => { if (active) { setSource(model); invalidate(); } }).catch((error: unknown) => {
       if (active) onAssetError(`站台列车加载失败，可重试三维素材：${error instanceof Error ? error.message : "资源请求失败"}`);
     });
@@ -50,6 +51,7 @@ export const MetroPlatform = memo(function MetroPlatform({ overview, standard, o
   return <group name="metro-platform">
     <primitive object={structure} dispose={null} />
     {train && <group name="metro-train-placement" position={[layout.trackX, layout.railY, layout.centreZ]} rotation={[0, layout.trainYaw, 0]}><primitive object={train} dispose={null} /></group>}
+    {PLAYER_TRAIN_DOORS.map(d => <pointLight key={d.id} position={[TRAIN_CENTRE_X, -2 + METRO_PROFILE.ceiling - METRO_PROFILE.floor - .15, d.pos.y + 1.25]} color="#fff4df" intensity={6} distance={6} decay={2} />)}
     <Sign text="01  青绿线 · 列车停靠" position={[WIDTH + 0.09, -0.1, 15]} width={4.6} />
   </group>;
 });

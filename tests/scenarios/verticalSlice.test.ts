@@ -18,7 +18,7 @@ function person(e:Engine,x:number,y:number) {
   n.persona.traits={courage:.6,vanity:1,temper:0,fairness:1,meddling:1};n.facing=Math.PI;
   return n;
 }
-const runner=(e:Engine,script:ScriptedStep[],respond?:import("../../src/agent/agent").NpcResponder)=>new GameRunner(e,new ScriptedAgent(script),async()=>({mechanic:"unsupported",reason:"",source:"keywords"}),{respond});
+const runner=(e:Engine,script:ScriptedStep[],respond?:import("../../src/agent/agent").NpcResponder)=>new GameRunner(e,new ScriptedAgent([...script,{at:"arrived",action:{type:"move_to",target:"TRAIN_1",reason:"到站台后继续登车"}}]),async()=>({mechanic:"unsupported",reason:"",source:"keywords"}),{respond});
 const route:ScriptedStep[]=[{at:"creative_done",action:{type:"move_to",target:"STAIRS_TOP",reason:"离开现场"}},{at:"arrived",action:{type:"traverse",route:"stairs",reason:"抵达站台"}}];
 async function until(r:GameRunner,condition:()=>boolean,max=1000) {
   if(r.phase==="ready")r.start();
