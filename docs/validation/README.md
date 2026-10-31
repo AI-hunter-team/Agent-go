@@ -14,6 +14,7 @@
 | [CONTROLROOM-003](CONTROLROOM-003.md) | 移除控制室桌面/侧墙屏幕，18项专项、构建与生产浏览器检查 |
 | [CONTROLROOM-002](CONTROLROOM-002.md) | 控制室角色过曝修正及照明平滑衔接；741测试、双角色与低画质/入场浏览器检查 |
 | [CONTROLROOM-001](CONTROLROOM-001.md) | 控制室、本机世界列表、沙盘、连续入场、740测试及新旧启动50种子对照；本地验证 |
+| [DOCS-SYNC-001](DOCS-SYNC-001.md) | 2026-11-01 文档与主线状态同步：仓库滞后核对、合入对照、源码一致性修正与全量链接审计；纯文档 |
 | [GUIDANCE-DIALOGUE-PR-001](GUIDANCE-DIALOGUE-PR-001.md) | 指导重试与多 NPC 对话整合最新 main，最终781项/类型/构建通过；窄屏报告按钮遮挡修复与无费用浏览器复验，PR #61交付证据 |
 | [ONBOARD-PR-001](ONBOARD-PR-001.md) | 登车终点、精细车厢和结束界面统一PR交付；提交/主线整合/CI状态见报告，不自动合并 |
 | [JOURNEY-FAILURE-001](JOURNEY-FAILURE-001.md) | 失败结束展示、真实120秒超时、主动复盘/重试/调整入口和四种尺寸；739项检查，本地未提交；失败动作待后续素材 |
@@ -80,6 +81,68 @@
 | [原 MVP 本地验收记录](../验收记录.md) | 保留原位置及证据；旧轮次的自动化、离线运行和浏览器限制，不是当前重跑 |
 | [DOC-001](DOC-001.md) | 本次文档与协作规则迁移的本地检查及交接 |
 | [CI-001](CI-001.md) | 后续 CI 配置、本地软件检查、远端运行与集成证据 |
+
+
+## 补充索引（2026-11-01 核对）
+
+以下报告此前未在上表登记，按编号排列；“随附 PR”指报告随之进入 `main` 的 PR（截至 `8a98665` 均已合入），完整对照见[中央记录的主线合入对照](../开发计划.md#主线合入对照截至-2026-11-01)。报告内的“未提交/待集成”等状态仍是写作时的快照。[IV2-18-evidence.json](IV2-18-evidence.json) 与 [IV2-PR-001-evidence.json](IV2-PR-001-evidence.json) 分别是对应报告的结构化证据。
+
+| 报告 | 主题 | 随附 PR |
+|---|---|---|
+| [3D-STACK-001](3D-STACK-001.md) | 浏览器 3D 与 UI 技术选型讨论 | #7 |
+| [API-CONFIG-001](API-CONFIG-001.md) | 页面配置模型 API 并验证启用 | #1 |
+| [API-REVIEW-001](API-REVIEW-001.md) | 模型接口选型核对 | #24 |
+| [ASSET-KIT-001](ASSET-KIT-001.md) | 非角色站厅素材小样与可复用资产包 | #14 |
+| [ASSET-KIT-001-V2](ASSET-KIT-001-V2.md) | 非角色站厅素材小样与可复用资产包（V2 复验） | #14 |
+| [BLACKOUT-SWITCH-001](BLACKOUT-SWITCH-001.md) | Agent 操作电闸触发限时熄灯 | #45 |
+| [BUBBLE-BORDER-001](BUBBLE-BORDER-001.md) | 移除角色气泡左侧强调效果 | #53 |
+| [CHARACTER-JITTER-001](CHARACTER-JITTER-001.md) | 角色抽搐修复 | #26 |
+| [CHECKPOINT-001](CHECKPOINT-001.md) | 设施移动目标对齐队尾 | #43 |
+| [CREATIVE-001](CREATIVE-001.md) | 保留玩家的非常规玩法目标 | #12 |
+| [CURRENT-ACTION-001](CURRENT-ACTION-001.md) | 当前行动在行程记录外常显 | #63 |
+| [DEADLINE-001](DEADLINE-001.md) | 开局选择截止时间 | #26 |
+| [DEMO-PREVIEW-001](DEMO-PREVIEW-001.md) | 启动验收预览 | #26 |
+| [DEMO-TRIAGE-001](DEMO-TRIAGE-001.md) | 三小时 Demo 优先级评估 | #24 |
+| [DEPLOY-COMPOSE-001](DEPLOY-COMPOSE-001.md) | Docker Compose 部署 | #1 |
+| [DIALOGUE-ORDER-001](DIALOGUE-ORDER-001.md) | 多 NPC 对话有序展示 | #61 |
+| [DOC-COMPOSE-001](DOC-COMPOSE-001.md) | GitHub 首页部署教程 | #6 |
+| [FACILITY-RANDOM-001](FACILITY-RANDOM-001.md) | 按情景种子随机生成设施故障 | #16 |
+| [FINAL-LOCAL-001](FINAL-LOCAL-001.md) | 本地最终测试版本 | #26 |
+| [GUARD-BALANCE-001](GUARD-BALANCE-001.md) | 减少安检员压迫感并扩大可读风险窗口 | #66 |
+| [GUIDANCE-RETRY-001](GUIDANCE-RETRY-001.md) | 被拒后调整话术的执行跟踪 | #61 |
+| [INT-README-001](INT-README-001.md) | 修复 Luna PR 的 README 集成冲突 | #1 |
+| [IV2-09](IV2-09.md) | 服务端 Boss 与 NPC 对话 | #32 |
+| [IV2-10](IV2-10.md) | Runner 与角色工具 | #32 |
+| [IV2-11](IV2-11.md) | 观战展示 | #32 |
+| [IV2-12](IV2-12.md) | 垂直切片集成 | #32 |
+| [IV2-MERGE-001](IV2-MERGE-001.md) | 规划修正与合入 | #21 |
+| [IV2-RAILING-001](IV2-RAILING-001.md) | 安检低栏杆翻越可达 | #36 |
+| [LLM-LATENCY-001](LLM-LATENCY-001.md) | 模型调用延迟优化 | #11 |
+| [METRO-INTEGRATION-001](METRO-INTEGRATION-001.md) | 青绿线列车接入正式站台 | #38 |
+| [METRO-TRAIN-001](METRO-TRAIN-001.md) | 中国城市地铁列车小样 | #38 |
+| [MODEL-LOADING-OVERLAY-001](MODEL-LOADING-OVERLAY-001.md) | 模型首次加载进度遮罩 | #57 |
+| [NAIWA-COLLISION-001](NAIWA-COLLISION-001.md) | 奶蛙保安碰撞体修复 | #47 |
+| [NPC-BUBBLE-001](NPC-BUBBLE-001.md) | 连续对话气泡避让 | #52 |
+| [NPC-MODEL-001](NPC-MODEL-001.md) | Agent 与 NPC 模型配置分离 | #20 |
+| [OPENING-001](OPENING-001.md) | 模型从开局自主选择路径 | #10 |
+| [PERF-001](PERF-001.md) | 观战性能与可选低开销设置 | #22 |
+| [PR-SUBMIT-001](PR-SUBMIT-001.md) | 提交 Responses、界面与性能更新 | #22 |
+| [PR14-REVIEW-001](PR14-REVIEW-001.md) | 布局导向带与开口同步 | #14 |
+| [PULL-001](PULL-001.md) | 同步当前分支 | #24 |
+| [PULL-002](PULL-002.md) | 同步最新仓库 main | #24 |
+| [PULL-003](PULL-003.md) | 快进当前 main 到最新仓库 | #24 |
+| [RECORD-COLLAPSE-001](RECORD-COLLAPSE-001.md) | 开局默认收起行程记录 | #50 |
+| [RESPONSES-001](RESPONSES-001.md) | 统一 Responses 与 DeepSeek 思考设置 | #22 |
+| [RESTORE-REVIEW-051](RESTORE-REVIEW-051.md) | 恢复 PR #51 的行程复盘 | #64 |
+| [RUN-001](RUN-001.md) | 本地启动游戏 | #24 |
+| [SYNC-001](SYNC-001.md) | 同步本地项目与云端功能分支 | #3 |
+| [TRAIN-BOARDING-002](TRAIN-BOARDING-002.md) | 站台 NPC 登车并从场景移除 | #44 |
+| [UI-JOURNEY-001](UI-JOURNEY-001.md) | 六阶段旅程界面 | #35 |
+| [UI-MOBILE-INFO-001-LATEST](UI-MOBILE-INFO-001-LATEST.md) | 移动端本局信息位置统一 | #59 |
+| [UI-POLISH-001](UI-POLISH-001.md) | 全界面统一优化 | #22 |
+| [VICTORY-CAMERA-002](VICTORY-CAMERA-002.md) | 胜利镜头编排与自动恢复 | #40 |
+| [WATCH-UI-001](WATCH-UI-001.md) | 观战记录与终局入口 | #41 |
+| [WORKTREE-CLEAN-001](WORKTREE-CLEAN-001.md) | 只保留一个 AgentGo 目录 | #24 |
 
 中央记录只链接报告并概括状态，不复制全部命令和结果。未来报告由集成负责人在本索引登记，避免并行任务同时编辑索引；任务可先从各自简报链接报告。
 

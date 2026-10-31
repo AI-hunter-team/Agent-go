@@ -36,7 +36,8 @@
 | `src/shared/` | 前后端共用的动作、观察、指导与报告类型；检查 `sim`、`agent`、`ui`、`server` 和测试 |
 | `src/sim/` | 世界、规则、几何/导航、观察、NPC、结算；检查运行器、离线 Agent、UI 与规则测试 |
 | `src/agent/` | 角色 Agent 接口、离线/远程实现、运行器；检查模拟时间、会话生命周期、报告与 UI |
-| `src/ui/` | React 面板、Canvas 渲染、日志与报告导出；不能用展示层绕过模拟规则 |
+| `src/ui/` | React 面板、`scene/` 三维观战（R3F）、二维调试 Canvas、日志与报告导出；不能用展示层绕过模拟规则 |
+| `src/replay/`、`src/assets/` | 角色轨迹回放；站厅、列车与栏杆的 GLB 素材；检查展示层、报告与资源测试 |
 | `server/` | Express API、局内会话、提示词、工具与模型调用；检查远程客户端、共享类型及伪客户端测试 |
 | `tests/` | Vitest 自动化与使用伪响应的模型接口测试；不是付费模型整局验收 |
 | `design/`、`docs/` | 视觉历史、产品/技术说明、任务与验证证据；按导航区分现行和历史 |
@@ -94,7 +95,7 @@ GitHub Actions 配置在 [ci.yml](../.github/workflows/ci.yml)：面向 `main` �
 
 CI 使用 `npm test -- --maxWorkers=2 --testTimeout=15000`，与已验收整局模拟命令保持一致：限制并发并为单项测试提供 15 秒等待预算，避免托管机器上的完整对局触及 Vitest 默认 5 秒。测试内容、断言和产品时限不变；`npm test` 脚本自身仍为 `vitest run`。此调整的实际阻塞与结果见 [ALL-LOCAL-001](validation/ALL-LOCAL-001.md)。
 
-`gameSession.test.ts` 的六个种子报告对照分别串行执行两个完整对局，单独设置30秒墙钟预算以适应Windows运行波动；其余用例除下述双整局场景外仍使用上述默认预算，完整报告比较与产品时限不变。实际失败及修复证据见 [CI-SESSION-001](validation/CI-SESSION-001.md)。
+`gameSession.test.ts` 的六个种子报告对照分别串行执行两个完整对局，在两局之间及循环中让出事件循环，并单独设置45秒墙钟预算以适应托管机器运行波动；其余用例除下述双整局场景外仍使用上述默认预算，完整报告比较与产品时限不变。原30秒预算的失败及修复证据见 [CI-SESSION-001](validation/CI-SESSION-001.md)，调整为45秒的后续修复（PR #62）见 [IV2-PR-001](validation/IV2-PR-001.md#合入后的-ci-后续修复)。
 
 `heuristicAgent.test.ts` 中固定拥挤场景的失败/可行路线用例同样连续运行两个完整对局，单独使用30秒墙钟预算，其两个种子、全部断言和游戏截止保持不变；其他离线策略用例沿用默认预算。Windows超过15秒的实际失败及修复验证见 [ONBOARD-PR-001](validation/ONBOARD-PR-001.md#合入前windows检查与修复)。
 

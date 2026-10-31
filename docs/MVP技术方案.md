@@ -59,19 +59,26 @@ MVP 必须证明（方案 1.1 第十一章）：
 
 ```
 src/
-  shared/       types.ts guidance.ts —— 共享类型与指导长度校验
-  sim/          rng.ts geometry.ts layout.ts nav.ts scenario.ts
-                world.ts npc.ts guards.ts observation.ts intent.ts
-                creative.ts engine.ts
-  agent/        agent.ts heuristicAgent.ts remoteAgent.ts runner.ts
-  ui/           App.tsx MapCanvas.tsx ControlPanel.tsx DecisionLog.tsx
-                ReportView.tsx render.ts format.ts styles.css main.tsx
-  server/         index.ts app.ts sessions.ts prompts.ts tools.ts responses.ts structured.ts
+  shared/       types.ts interaction.ts guidance.ts gameSettings.ts journey.ts review.ts
+                modelConfig.ts metro.ts debug.ts —— 前后端共享类型、设置与校验
+  sim/          rng.ts geometry.ts facilityGeometry.ts layout.ts nav.ts movement.ts scenario.ts
+                world.ts transit.ts npc.ts npcBrain.ts persona.ts guards.ts alert.ts perception.ts
+                events.ts items.ts observation.ts intent.ts dialogue.ts negotiation.ts engine.ts
+    actions/    executor.ts primitives.ts contest.ts legacy.ts —— 行动执行器、原语、对抗与旧动作适配
+    content/    alertRules.ts items.ts personas.ts
+  agent/        agent.ts heuristicAgent.ts remoteAgent.ts runner.ts dialogueFollowThrough.ts reviewRecorder.ts
+  ui/           App.tsx、面板/复盘/对话组件、MapCanvas.tsx（二维调试）、render.ts、样式
+    scene/      GameScene.tsx Station.tsx MetroPlatform.tsx Character.tsx 等三维观战（R3F）
+  replay/       trajectory.ts —— 角色轨迹回放
+  assets/       station-kit/ metro-train/ metro-railings/ —— 正式 GLB 素材
+server/         index.ts app.ts sessions.ts prompts.ts tools.ts responses.ts responsesStream.ts structured.ts
+                boss.ts npcDialogue.ts review.ts objective.ts llm.ts modelConfig.ts modelSettings.ts
+                modelError.ts security.ts debug.ts
 tests/          *.test.ts
 docs/           产品/技术方案、导航/开发流程、路线图/工作记录、任务/验证及模板
 ```
 
-职责与消费者检查见 [开发流程](DEVELOPMENT.md)。动作/观察/报告结构维护在 [shared/types.ts](../src/shared/types.ts)，Agent 接口在 [agent.ts](../src/agent/agent.ts)；队列实现合并于 `world.ts`，不存在独立 `queues.ts`。
+职责与消费者检查见 [开发流程](DEVELOPMENT.md)。动作/观察/报告结构维护在 [shared/types.ts](../src/shared/types.ts)，Agent 接口在 [agent.ts](../src/agent/agent.ts)；队列实现合并于 `world.ts`，不存在独立 `queues.ts`。原 `creative.ts` 已在交互 2.0 中删除：自由行动由服务端 Boss 解释为原语计划，模拟器在 `actions/` 执行；`intent.ts` 负责离线计划解析，`negotiation.ts` 仅重导出 `dialogue.ts` 的插队沟通。
 
 ## 5. 模拟器
 
@@ -263,15 +270,25 @@ client.beta.messages.create({
 
 ## 10. 接口定义（摘要）
 
-以下按本次调查的 [服务端路由](../server/app.ts) 与 [远程客户端](../src/agent/remoteAgent.ts) 核对；共享响应结构见 [types.ts](../src/shared/types.ts)，工具参数及解析见 [tools.ts](../server/tools.ts)。这是原 MVP 的内部接口摘要；后续页面模型配置、报告上传与 NPC 协商入口见 §16，不是独立的版本化对外承诺。
+以下按本次调查的 [服务端路由](../server/app.ts) 与 [远程客户端](../src/agent/remoteAgent.ts) 核对；共享响应结构见 [types.ts](../src/shared/types.ts)，工具参数及解析见 [tools.ts](../server/tools.ts)。以下为截至 `8a98665` 的内部接口摘要，字段细节以源码为准，不是独立的版本化对外承诺。原 MVP 的 `POST /api/creative/classify` 与 §16 所述 `POST /api/npc/negotiate` 已由 `/api/boss/interpret`、`/api/npc/respond` 取代。
 
 ```
-POST /api/guidance/normalize  { text }                     → { guidance: NormalizedGuidance | null }
-POST /api/session             { guidance, normalized }      → { sessionId }
-POST /api/agent/decide        { sessionId, turn }           → DecisionResult
-POST /api/creative/classify   { intent, observation }       → CreativeClassification
-DELETE /api/session/:id                                     → 204
-GET  /api/health                                            → { llm: boolean, model: string | null }
+POST   /api/guidance/normalize  { text, runId? }                       → { guidance: NormalizedGuidance | null, debug }
+POST   /api/journey/prepare     { guidance, seed, sceneId, settings, … } → 初始方案及 preparationId
+POST   /api/session             { guidance, normalized, settings, loadout?, preparationId?, … } → { sessionId, reviewToken }
+POST   /api/agent/decide        { sessionId, turn }                    → DecisionResult + debug
+POST   /api/boss/interpret      { sessionId, instruction, context }    → 原语行动计划 + debug
+POST   /api/npc/respond         { sessionId, request }                 → NPC 回复（失败不授予许可）
+POST   /api/session/:id/report  { report }                             → 204
+DELETE /api/session/:id                                                → 204
+GET    /api/review/status                                              → { available }
+POST   /api/review/binding                                             → { reviewToken | null }
+POST   /api/review              { input }                              → 局后复盘
+POST   /api/review/guidance     { guidance, strategies }               → 下一局指导草稿（≤300 字）
+POST   /api/model/verify        { baseUrl, apiKey }                    → 可用模型
+POST   /api/model/enable        { model, reasoningEffort }             → 启用页面模型配置
+DELETE /api/model/config                                               → 204
+GET    /api/health                                                     → { llm: boolean, model: string | null }
 ```
 
 `turn` 为上一动作结果 + 新观察 + 触发事件（结构化 JSON，服务端渲染为文本）。空白指导返回 `guidance: null`，初始方案包含于 `NormalizedGuidance.initialPlan`，没有独立的 `plan` 响应字段。错误、会话及无模型分支以路由和 [server.test.ts](../tests/server.test.ts) 核对；health 不执行真实模型请求。
@@ -369,11 +386,13 @@ PORT=8787
 
 身份：已合入 main `c6bfb5297f02cadc9a02dda1547ccb262b49bd93` 的实现核对。用户授权处理并合并剩余 PR，PR #8 的功能与现有 3D、页面模型配置和 Debug 接通；不把以下事实改写成原方案或历史验收。范围、差异与证据见[集成简报](tasks/PR-REMAINING-001.md)、[验证报告](validation/PR-REMAINING-001.md)及 [PR #8](https://github.com/AI-hunter-team/Agent-go/pull/8)。
 
+> 后续变化（2026-11-01 补注）：本节是合入 `c6bfb52` 时的快照。当前站厅为 90×30 米、楼梯 `(61,9)`→`(73,9)`（见 §20 与 [layout.ts](../src/sim/layout.ts)），模型下行工具为 `traverse`（`descend_stairs` 仅为旧动作兼容），NPC 对话经 `/api/npc/respond` 使用该局绑定的同一模型、不再读取 `NPC_*`（见 §10、§17），终点为实际登车（见 §21）。
+
 ### 楼梯、结算与 NPC 协商
 
 - 当前站厅为 70×30 米，闸机线 x=44，上层楼梯入口 `(48,15)`、下层出口 `(57,15)`，布局以 [layout.ts](../src/sim/layout.ts) 为准。过闸仅设置 `passedGate`；须到入口执行 `descend_stairs`，完成 6 秒下楼进入站台才成功并计分。不能将原过闸成绩直接与新成绩比较；旧技术章节中的“过闸即成功”不再描述当前实现。
 - 新动作 `request_cut_in` 针对具体、可见、可达且在开放设施排队的乘客，距离不超过 3 米，请求 1–200 字，每位乘客每局最多三轮。模型明确同意后，模拟器才检查并执行 1.5 秒移动到该乘客前的插队；拒绝、离线、错误或截断不产生许可。旧 `attempt_creative` 插队需先沟通，不再直接授权插队。
-- 两名保安沿 x=41 直线往返，分别覆盖 y=3–13 和 y=17–27；违规仍由模拟器的距离、视线和遮挡判定。协商与执行边界见 [negotiation.ts](../src/sim/negotiation.ts)、[creative.ts](../src/sim/creative.ts)，结算见 [engine.ts](../src/sim/engine.ts)及 [world.ts](../src/sim/world.ts)，模型工具见 [tools.ts](../server/tools.ts)。
+- 两名保安沿 x=41 直线往返，分别覆盖 y=3–13 和 y=17–27；违规仍由模拟器的距离、视线和遮挡判定。协商与执行边界见 [negotiation.ts](../src/sim/negotiation.ts)、[dialogue.ts](../src/sim/dialogue.ts)、[actions/](../src/sim/actions/)（原 `creative.ts` 已删除），结算见 [engine.ts](../src/sim/engine.ts)及 [world.ts](../src/sim/world.ts)，模型工具见 [tools.ts](../server/tools.ts)。
 - 对应设计：[站内交互](superpowers/specs/2026-10-30-station-interactions-design.md)。楼梯仍是固定耗时与程序高度展示，没有增加多层自由寻路或物理模拟。
 
 ### 接口与报告入口
@@ -467,13 +486,13 @@ PORT=8787
 - 北侧楼梯从 `(61,9)` 到 `(73,9)`，基础耗时 6 秒；南侧扶梯从 `(61,22)` 到 `(73,22)`，基础乘坐 4 秒、每 1 秒放行一名乘客，FIFO 候梯区最多 14 人。`take_escalator` 需通过闸机并到入口，候梯可离队，上扶梯后不能改向；程序控制实际 NPC 入队、移动和离开，初始人群与持续换乘流按种子生成。两路都以到达下层站台结算，普通寻路不能跨层。
 - 观察可选增加 `attractions` 和 `routes`，只包含当前可见对象/入口及可见候梯乘客；不提前给全局队列或未来状态。离线 Agent 到售票机前比较点读取可见队列，过闸后结合步行、候梯及下行成本选择路线。它始终不理解自然语言指导，也不证明真实模型会分心。
 - 报告可选分类 `distraction` 和 `escalator` 与既有分类互斥；候梯仍归排队。关注时长可能含减速行走，不等于净损失。事件记录开始、结束、打断和实际候梯时长；赛后快照可选增加 `transit` 队列与乘坐状态，只用于已结束对局的复盘。经验仍由玩家选择建议、编辑并采纳草稿进入下一局，不自动记忆。
-- 三维设施、NPC、两条下行、镜头取景、二维调试/回放与流程面板使用同一布局。旧报告缺失新增观察/时间/快照字段时兼容显示。尺寸、关注耗时与运输参数为试玩起点；当前 120 秒挑战保留，不能将旧地图成绩直接作为本版成绩。
+- 三维设施、NPC、两条下行、镜头取景、二维调试/回放与流程面板使用同一布局。旧报告缺失新增观察/时间/快照字段时兼容显示。尺寸、关注耗时与运输参数为试玩起点；该轮保留 120 秒挑战（当前默认已改为 150 秒，可选 120/150/180/240/300 秒，见 [gameSettings.ts](../src/shared/gameSettings.ts)），不能将旧地图成绩直接作为本版成绩。
 
-主线兼容补充：保留 Responses 模型、角色与正式站厅/栏杆；服务及扶梯移动均避让实际乘客，拥挤可能增加基础耗时。候梯位次按接受顺序保留并受前序实际位置约束；导航先到扶梯入口侧边，再走向自己的位次。120 秒默认及主线截止时间选项保持不变，详细集成证据见验证记录末节。
+主线兼容补充：保留 Responses 模型、角色与正式站厅/栏杆；服务及扶梯移动均避让实际乘客，拥挤可能增加基础耗时。候梯位次按接受顺序保留并受前序实际位置约束；导航先到扶梯入口侧边，再走向自己的位次。当时的 120 秒默认及主线截止时间选项保持不变（现行默认见 §21），详细集成证据见验证记录末节。
 
 ## 21. 登车终点与车厢庆祝（ONBOARD-VICTORY-001）
 
-身份：2026-10-31 用户明确要求“上地铁才赢，然后在地铁里跳舞”，并确认结束页草图后实施；本轮本地变更，实际检查与合入状态见[简报](tasks/ONBOARD-VICTORY-001.md)及[验证](validation/ONBOARD-VICTORY-001.md)。本节覆盖前文历史版本中的到站台终点，不改变当前默认150秒、拥挤度或违规判负规则。
+身份：2026-10-31 用户明确要求“上地铁才赢，然后在地铁里跳舞”，并确认结束页草图后实施；已经 [PR #60](https://github.com/AI-hunter-team/Agent-go/pull/60) 合入，实际检查见[简报](tasks/ONBOARD-VICTORY-001.md)及[验证](validation/ONBOARD-VICTORY-001.md)。本节覆盖前文历史版本中的到站台终点，不改变当前默认150秒、拥挤度或违规判负规则。
 
 - 下楼/乘扶梯只设置 `onPlatform`，角色回到可行动状态；站台到地铁仍计时，超时包括正在登车的情况。`PLAYER_TRAIN_DOORS` 对齐停靠头车的五个真实门口，导航点在站台侧 x=89.1，z=8.8/12.35/15.9/19.45/23；仅下行到站台后才能经合法路径抵达。
 - `move_to TRAIN_1`–`TRAIN_5` 抵达门口后进入不可随意中断的 `boarding` 活动：穿过开放车门，绕开中央立杆，到达车厢过道；由世界逐步移动并做人员碰撞检查，普通导航不得跨进轨道。完成才设置 `onTrain` 并由 Engine 结算，成绩包含全部登车步行时间。原 NPC 站台离场规则保留。
@@ -481,4 +500,4 @@ PORT=8787
 - 新报告增加可选 `goal: board_train`；旧报告缺失时仍标识旧版站台终点。Debug 增加 `boarding` 阶段，登车步行仍归 `walking`，不重复计时；地图/回放包含车厢范围。
 - 结束页默认展示结果、再来一局/查看复盘/修改思路，复盘主动打开；成功在真实终点位置播放已有舞蹈。车厢镜头沿过道轻微运镜，自动和拖动视角均约束在车内，回正恢复运镜；标题/彩带短暂入场，减少动态效果不播放彩带或持续运镜。动画不推进模拟世界、不改变成绩，手机操作固定在可视区域。
 
-车厢美术接续（METRO-CABIN-002，本地未提交）：用户要求细化内饰和修正偏小的列车比例。车体名义宽3.6m、实际外包络约3.7116m，中心净高约2.6904m；地板−2m、轨面−3.1m、车长、五个纵向门位及轨距保留。共享尺寸在 `src/shared/metro.ts`，停靠中心与玩家入厢路径同步移动，不能仅在展示层放大。内饰/嵌入PBR材质、独立预览、模型预算及验证见[设计说明](../design/metro-train/README.md)和[本轮报告](validation/METRO-CABIN-002.md)。登车段实际路径略增长，旧版148.8秒不作为新比例版本的固定成绩。
+车厢美术接续（METRO-CABIN-002，已经 PR #60 合入）：用户要求细化内饰和修正偏小的列车比例。车体名义宽3.6m、实际外包络约3.7116m，中心净高约2.6904m；地板−2m、轨面−3.1m、车长、五个纵向门位及轨距保留。共享尺寸在 `src/shared/metro.ts`，停靠中心与玩家入厢路径同步移动，不能仅在展示层放大。内饰/嵌入PBR材质、独立预览、模型预算及验证见[设计说明](../design/metro-train/README.md)和[本轮报告](validation/METRO-CABIN-002.md)。登车段实际路径略增长，旧版148.8秒不作为新比例版本的固定成绩。
