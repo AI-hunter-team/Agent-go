@@ -148,18 +148,10 @@ export class DialogueSystem {
         const offer = step.offerItemId ? this.world.items.items.get(step.offerItemId) : undefined;
         const moves = [...(offer ? [{
           itemId: offer.id,
-          to: {
-            type: "held" as const,
-            personId: npc.id,
-            slot: ITEM_DEFS[offer.kind].size === 0 ? "pocket" as const : "hand" as const
-          }
+          to: this.world.items.preferredLocation(offer, npc.id, give ? [give.id] : [])
         }] : []), ...(give ? [{
           itemId: give.id,
-          to: {
-            type: "held" as const,
-            personId: p.id,
-            slot: ITEM_DEFS[give.kind].size === 0 ? "pocket" as const : "hand" as const
-          }
+          to: this.world.items.preferredLocation(give, p.id, offer ? [offer.id] : [])
         }] : [])];
         const moved = this.world.items.moveMany(moves, "dialogue");
         if (!moved.ok) error = moved.text;else for (const move of moves) this.world.items.items.get(move.itemId)!.ownerId = move.to.personId;

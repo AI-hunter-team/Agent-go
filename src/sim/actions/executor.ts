@@ -39,6 +39,7 @@ export class ActionExecutor {
   private queue: PlanStep[] = [];
   private current: Current | null = null;
   private rng;
+  private keepQueue = false;
   private traversal: Extract<Person["activity"], { kind: "stairs" | "escalator" }> | null = null;
   private consent: {
     npcId: string;
@@ -95,7 +96,6 @@ export class ActionExecutor {
     this.traversal = p.activity.kind === "escalator" ? structuredClone(p.activity) : null;
     this.queue = structuredClone(plan.steps);
     this.outcomes = [];
-    this.context.world.removeFromQueue(p);
     this.next();
     return {
       ok: true,
@@ -113,7 +113,10 @@ export class ActionExecutor {
       this.fail(error);
       return;
     }
-    this.context.world.removeFromQueue(this.context.world.player!);
+    const p = this.context.world.player!;
+    const point = this.target(step);
+    this.keepQueue = this.isQueuing(p) && (step.op === "wait" || step.op === "talk" && !!point && this.inRange(step, point));
+    if (!this.keepQueue) this.context.world.removeFromQueue(p);
     this.current = {
       step,
       phase: "approach",
@@ -141,7 +144,11 @@ export class ActionExecutor {
       return;
     }
     const a = this.current;
-    if (p.incapacitated || !["acting", "creative"].includes(p.activity.kind)) {
+    if (this.keepQueue && a.step.op === "wait" && ["service", "escalator", "done"].includes(p.activity.kind)) {
+      this.finishQueueWait(a);
+      return;
+    }
+    if (p.incapacitated || !["acting", "creative"].includes(p.activity.kind) && !(this.keepQueue && this.isQueuing(p))) {
       this.cancel("行动被打断");
       return;
     }
@@ -203,6 +210,10 @@ export class ActionExecutor {
       return;
     }
     const a = this.current;
+    if (a && this.keepQueue && a.step.op === "wait" && ["service", "escalator", "done"].includes(this.context.world.player!.activity.kind)) {
+      this.finishQueueWait(a);
+      return;
+    }
     if (!a?.ready) return;
     if (a.blocked) { this.fail("翻出时与他人碰撞，继续乘扶梯"); return; }
     const error = this.validate(a.step, true);
@@ -253,12 +264,21 @@ export class ActionExecutor {
   }
   private resetActivity() {
     const p = this.context.world.player!;
+    this.keepQueue = false;
     if (["acting", "creative"].includes(p.activity.kind)) p.activity = {
       kind: "idle"
     };
   }
+  private finishQueueWait(a: Current) {
+    const suffix = this.queue.length ? "；后续步骤未执行" : "";
+    this.outcomes.push({ ok: true, text: `已开始办理或乘梯，等待结束${suffix}`, eventIds: [...a.eventIds] });
+    this.current = null;
+    this.queue = [];
+    this.keepQueue = false;
+  }
   private setActivity(op: string, progress: number) {
     const p = this.context.world.player!;
+    if (this.keepQueue && this.isQueuing(p)) return;
     if (p.activity.kind === "creative") {
       p.activity.remaining = this.current?.remaining ?? 0;
       return;
@@ -268,6 +288,12 @@ export class ActionExecutor {
       op,
       progress
     };
+  }
+  private isQueuing(p: Person): boolean {
+    if (p.activity.kind === "queued") return Boolean(this.context.world.queuePosition(p));
+    if (p.activity.kind === "to_queue") return this.context.world.facility(p.activity.facility)?.status === "open";
+    if (p.activity.kind === "to_escalator" || p.activity.kind === "escalator_queue") return this.context.world.transit.queue.includes(p.id);
+    return false;
   }
   private target(step: PlanStep): Vec | null {
     const w = this.context.world;
@@ -315,11 +341,7 @@ export class ActionExecutor {
     return i && this.context.world.items.holderId(i) === "player" ? i : null;
   }
   private slot(item: Item, personId: string): ItemLocation {
-    return {
-      type: "held",
-      personId,
-      slot: ITEM_DEFS[item.kind].size === 0 && item.kind !== "backpack" ? "pocket" : item.kind === "backpack" ? "bag" : "hand"
-    };
+    return this.context.world.items.preferredLocation(item, personId);
   }
   private validate(step: PlanStep, settling: boolean): string | null {
     const {
@@ -709,6 +731,7 @@ export class ActionExecutor {
       text: error ?? "让位失效"
     };
     w.finishAttention(p, "转向协商让位");
+    this.keepQueue = false;
     w.removeFromQueue(p);
     this.consent = {
       npcId,

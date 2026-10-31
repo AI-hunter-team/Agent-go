@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { ActionPlan, PlanStep } from "../src/shared/types";
 import { createFixtureEngine, emptyScenario } from "./fixtures/scenarios";
 import type { Engine } from "../src/sim/engine";
+import { ESCALATOR_TOP } from "../src/sim/layout";
 const plan = (...steps: PlanStep[]): ActionPlan => ({
   status: "plan",
   steps,
@@ -25,6 +26,60 @@ const advance = (e: Engine, seconds: number) => {
   }
 };
 describe("action executor lifecycle", () => {
+  test.each([0.1, 20])("waiting %s seconds in a queue permits service without executing later steps", (seconds) => {
+    const e = setup(), f = e.world.facility("TVM-2")!;
+    f.queue = ["player"];
+    e.player.pos = { ...f.def.head };
+    e.player.activity = { kind: "queued", facility: f.def.id };
+    expect(e.executor.start(plan({ op: "wait", seconds }, { op: "make_noise", level: "low" })).ok).toBe(true);
+    expect(f.queue).toEqual(["player"]);
+    e.step();
+    expect(f.serving?.personId).toBe("player");
+    expect(e.player.activity.kind).toBe("service");
+    expect(e.executor.busy).toBe(false);
+    expect(e.executor.outcomes.at(-1)?.text).toContain("后续步骤未执行");
+    e.step();
+    expect(e.player.activity.kind).toBe("service");
+    expect(e.executor.busy).toBe(false);
+  });
+
+  test("waiting in an escalator queue retains membership and ends when boarding starts", () => {
+    const e = setup(), transit = e.world.transit;
+    for (const [id] of e.world.persons) if (id !== "player") e.world.persons.delete(id);
+    transit.queue.splice(0, transit.queue.length, "player");
+    transit.nextCrowdAt = Infinity;
+    e.player.passedGate = true;
+    e.player.pos = { ...ESCALATOR_TOP };
+    e.player.activity = { kind: "escalator_queue", joinedAt: 0 };
+    expect(e.executor.start(plan({ op: "wait", seconds: 20 })).ok).toBe(true);
+    expect(transit.queue).toEqual(["player"]);
+    e.step();
+    expect(e.player.activity.kind).toBe("escalator");
+    e.step();
+    expect(e.player.activity.kind).toBe("escalator");
+    expect(e.executor.busy).toBe(false);
+  });
+
+  test("a third carried item can be taken into an available backpack", () => {
+    const e = setup();
+    for (let i = 0; i < 2; i++) e.world.items.spawn("water_bottle", { type: "held", personId: "player", slot: "hand" }, "player");
+    const item = e.world.items.spawn("snack", { type: "ground", pos: { ...e.player.pos } }, null);
+    expect(e.executor.start(plan({ op: "take", itemId: item.id })).ok).toBe(true);
+    advance(e, 2);
+    expect(item.location).toEqual({ type: "held", personId: "player", slot: "bag" });
+    expect(e.world.items.bagUsed("player")).toBe(1);
+  });
+
+  test("a full backpack and two full hands still reject a new item", () => {
+    const e = setup();
+    for (let i = 0; i < 2; i++) e.world.items.spawn("water_bottle", { type: "held", personId: "player", slot: "hand" }, "player");
+    for (let i = 0; i < 4; i++) e.world.items.spawn("water_bottle", { type: "held", personId: "player", slot: "bag" }, "player");
+    const item = e.world.items.spawn("snack", { type: "ground", pos: { ...e.player.pos } }, null);
+    expect(e.executor.start(plan({ op: "take", itemId: item.id })).ok).toBe(false);
+    expect(item.location.type).toBe("ground");
+    expect(e.world.items.bagUsed("player")).toBe(4);
+  });
+
   test("approaches, spends real duration, then takes and gives an existing item", () => {
     const e = setup(),
       item = e.world.items.spawn("umbrella", {
@@ -98,6 +153,8 @@ describe("action executor lifecycle", () => {
   });
   test("full hands reject take, lost recipient interrupts give, and hidden targets cannot start", () => {
     const e = setup();
+    const bag = e.world.items.bag("player")!;
+    e.world.items.move(bag.id, { type: "ground", pos: { ...e.player.pos } }, "fixture");
     for (let i = 0; i < 2; i++) e.world.items.spawn("water_bottle", {
       type: "held",
       personId: "player",

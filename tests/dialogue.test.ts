@@ -30,6 +30,55 @@ function setup() {
   };
 }
 describe("simulator dialogue settlement", () => {
+  test("queued conversation and a refused yield keep the player's original place", () => {
+    const { e, n } = setup();
+    const f = e.world.facility("TVM-2")!;
+    f.queue = [n.id, "player"];
+    n.pos = e.world.queueStandPoint(f, 0);
+    n.activity = { kind: "queued", facility: f.def.id };
+    e.player.pos = e.world.queueStandPoint(f, 1, "player");
+    e.player.activity = { kind: "queued", facility: f.def.id };
+    const before = [...f.queue];
+
+    expect(e.applyAction({ type: "talk", npcId: n.id, message: "可以让我先走吗", goal: "yield", reason: "" }).ok).toBe(true);
+    expect(e.executor.pendingDialogue).not.toBeNull();
+    expect(f.queue).toEqual(before);
+    expect(e.dialogue.apply(reply({ decision: "refuse", give: null })).ok).toBe(true);
+    expect(f.queue).toEqual(before);
+    expect(e.player.activity).toEqual({ kind: "queued", facility: f.def.id });
+
+    expect(e.applyAction({ type: "talk", npcId: n.id, message: "你好", goal: "chat", reason: "" }).ok).toBe(true);
+    expect(e.dialogue.apply(reply({ decision: "accept", give: null })).ok).toBe(true);
+    expect(f.queue).toEqual(before);
+    expect(e.player.activity).toEqual({ kind: "queued", facility: f.def.id });
+  });
+
+  test("an accepted yield leaves the old slot only when physical movement begins", () => {
+    const { e, n } = setup(), f = e.world.facility("TVM-2")!;
+    f.queue = [n.id, "player"];
+    n.pos = e.world.queueStandPoint(f, 0);
+    n.activity = { kind: "queued", facility: f.def.id };
+    e.player.pos = e.world.queueStandPoint(f, 1, "player");
+    e.player.activity = { kind: "queued", facility: f.def.id };
+    expect(e.applyAction({ type: "talk", npcId: n.id, message: "请让我先走", goal: "yield", reason: "" }).ok).toBe(true);
+    expect(f.queue).toEqual([n.id, "player"]);
+    expect(e.dialogue.apply(reply({ decision: "accept", give: null })).ok).toBe(true);
+    expect(f.queue).toEqual([n.id]);
+    expect(e.player.activity.kind).toBe("creative");
+  });
+
+  test("trade can put a received object into the backpack when both hands are full", () => {
+    const { e, n } = setup();
+    const umbrella = e.world.items.spawn("umbrella", { type: "held", personId: n.id, slot: "hand" }, n.id);
+    const offer = e.world.items.holdings("player").find(item => item.kind === "coins")!;
+    for (let i = 0; i < 2; i++) e.world.items.spawn("water_bottle", { type: "held", personId: "player", slot: "hand" }, "player");
+    expect(e.applyAction({ type: "talk", npcId: n.id, message: "用零钱换伞", goal: "trade", offerItemId: offer.id, reason: "" }).ok).toBe(true);
+    expect(e.dialogue.apply(reply({ give: "umbrella" })).ok).toBe(true);
+    expect(umbrella.location).toEqual({ type: "held", personId: "player", slot: "bag" });
+    expect(e.world.items.bagUsed("player")).toBe(1);
+    expect(e.world.items.holderId(offer)).toBe(n.id);
+  });
+
   test("arrival produces a request and freezes world time until a response transfers a real ticket", () => {
     const {
       e,

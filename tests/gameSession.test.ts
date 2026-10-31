@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
+import { setImmediate as yieldEventLoop } from "node:timers/promises";
 import type { Agent } from "../src/agent/agent";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { GameRunner } from "../src/agent/runner";
@@ -10,6 +11,7 @@ import { sampleActor } from "../src/ui/presentation";
 
 afterEach(() => { vi.useRealTimers(); });
 
+// Compare two complete runs per seed within a dedicated wall-clock budget.
 test.each([1, 2, 3, 4, 5, 6])("presentation-driven seed %i has the same report as the runner", async (seed) => {
   // Debug identities and wall timestamps are independent of simulation output.
   // Fix them so the full report comparison still checks every diagnostic field.
@@ -18,11 +20,14 @@ test.each([1, 2, 3, 4, 5, 6])("presentation-driven seed %i has the same report a
   const options = { now: () => 0, runId: `seed-${seed}` };
   const baseline = new GameRunner(new Engine(seed), new HeuristicAgent(), offlineClassifier, options);
   await baseline.runToEnd();
+  // Keep Vitest's worker RPC responsive between the CPU-heavy simulations.
+  await yieldEventLoop();
   const session = new GameSession(seed);
   session.start(new HeuristicAgent(), offlineClassifier, options);
   session.setSpeed(4);
   let loops = 0;
   while (session.runner!.phase !== "ended" && loops++ < 10000) {
+    if (loops % 250 === 0) await yieldEventLoop();
     if (session.runner!.pending) await session.runner!.pending;
     else {
       session.tick(0.016);
@@ -35,7 +40,7 @@ test.each([1, 2, 3, 4, 5, 6])("presentation-driven seed %i has the same report a
   expect(session.runner!.phase).toBe("ended");
   expect(session.runner!.report()).toEqual(baseline.report());
   expect(session.alpha).toBe(1);
-});
+}, 30000);
 
 test("3D session keeps preparation diagnostics and the session-bound creative classifier in its final report", async () => {
   let now = 0;

@@ -56,6 +56,18 @@ export class ItemSystem {
     return { ok: true, text: "交易完成" };
   }
   canMove(itemId: string, to: ItemLocation): boolean { const item = this.items.get(itemId); return Boolean(item && !this.validate(item,to)); }
+  /** Prefer a hand, then an available backpack; outgoing items free slots in an atomic trade. */
+  preferredLocation(item: Item, personId: string, outgoing: readonly string[] = []): Extract<ItemLocation, { type: "held" }> {
+    const held = this.holdings(personId).filter((i) => i.id !== item.id && !outgoing.includes(i.id));
+    const location = (slot: "pocket" | "hand" | "bag"): Extract<ItemLocation, { type: "held" }> => ({ type: "held", personId, slot });
+    if (item.kind === "backpack") return location("bag");
+    if (ITEM_DEFS[item.kind].size === 0) return location("pocket");
+    if (held.filter((i) => this.slot(i) === "hand").length < 2) return location("hand");
+    const used = held.filter((i) => i.kind !== "backpack" && this.slot(i) === "bag").reduce((n, i) => n + ITEM_DEFS[i.kind].size, 0);
+    if (held.some((i) => i.kind === "backpack") && used + ITEM_DEFS[item.kind].size <= BAG_CAPACITY) return location("bag");
+    // Return an invalid hand destination when no slot fits; move/canMove supplies the existing rejection.
+    return location("hand");
+  }
   holderId(item: Item): string | null {
     if (item.location.type === "held") return item.location.personId;
     if (item.location.type === "container") {
