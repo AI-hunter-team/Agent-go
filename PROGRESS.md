@@ -1,5 +1,11 @@
 # 进度
 
+## 2026-10-31：启动用户验收预览
+
+- 已从已合入主线 `1866824` 导出隔离副本并完成生产构建，在 `http://localhost:5173/` 启动预览，后台 PID 53380；页面/API 均为 200。
+- 应用内浏览器已显示三维站厅与开局面板并保留供用户验收；当前没有服务端模型配置，可先用离线模式或在页面配置模型。
+- 无业务函数改动或额外业务测试；前端/后端产物位于 `.codex/demo-preview-001/source/dist/`、`.codex/demo-preview-001/source/build/server.js`。详情见[启动记录](docs/validation/DEMO-PREVIEW-001.md)。
+
 ## 2026-10-31：ALL-LOCAL-001 全部本地工作集成
 
 - PR #22 已在 CI/Compose 通过后合入 main `67a7703`。原开发源快照 `b1ef12e` 与角色/保安源提交 `3eacd0f` 均已普通 git push，可追溯且不会丢失旧工作。
