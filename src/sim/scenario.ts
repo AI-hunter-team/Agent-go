@@ -8,6 +8,8 @@ import { DEFAULT_GAME_SETTINGS, resolveGameSettings, type GameSettings } from ".
 
 export const DT = 0.1;
 
+export const PERCEPTION_RULES = { npcSightRange: 10, npcFovDeg: 140, shoutRadius: 8 } as const;
+
 export const RULES = {
   timeLimit: DEFAULT_GAME_SETTINGS.timeLimitSeconds,
   visionRange: 12,
