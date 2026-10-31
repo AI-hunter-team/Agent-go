@@ -1,0 +1,9 @@
+{
+  "generatedFrom": [
+    "scripts/station-kit/",
+    "src/assets/station-kit/"
+  ],
+  "thirdPartyAssets": [],
+  "attribution": "Geometry and textures created for this project; see project distribution terms.",
+  "note": "Three.js is a code dependency governed by its own MIT license, not a third-party art asset."
+}

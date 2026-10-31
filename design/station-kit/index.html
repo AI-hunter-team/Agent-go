@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI猎人 · 场景素材工坊</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2335473f'/%3E%3Cpath d='M8 24V8h16v16M12 18h8' fill='none' stroke='%23d5a143' stroke-width='3'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="masthead">
+    <div><p class="eyebrow">AI HUNTER / ENVIRONMENT KIT 02</p><h1>场景素材工坊<span>现代主义交通剧场</span></h1></div>
+    <nav aria-label="预览模式">
+      <button data-mode="scene" class="active">样板站厅</button>
+      <button data-mode="asset">模块查看</button>
+      <button data-mode="materials">材质</button>
+    </nav>
+    <div class="tag">非角色素材 · V2 空间修整</div>
+  </header>
+  <main>
+    <aside class="sidebar">
+      <section class="intro"><span class="number">01</span><h2>同一套部件，组合不同动线</h2><p>3 米拼装节奏，独立设施与导向标记。角色可在后续单独接入。</p></section>
+      <section><h3>素材目录 <span id="asset-count">加载中</span></h3><div id="asset-list" class="asset-list"></div></section>
+      <section id="asset-info" class="info"></section>
+      <section class="controls">
+        <h3>状态与活动部件</h3>
+        <label for="state">设施状态</label><select id="state"><option value="open">正常开放</option><option value="closed">临时停用</option><option value="broken">故障</option></select>
+        <label for="gate">闸机开合 <output id="gate-value">0%</output></label><input id="gate" type="range" min="0" max="100" value="0" />
+        <label class="check"><input type="checkbox" id="grid" />显示拼装网格</label>
+        <label class="check"><input type="checkbox" id="surface-detail" checked />柔和接触阴影</label>
+      </section>
+      <section class="downloads"><a id="download" href="#">下载所选 GLB <span>↗</span></a><a id="manifest-link" href="#" target="_blank">资产与尺寸清单 <span>↗</span></a></section>
+    </aside>
+    <section class="stage" aria-label="三维素材预览">
+      <div class="stage-top"><div><p class="eyebrow">LIVE 3D / EXPORTED GLB</p><h2 id="view-title">可拼装样板站厅</h2></div><button id="reset" class="secondary">回正视角 ↺</button></div>
+      <div class="layout-switch" role="group" aria-label="布局"><button data-layout="split" class="active">左右分流</button><button data-layout="straight">直线通道</button><button data-layout="dogleg">绕柱通道</button></div>
+      <div class="camera-switch" role="group" aria-label="视角"><button data-camera="interior" class="active">室内视角</button><button data-camera="overview">拼装总览</button></div>
+      <div id="viewport"></div>
+      <div class="stage-footer"><span id="load-status" role="status">正在载入 GLB 素材…</span><span>拖拽旋转 · 滚轮缩放 · 右键平移</span></div>
+      <div id="error" role="alert" hidden></div>
+    </section>
+  </main>
+  <footer class="page-footer"><span>暖白 / 鼠尾草 / 赭黄 / 炭黑 / 砖红</span><span>基础墙 3.5m · 高顶 4.25m · 方柱 2×2m</span><span>独立美术小样，不改变模拟规则</span></footer>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
