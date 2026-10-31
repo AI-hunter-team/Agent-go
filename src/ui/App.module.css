@@ -117,7 +117,7 @@
 .debug { position: absolute; bottom: 90px; left: 24px; z-index: 30; background: white; padding: 8px; max-width: 400px; max-height: 40vh; overflow: auto; border-radius: 14px; }
 .debug pre { font-size: 10px; white-space: pre-wrap; }
 @keyframes enter { from { opacity: 0; margin-top: 12px; } to { opacity: 1; margin-top: 0; } }
-@keyframes scene-layer-in { from { opacity: .35; transform: scale(1.025) translateY(10px); filter: blur(2px); } to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); } }
+@keyframes scene-layer-in { from { opacity: .35; filter: blur(2px); } to { opacity: 1; filter: blur(0); } }
 @keyframes panel-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes broadcast-in { from { opacity: 0; transform: translate(-50%, -14px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes broadcast-in-side { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
@@ -193,3 +193,23 @@
   .characters button { padding: 8px 6px; }
   .portrait { width: 40px; height: 40px; border-radius: 12px; }
 }
+
+/* Lounge identity: preparation panels share one restrained visual language. */
+.app{color:#182724;background:#f6f3ea}.brand{width:112px;height:auto;display:block}.panel{background:#f6f3eaf5;border:1px solid #d8dbd0;border-radius:12px;box-shadow:none}
+.preparation{padding:26px;border-radius:12px;background:#f6f3eaf5;border:1px solid #d8dbd0;box-shadow:0 12px 40px #18272412}
+.preparation h1{font-size:30px;letter-spacing:-.025em}.preparation h2{font-size:23px}.character{background:#f6f3eaf0;border-radius:12px}.portrait{border-radius:8px;background:#e8ece2}.characters button{border-radius:8px}.planPart{border-radius:8px;background:#eceee4}.eyebrow{color:#677469;font-weight:600}.topLeft{gap:18px}.topLeft button{box-shadow:none;background:#f6f3eae8;border-radius:8px}
+.settingsTrigger{top:auto;bottom:20px;left:6.3%;width:auto;height:40px;border:0;border-radius:6px;padding:6px 12px;font-size:18px;background:#f6f3eabf;box-shadow:none}.settingsTrigger span{font-size:13px;margin-left:6px}.app[data-stage=world] .settingsTrigger{visibility:hidden}
+@media(max-width:600px){.settingsTrigger{left:20px;bottom:12px;height:36px}.preparation{padding:20px;max-height:49dvh;border-radius:12px}.brand{width:90px}.topLeft{gap:12px}.preparation h1{font-size:25px}.characters{margin:14px 0}.portrait{width:58px;height:58px}}
+
+/* Timer and map share one responsive rail; broadcasts remain clear of it. */
+.mapRail{position:absolute;top:28px;right:24px;width:240px;display:grid;gap:10px;max-height:calc(100dvh - 120px);overflow:auto;scrollbar-width:thin;pointer-events:none}
+.mapRail .timer{position:static;width:100%;box-sizing:border-box;pointer-events:auto}
+.broadcast{max-width:calc(100vw - 940px)}
+@media(min-width:761px) and (max-width:1200px){.broadcast{top:auto;bottom:90px;left:50%;right:auto;transform:translateX(-50%);width:340px;max-width:calc(100vw - 320px)}}
+@media(max-width:760px){.mapRail{top:16px;right:12px;width:170px;max-height:calc(100dvh - 340px);gap:6px}.mapRail .timer{padding:9px 12px;gap:3px}.mapRail .timer strong{font-size:30px}.broadcast{top:auto;bottom:calc(25dvh + 140px);max-width:none;width:auto}}
+
+/* Keep the lounge settings in the approved lower-left position despite the legacy lobby rule. */
+.app[data-stage=lobby] .settingsTrigger { top:auto; bottom:8.5%; left:4.78%; width:auto; height:46px; background:transparent; border:0; padding:0; color:#565958; gap:18px; font-size:30px; }
+.app[data-stage=lobby] .settingsTrigger span {font-size:24px;font-weight:650;margin-left:0}
+.settingsTrigger img{width:32px;height:32px;opacity:.66}
+@media(max-width:600px){.app[data-stage=lobby] .settingsTrigger{top:auto;bottom:12px;left:20px;width:auto;height:36px}}

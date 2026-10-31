@@ -3,6 +3,7 @@ import type { NormalizedGuidance } from "./types";
 import { NORMALIZED_MAX_JSON_LENGTH, NORMALIZED_MAX_TEXT_LENGTH } from "./guidance";
 
 export interface JourneyInput {
+  world?: import("./world").WorldDescriptor;
   sceneId: "metro";
   seed: number;
   settings: GameSettings;
@@ -24,6 +25,8 @@ export interface JourneyPreparation {
   plan: JourneyPlan;
 }
 export interface JourneyMetadata {
+  worldName?: string;
+  worldSeedSource?: { mode: "random" | "custom"; value: string };
   sceneId: string;
   sceneName: string;
   characterId: string;

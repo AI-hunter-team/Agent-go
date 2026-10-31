@@ -11,7 +11,13 @@ let server:Server|null=null;
 afterEach(()=>{server?.close();server=null;});
 async function start(respond?:NonNullable<LlmService["respond"]>) {
  const sessions=new SessionStore();const session=sessions.create("",null);
- server=createApp({llm:respond?{model:"fixed-npc",respond,normalize:async()=>{throw Error("unused")},decide:async()=>{throw Error("unused")},classify:async()=>{throw Error("unused")}}:null,sessions,debugLogger:new DebugLogger(false,"logs",["private-secret"])}).listen(0,"127.0.0.1");await new Promise(r=>server!.once("listening",r));
+ const app=createApp({llm:respond?{model:"fixed-npc",respond,normalize:async()=>{throw Error("unused")},decide:async()=>{throw Error("unused")},classify:async()=>{throw Error("unused")}}:null,sessions,debugLogger:new DebugLogger(false,"logs",["private-secret"])});
+ // Windows may allocate a temporary port that the Fetch standard blocks.
+ const blockedPorts=new Set([2049,3659,4045,5060,5061,6000,6566,6665,6666,6667,6668,6669,6697,10080]);
+ do {
+  server=app.listen(0,"127.0.0.1");await new Promise(r=>server!.once("listening",r));
+  if(blockedPorts.has((server.address() as AddressInfo).port)){await new Promise<void>(resolve=>server!.close(()=>resolve()));server=null;}
+ } while(!server);
  return async(request:unknown,sessionId:string|null=session.id,path="/api/npc/respond")=>{
   const res=await fetch(`http://127.0.0.1:${(server!.address() as AddressInfo).port}${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sessionId,request})});const text=await res.text();return {status:res.status,body:text.startsWith("{")?JSON.parse(text):text};
  };

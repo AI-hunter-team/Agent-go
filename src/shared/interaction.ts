@@ -221,6 +221,7 @@ export interface ItemTransfer { t: number; itemId: string; kind: ItemKind; from:
 export interface BossRecord { t: number; instruction: string; plan: ActionPlan; outcomes: StepOutcome[] }
 
 export interface BossContext {
+  publicMap?: import("./world").PublicStationMap;
   self: {
     position: Vec;
     inventory: {

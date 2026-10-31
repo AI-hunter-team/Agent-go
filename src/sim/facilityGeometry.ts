@@ -13,7 +13,7 @@ export function facilitySolids(kind: FacilityKind, pos: Vec, queueDirection?: Ve
   const local: Rect[] = kind === "tvm" ? [{ x: -0.175, y: -0.425, w: 0.789, h: 0.85 }]
     : kind === "security" ? [CONVEYOR, ...[-SECURITY_POST_OFFSET, SECURITY_POST_OFFSET].map((z) => ({ x: -0.244, y: z - 0.11, w: 0.454, h: 0.22 }))]
     : [-GATE_CABINET_OFFSET, GATE_CABINET_OFFSET].map((z) => ({ x: -0.555, y: z - 0.055, w: 1.11, h: 0.11 }));
-  return local.map((r) => kind === "tvm" && queueDirection?.y === 1
-    ? { x: pos.x + r.y, y: pos.y - r.x - r.w, w: r.h, h: r.w }
-    : { x: pos.x + r.x, y: pos.y + r.y, w: r.w, h: r.h });
+  const q=queueDirection ?? {x:-1,y:0};
+  const angle=kind==="tvm" ? Math.atan2(q.y,q.x)-Math.PI : Math.atan2(-q.y,-q.x), c=Math.round(Math.cos(angle)), s=Math.round(Math.sin(angle));
+  return local.map(r=>{ const points=[[r.x,r.y],[r.x+r.w,r.y],[r.x,r.y+r.h],[r.x+r.w,r.y+r.h]].map(([x,y])=>({x:pos.x+x*c-y*s,y:pos.y+x*s+y*c})); const xs=points.map(p=>p.x),ys=points.map(p=>p.y);return {x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};});
 }

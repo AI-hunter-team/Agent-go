@@ -4,8 +4,8 @@ import { REACTION_RULES as R } from "./content/alertRules";
 import type { EventBus } from "./events";
 import { angleTo, dist, inViewCone, lineOfSight } from "./geometry";
 import type { GuardSystem } from "./guards";
-import { HEIGHT, SIGHT_OCCLUDERS, WIDTH } from "./layout";
-import { findPath } from "./nav";
+
+
 import { DT, INTERACTION_RULES, PERCEPTION_RULES } from "./scenario";
 import type { Activity, Person, World } from "./world";
 
@@ -73,7 +73,7 @@ export class NpcBrain {
     const action = forced ?? this.choose(npc, subject, record);
     const previous = this.active.get(npc.id);
     const resume = previous?.resume ?? npc.activity;
-    if (resume.kind === "service" || resume.kind === "stairs" || resume.kind === "done") return;
+    if (resume.kind === "entering" || resume.kind === "service" || resume.kind === "stairs" || resume.kind === "done") return;
     record.reaction = action;
     this.bus.endAct(npc.id);
     const moving = ["keep_distance", "flee", "confront", "report"].includes(action);
@@ -83,7 +83,7 @@ export class NpcBrain {
     npc.activity = { kind: "reacting", reaction: action, subjectId: subject.id };
     this.remember(npc.id, { t: this.world.t, about: subject.id, kind: action, text: words[action], eventId: record.causeEventId });
     if (["murmur","complain","argue","expel","confront"].includes(action)) {
-      this.world.log("speech", `${npc.id}：${words[action]}`, this.world.player ? dist(npc.pos,this.world.player.pos) <= 8 && lineOfSight(npc.pos,this.world.player.pos,SIGHT_OCCLUDERS) : false);
+      this.world.log("speech", `${npc.id}：${words[action]}`, this.world.player ? dist(npc.pos,this.world.player.pos) <= 8 && lineOfSight(npc.pos,this.world.player.pos,this.world.layout.SIGHT_OCCLUDERS) : false);
       const event = this.bus.emit({ t: this.world.t, kind: "argument", severity: "odd", actorId: npc.id, targetId: subject.id, pos: { ...npc.pos }, loudness: action === "murmur" ? 2 : 5, causeId: record.causeEventId });
       this.bus.beginAct({ actorId: npc.id, kind: event.kind, severity: event.severity, eventId: event.id });
     }
@@ -99,7 +99,7 @@ export class NpcBrain {
       a.remaining -= DT;
       if (a.action === "report") {
         const guards = this.guards.guards.filter((g) => !g.incapacitated).sort((x,y) => dist(x.pos,npc.pos)-dist(y.pos,npc.pos));
-        const close = guards.find((g) => dist(g.pos,npc.pos) <= PERCEPTION_RULES.shoutRadius && lineOfSight(g.pos,npc.pos,SIGHT_OCCLUDERS));
+        const close = guards.find((g) => dist(g.pos,npc.pos) <= PERCEPTION_RULES.shoutRadius && lineOfSight(g.pos,npc.pos,this.world.layout.SIGHT_OCCLUDERS));
         if (close) {
           this.bus.emit({ t: this.world.t, kind: "report", severity: "violation", actorId: id, targetId: close.def.id, aboutId: a.subjectId, aboutPos: { ...a.point }, pos: { ...npc.pos }, loudness: 8, causeId: a.causeId });
           this.finish(id); continue;
@@ -110,7 +110,7 @@ export class NpcBrain {
         const d = dist(npc.pos,a.point);
         if (d >= distance) { this.finish(id); continue; }
         const dx = (npc.pos.x-a.point.x)/(d || 1), dy = (npc.pos.y-a.point.y)/(d || 1);
-        const dest = { x: Math.max(1,Math.min(WIDTH-1,a.point.x+(d ? dx : -1)*distance)), y: Math.max(1,Math.min(HEIGHT-1,a.point.y+dy*distance)) };
+        const dest = { x: Math.max(1,Math.min(this.world.layout.WIDTH-1,a.point.x+(d ? dx : -1)*distance)), y: Math.max(1,Math.min(this.world.layout.HEIGHT-1,a.point.y+dy*distance)) };
         this.walk(npc,a,dest,.2);
       } else if (a.action === "confront") {
         this.walk(npc,a,a.point,1.2);
@@ -162,10 +162,10 @@ export class NpcBrain {
       this.cuts.set(p.id, { targetId, facility: q.facility.def.id, until: w.t + INTERACTION_RULES.npcCutTimeout, eventId: event.id });
     }
   }
-  private sees(npc: Person, point: Vec) { return !npc.incapacitated && inViewCone(npc.pos,npc.facing,PERCEPTION_RULES.npcFovDeg,PERCEPTION_RULES.npcSightRange * Math.min(this.world.lightAt(npc.pos), this.world.lightAt(point)),point) && lineOfSight(npc.pos,point,SIGHT_OCCLUDERS); }
+  private sees(npc: Person, point: Vec) { return !npc.incapacitated && inViewCone(npc.pos,npc.facing,PERCEPTION_RULES.npcFovDeg,PERCEPTION_RULES.npcSightRange * Math.min(this.world.lightAt(npc.pos), this.world.lightAt(point)),point) && lineOfSight(npc.pos,point,this.world.layout.SIGHT_OCCLUDERS); }
   private walk(npc: Person, a: Active, point: Vec, stop: number) {
     if (dist(npc.pos,point) <= stop) return;
-    if (!a.path.length || dist(a.path.at(-1)!,point) > 1) a.path = findPath(npc.pos,point) ?? [];
+    if (!a.path.length || dist(a.path.at(-1)!,point) > 1) a.path = this.world.navigation.findPath(npc.pos,point) ?? [];
     if (a.path[0] && this.world.movePerson(npc,a.path[0],npc.speed*DT)) a.path.shift();
   }
   private finish(id: string) {

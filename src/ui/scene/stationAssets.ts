@@ -9,7 +9,7 @@ export interface StationKit { models: Map<string, Group>; materials: Map<string,
 let pending: Promise<StationKit> | undefined;
 export function loadStationKit(): Promise<StationKit> {
   if (!pending) pending = (async () => {
-    const entries = (await Promise.all(["station-kit", "metro-railings"].map(async (directory) => {
+    const entries = (await Promise.all(["station-kit", "metro-railings", "station-detail"].map(async (directory) => {
       const base = new URL(`${import.meta.env.BASE_URL}assets/${directory}/`, location.origin);
       const response = await fetch(new URL("manifest.json", base));
       if (!response.ok) throw new Error(`站厅清单 ${directory} HTTP ${response.status}`);

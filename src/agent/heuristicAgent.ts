@@ -21,6 +21,7 @@ const TRAIT_EXTRA: Record<FacilityKind, Record<string, number>> = {
 export class HeuristicAgent implements Agent {
   readonly kind = "offline" as const;
   private searched = new Set<string>();
+  private readonly switches=new Map<FacilityKind,{at:number;count:number}>();
 
   async decide(turn: AgentTurn): Promise<DecisionResult> {
     return { action: this.choose(turn), thinking: null, usage: null, model: null, latencyMs: 0, error: null };
@@ -28,15 +29,47 @@ export class HeuristicAgent implements Agent {
 
   async dispose() {
     this.searched.clear();
+    this.switches.clear();
   }
 
   private choose(turn: AgentTurn): AgentAction {
-    const { self, facilities } = turn.observation;
+    const { self, facilities, publicMap } = turn.observation;
     if (self.onPlatform) {
       if (self.activity.startsWith("正在登车")) return { type: "wait", seconds: 20, reason: "继续走入车厢，登车后才完成旅程" };
       const doors = turn.observation.trainDoors ?? [];
       const nearest = doors.reduce<typeof doors[number] | undefined>((best, door) => !best || door.distance < best.distance ? door : best, undefined);
-      return { type: "move_to", target: nearest?.id ?? (self.position.y <= 15 ? "PLATFORM_N" : "PLATFORM_S"), reason: nearest ? "走向可见的地铁车门并登车" : "已到站台，沿当前一侧前往候车区寻找车门" };
+      const publicDoor = publicMap?.nodes.filter(node => node.id.startsWith("TRAIN_")).sort((a, b) => Math.hypot(a.pos.x - self.position.x, a.pos.y - self.position.y) - Math.hypot(b.pos.x - self.position.x, b.pos.y - self.position.y))[0];
+      return { type: "move_to", target: nearest?.id ?? publicDoor?.id ?? (self.position.y <= 15 ? "PLATFORM_N" : "PLATFORM_S"), reason: nearest || publicDoor ? "走向本局车门并登车" : "已到站台，沿当前一侧前往候车区寻找车门" };
+    }
+    if(publicMap) {
+      if(self.activity.includes("办理") || self.activity.startsWith("正在下楼") || self.activity.startsWith("正在乘扶梯")) return {type:"wait",seconds:20,reason:"等待当前办理或下行完成"};
+      if(self.passedGate) {
+        const available=turn.observation.routes ?? [];
+        const options=publicMap.routes.map(r=>({...r, distance:Math.hypot(r.position.x-self.position.x,r.position.y-self.position.y), queueLength:available.find(a=>a.id===r.id)?.queueLength??0}));
+        const best=options.sort((a,b)=>a.distance/1.4+a.travelSeconds+a.queueLength-b.distance/1.4-b.travelSeconds-b.queueLength)[0];
+        if(self.activity.startsWith("正在候梯") || self.activity.startsWith("正在走向扶梯队尾"))return {type:"wait",seconds:20,reason:"继续候梯"};
+        return best.distance<=STAIRS_REACH?{type:"traverse",route:best.id,reason:"选择预计较快的下行路线"}:{type:"move_to",target:best.node,reason:"根据公开地图直接前往下行入口"};
+      }
+      const kind:FacilityKind=!self.hasTicket?"tvm":!self.screened?"security":"gate";
+      if(kind==="tvm"&&!self.queue&&!self.activity.startsWith("正在走向")&&!this.searched.has("generated:ticket-comparison")){
+        this.searched.add("generated:ticket-comparison");return {type:"move_to",target:"TICKETS_C",reason:"到公开售票区比较现场队伍"};
+      }
+      if(self.queue){
+        const mine=facilities.find(f=>f.id===self.queue!.facility),last=this.switches.get(kind);
+        const other=facilities.filter(f=>f.kind===kind&&f.status==="open"&&f.id!==self.queue!.facility).sort((a,b)=>estimate(a,kind)-estimate(b,kind))[0];
+        if(mine&&other&&(!last||last.count<2&&self.elapsed-last.at>=15)){
+          const before=Math.max(0,self.queue.position-1),mid=(mine.serviceRange[0]+mine.serviceRange[1])/2;
+          const remaining=(before+(mine.serving?.5:0))*mid+mine.queue.slice(0,before).reduce((n,t)=>n+(TRAIT_EXTRA[kind][t]??0),0);
+          if(remaining-estimate(other,kind)>12){this.switches.set(kind,{at:self.elapsed,count:(last?.count??0)+1});return {type:"join_queue",facility:other.id,reason:"现场可见的另一队预计明显更快，接受失去当前位次的代价"};}
+        }
+      }
+      const approaching = /^正在走向 (.+) 队尾$/.exec(self.activity)?.[1];
+      const approachStopped = approaching && facilities.some(f => f.id === approaching && f.status !== "open");
+      if(self.queue || self.activity.startsWith("正在走向") && !approachStopped)return {type:"wait",seconds:20,reason:"继续当前排队或移动，变化时重新判断"};
+      const visible=facilities.filter(f=>f.kind===kind&&f.status==="open").sort((a,b)=>estimate(a,kind)-estimate(b,kind));
+      const known=publicMap.facilities.filter(f=>f.kind===kind&&!facilities.some(v=>v.id===f.id&&v.status!=="open")).sort((a,b)=>Math.hypot(a.pos.x-self.position.x,a.pos.y-self.position.y)-Math.hypot(b.pos.x-self.position.x,b.pos.y-self.position.y));
+      const target=visible[0]??known[0];
+      return target?{type:"join_queue",facility:target.id,reason:"结合公开位置和现场可见队伍选择设施"}:{type:"wait",seconds:5,reason:"等待设施恢复"};
     }
     if (self.passedGate) {
       if (self.activity.startsWith("正在下楼梯") || self.activity.startsWith("正在乘扶梯")) return { type: "wait", seconds: 3, reason: "正在下行，等到达下层站台" };

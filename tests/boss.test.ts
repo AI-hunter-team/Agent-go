@@ -1,8 +1,11 @@
+import { generateWorld } from "../src/sim/worldDefinition";
+import { Engine } from "../src/sim/engine";
+import { buildBossSystem } from "../server/boss";
 import { jsonResponse } from "./responsesSupport";
 import { expect, test } from "vitest";
 import { interpret, validatePlan } from "../server/boss";
 import { ResponsesClient, ResponsesLlmService } from "../server/responses";
-import { buildIntentContext } from "../src/sim/intent";
+import { buildIntentContext, parsePlan } from "../src/sim/intent";
 import { createFixtureEngine } from "./fixtures/scenarios";
 const e = createFixtureEngine();
 const context = buildIntentContext(e.world, e.guards);
@@ -52,4 +55,13 @@ test("Boss context exposes held items while keeping pocket contents hidden",()=>
  const engine=createFixtureEngine();const p=engine.world.addPerson("normal",{x:3,y:15},{hasTicket:true});
  engine.world.items.spawn("umbrella",{type:"held",personId:p.id,slot:"hand"},p.id);
  expect(buildIntentContext(engine.world,engine.guards).people.find(n=>n.id===p.id)?.holding).toEqual(["umbrella"]);
+});
+
+test("generated action interpretation uses this world's public nodes and item spots",()=>{
+  const engine=new Engine(4,{},undefined,undefined,generateWorld(4)),context=buildIntentContext(engine.world,engine.guards);
+  const request={status:"plan",steps:[{op:"approach",target:{kind:"node",id:"ENTRANCE_B"}}],summary:"去另一个入口",reason:""};
+  expect(parsePlan("靠近 ENTRANCE_B",context).steps).toEqual(request.steps);
+  expect(validatePlan(request,context)?.status).toBe("plan");
+  expect(validatePlan(request,{...context,publicMap:undefined})).toBeNull();
+  expect(buildBossSystem(context.publicMap)).toContain(JSON.stringify(context.publicMap!.nodes));
 });

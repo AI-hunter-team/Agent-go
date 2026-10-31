@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f4f2ec" />
+  <title>agent-go · 地铁资产样板间</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/icon-color.svg" />
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="返回 agent-go"><img class="brand-logo" src="/assets/brand/wordmark-color.svg" alt="agent-go" width="150" height="43"/><small>WORLD & MATERIALS</small></a>
+    <nav class="mode-switch" aria-label="展厅模式">
+      <button data-mode="room" aria-pressed="true">组合样板间</button><button data-mode="asset" aria-pressed="false">单件资产</button><button data-mode="material" aria-pressed="false">材质试样</button>
+    </nav>
+    <a class="back-link" href="./">返回游戏 <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="exhibition">
+    <aside class="collection" aria-label="展厅目录">
+      <div class="collection-heading"><p class="eyebrow" id="collection-kicker">THE STATION / 01</p><h1 id="collection-title">一座车站的细节</h1><p id="collection-description">从入站到候车，看看这些部件如何组成一个完整空间。</p></div>
+      <div class="catalog-filters" id="filters" hidden><label for="search" class="sr-only">搜索资产</label><input id="search" type="search" placeholder="搜索资产…" /><label for="category" class="sr-only">资产分类</label><select id="category"><option value="">全部分类</option></select></div>
+      <div class="catalog-list" id="catalog-list" aria-label="空间与资产"></div>
+      <div class="collection-foot"><span class="live-dot" aria-hidden="true"></span><span id="collection-count">正在准备展品</span></div>
+    </aside>
+    <section class="stage" aria-label="交互三维展厅">
+      <div class="stage-heading"><div><p class="eyebrow" id="stage-kicker">STATION STUDY · 01</p><h2 id="stage-title">云桥站 · 双层剖视</h2></div><span class="stage-badge" id="stage-badge">组合样板间</span></div>
+      <div id="viewport" tabindex="0" aria-label="三维模型，可拖拽旋转、滚轮缩放、右键平移"></div>
+      <div class="loading-note" id="loading-note" role="status"><span class="loader" aria-hidden="true"></span>正在布置样板间…</div>
+      <div class="error-note" id="error-note" role="alert" hidden><strong id="error-title">三维展厅暂时不可用</strong><p id="error-description"></p><button id="retry">重新载入</button></div>
+      <div class="stage-tools" role="group" aria-label="画面工具"><button id="reset" title="回到当前展示的初始视角">↺ <span>复位视角</span></button><button id="rotate" aria-pressed="false">◌ <span>自动环绕</span></button><button id="capture">▣ <span>保存画面</span></button><button id="fullscreen">⤢ <span>全屏</span></button></div>
+      <div class="stage-caption"><span id="scene-note">同一套资产，放回真实的空间关系。</span><span class="interaction-hint">拖拽旋转 · 滚轮缩放 · 右键平移</span></div>
+    </section>
+    <aside class="inspector" aria-label="展品信息">
+      <div><p class="eyebrow" id="info-kicker">COMPOSED SPACE</p><h2 id="info-title">双层岛式车站</h2><p class="info-description" id="info-description">入口、站厅、楼扶梯与候车空间，共用同一套模型与表面。</p></div>
+      <dl class="specifications" id="specifications"></dl>
+      <button class="inspect-button" id="inspect" hidden>单独查看这件资产 <span aria-hidden="true">↗</span></button>
+      <section class="view-options" id="room-options"><h3>空间显示</h3><label><span>导向标识</span><input id="labels" type="checkbox" checked /></label><label><span>显示站厅顶板</span><input id="roof" type="checkbox" /></label></section>
+      <section class="view-options" id="variant-options" hidden><h3>组合变体</h3><div class="option-pair"><button data-variant="0" aria-pressed="true">组合 A</button><button data-variant="1" aria-pressed="false">组合 B</button></div></section>
+      <section class="view-options" id="facility-options" hidden><h3>设施演示</h3><label class="stacked">设备状态<select id="facility-state"><option value="open">正常开放</option><option value="closed">临时停用</option><option value="broken">故障状态</option></select></label></section>
+      <section class="view-options" id="motion-options" hidden><h3 id="motion-title">车门开合</h3><label class="range-label" for="opening"><span>关闭 → 打开</span><output id="opening-value">0%</output></label><input id="opening" type="range" min="0" max="100" value="0" /></section>
+      <section class="view-options" id="channel-options" hidden><h3>表面查看</h3><div class="channel-options"><button data-channel="lit" aria-pressed="true">完整材质</button><button data-channel="normal" aria-pressed="false">表面凹凸</button><button data-channel="roughness" aria-pressed="false">粗糙度</button></div><p class="small-note" id="channel-note">曲面和侧光可以帮助观察材质的光泽与细节。</p></section>
+      <section class="palette-section"><h3>车站配色</h3><div class="palette"><i style="--swatch:#e6e2d4" title="暖白"></i><i style="--swatch:#a3b2a4" title="灰绿"></i><i style="--swatch:#247f76" title="青绿"></i><i style="--swatch:#d6ac4c" title="盲道黄"></i><i style="--swatch:#38463f" title="深灰"></i><i style="--swatch:#aa4e39" title="消防砖红"></i></div><p>暖白磨石 / 灰绿墙面 / 青绿列车</p></section>
+      <div class="asset-status"><span class="live-dot" aria-hidden="true"></span><span id="asset-status" role="status">正在载入正式材质</span><button id="retry-kit" hidden>重试正式材质</button></div>
+    </aside>
+  </main>
+  <footer class="page-footer"><span>AGENT GO · 地铁空间样板间</span><span id="footer-tip">点击场景中的设施，可查看对应资产。</span><span>原始米制比例 · 项目原创资产</span></footer>
+  <script type="module" src="/src/showroom/main.ts"></script>
+</body>
+</html>

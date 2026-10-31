@@ -3,7 +3,7 @@ import {
   Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Object3D, Path, Shape, ShapeGeometry, Vector3,
 } from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { METRO_PROFILE } from "../../shared/metro";
+import { METRO_DOOR_OFFSETS, METRO_PROFILE } from "../../shared/metro";
 import { createMetroInterior } from "./interior";
 
 export type MetroCarKind = "head" | "trailer";
@@ -93,7 +93,7 @@ export function createMetroCar(kind: MetroCarKind, palette = metroMaterials()): 
   const root = new Group(); root.name = `metro-${kind}-car`;
   root.userData = { kind, units: "metres", forward: "+X", railTop: 0, passengerFloor: METRO.floor, design: "Original Chinese metro inspired game asset; not a certified real vehicle replica" };
   const bodyEnd = kind === "head" ? 8.9 : 11.15;
-  const doorXs = kind === "head" ? [-8, -4.45, -0.9, 2.65, 6.2] : [-8.1, -4.05, 0, 4.05, 8.1];
+  const doorXs = [...METRO_DOOR_OFFSETS[kind]];
   const windows = doorXs.slice(0, -1).map((v, i) => ({ x: (v + doorXs[i + 1]) / 2, w: doorXs[i + 1] - v - 1.62 }));
   for (const side of [-1, 1]) {
     const shell = rectangle(-11.15, 1.06, bodyEnd + 11.15, 2.24, 0.06);

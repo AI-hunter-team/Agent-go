@@ -1,3 +1,4 @@
+import { serializableWorld } from "../sim/worldDefinition";
 import type { ActionPlan, BossRecord, NpcDialogueRequest, NpcResponse } from "../shared/types";
 import { buildIntentContext, parsePlan } from "../sim/intent";
 import { offlineNpcResponse } from "../sim/dialogue";
@@ -131,7 +132,7 @@ export class GameRunner {
     for (let i = 0; ; i++) {
       if (this.engine.status !== "running") return this.finish();
       if (this.engine.executor.pendingDialogue) return this.beginDialogue();
-      if (this.engine.hasTriggers()) return this.beginDecision();
+      if (this.engine.player.activity.kind!=="entering" && this.engine.hasTriggers()) return this.beginDecision();
       if (i >= steps) return;
       this.engine.step();
       this.reviewRecorder.capture(this.engine);
@@ -491,6 +492,7 @@ export class GameRunner {
       ...(this.journey ? { journey: structuredClone(this.journey) } : {}),
       ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot() } : {}),
       debug: this.snapshotDebug(),
+      ...(e.world.definition.generatorVersion!=="legacy-v0"?{world:serializableWorld(e.world.definition)}:{}),
       seed: e.seed,
       settings: { ...e.settings },
       loadout: { ...e.loadout },

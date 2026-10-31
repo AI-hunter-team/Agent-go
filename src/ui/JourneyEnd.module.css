@@ -1,8 +1,7 @@
 .end { position: absolute; z-index: 35; inset: 0; pointer-events: none; }
 .end[hidden] { display: none; }
 .navigation { position: absolute; top: 24px; left: 32px; display: flex; align-items: center; gap: 20px; pointer-events: auto; }
-.brand { font-size: 23px; font-weight: 800; letter-spacing: -.04em; text-shadow: 0 1px 10px white; }
-.brand span { margin-left: 5px; font-size: 12px; color: #edbf25; }
+.brand { display: block; width: 112px; height: auto; filter: drop-shadow(0 1px 5px #fff); }
 .navigation button { background: #fffffff0; }
 .result { position: absolute; top: max(76px, 10dvh); left: 50%; transform: translateX(-50%); width: min(650px, calc(100% - 32px)); text-align: center; color: #142033; text-shadow: 0 2px 14px #fff, 0 0 24px #fff; }
 .result h1 { margin: 0 0 8px; font-size: clamp(32px, 5vw, 64px); font-weight: 900; line-height: 1.15; letter-spacing: -.05em; }
@@ -22,6 +21,7 @@
 .buttons { display: flex; width: 100%; gap: 12px; }
 .buttons button { flex: 1; min-width: 0; min-height: 52px; border-radius: 18px; background: #fffffff5; box-shadow: 0 6px 22px #14203321; font-size: 16px; font-weight: 800; }
 .buttons :global(.primary) { background: #f7cf38; }
+.secondaryActions { display:flex; align-items:center; justify-content:center; gap:12px; }
 .actions .edit { min-height: 36px; border: 0; padding: 4px 14px; background: #ffffffc9; border-radius: 12px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 .confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .confetti i { position: absolute; top: -16px; width: 8px; height: 13px; background: #edbf25; animation: confetti-fall 2.8s ease-out both; }
@@ -30,7 +30,7 @@
 @keyframes confetti-fall { 0% { opacity: 0; transform: translateY(0) rotate(0); } 12% { opacity: 1; } 100% { opacity: 0; transform: translateY(42dvh) rotate(160deg); } }
 @media (max-width: 600px) {
   .navigation { top: max(12px, env(safe-area-inset-top)); left: 16px; gap: 12px; }
-  .brand { font-size: 20px; }
+  .brand { width: 96px; }
   .navigation button { min-height: 40px; font-size: 12px; padding: 8px 12px; }
   .result { top: 90px; }
   .result h1 { font-size: 42px; }
@@ -47,7 +47,8 @@
   .end[data-outcome=failed] .result h1 { font-size: 28px; }
   .elapsed { margin-top: 6px; padding: 2px 8px; }
 }
-@media (max-height: 500px) { .result { top: 60px; } .result h1 { font-size: 32px; margin-bottom: 2px; } .result p { font-size: 12px; } .actions { bottom: 8px; gap: 2px; } .buttons button { min-height: 42px; } .actions .edit { min-height: 28px; } }
+@media (max-height: 500px) { .result { top: 60px; } .result h1 { font-size: 32px; margin-bottom: 2px; } .result p { font-size: 12px; } .actions { bottom: 8px; gap: 2px; } .buttons button { min-height: 42px; } .secondaryActions { display:flex; align-items:center; justify-content:center; gap:12px; }
+.actions .edit { min-height: 28px; } }
 @media (max-height: 500px) {
   .end[data-outcome=failed] .result { top: 18px; width: min(480px, calc(100% - 360px)); }
   .failureLabel { margin-bottom: 6px; padding: 2px 10px; font-size: 11px; line-height: 18px; }
