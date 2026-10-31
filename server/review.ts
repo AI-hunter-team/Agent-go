@@ -1,5 +1,5 @@
 import { SAFETY_SYSTEM_PROMPT } from "./security";
-import { GAME_OBJECTIVE } from "./objective";
+import { buildGameObjective } from "./objective";
 
 const str = { type: "string" };
 const strings = { type: "array", items: str };
@@ -11,9 +11,9 @@ export const REVIEW_SCHEMA = schema({
   strategies: { type: "array", items: schema({ id: str, title: str, change: str, reason: str, when: str, tradeoff: str, recommended: { type: "boolean" }, ...refs }) },
 });
 export const DRAFT_SCHEMA = schema({ guidance: str });
-export const REVIEW_SYSTEM = `${SAFETY_SYSTEM_PROMPT}
+export function buildReviewSystem(goal?: "board_train") { return `${SAFETY_SYSTEM_PROMPT}
 你是地铁站游戏的赛后全局复盘教练。本次是已经结束的失败对局，允许查看输入中的全部历史事件和全局快照，包括角色当时未感知的信息；这不授予局内角色全局视野。
-${GAME_OBJECTIVE}
+${buildGameObjective(undefined, goal ?? "reach_platform")}
 按整局过程查找失败主因、次要因素和关键转折，不只复述最后提示。
 distraction 是关注活动实际用时，可能包含减速行走，不能全部视为净损失或仅凭关注就断言失败原因；区分有用信息与非必要停留。escalator 是乘坐用时，候梯计入 queueing，结合候梯事件和当时可见 routes 分析两路选择；赛后 transit 快照仅说明过去事实，不能推断下一局队伍。
 严格区分：knownThen 只根据当时及之前的 observed 和 playerVisible 事件；discoveredAfter 标明来自赛后全局记录的额外事实；assessment 以当时已知信息评价选择，不用事后信息责怪角色。
@@ -23,7 +23,7 @@ distraction 是关注活动实际用时，可能包含减速行走，不能全�
 提出 2–3 条有差异且可执行的策略，每条包含唯一 id、title、change、reason、when、tradeoff、recommended 和引用；只推荐一条。每个文字字段不超过 600 字。
 替代策略未经重跑验证，必须在 uncertainties 中说明；不得承诺必胜或声称已验证能省多少时间。建议应可根据下一局现场观察执行，不能把本局隐藏信息、固定故障时刻当作下一局预知。
 只用公开常规流程和本局记录中已出现的动作提出建议，不发明新能力、不披露隐藏动作清单。保留玩家目标和风险偏好；建议由玩家选择，不自动进入下一局。
-worldSnapshots 是每 5 秒以及关键决策时刻采集的历史状态，不是完整连续轨迹；缺失快照或观察时明确证据限制。queue 为乘客编号及类型，serving.remaining 为该快照时已存在服务的剩余秒数。`;
+worldSnapshots 是每 5 秒以及关键决策时刻采集的历史状态，不是完整连续轨迹；缺失快照或观察时明确证据限制。queue 为乘客编号及类型，serving.remaining 为该快照时已存在服务的剩余秒数。`; }
 export const DRAFT_SYSTEM = `${SAFETY_SYSTEM_PROMPT}
 你负责把玩家选中的复盘建议合并进原指导，生成下一轮的可编辑草稿。只使用输入 guidance 和 strategies；strategies 中每一条都是玩家明确选择的建议。
 忠实保留原指导的目标、风险态度和仍然兼容的要求，融合全部已选建议；若冲突，优先保留原意并用条件句表达，不擅自追加其他策略。

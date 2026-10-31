@@ -1,6 +1,7 @@
 import { Vector3 } from "three";
 import type { ActorPose } from "../presentation";
 import { cameraFraction } from "./cameraCollision";
+import { constrainCabinCamera } from "./trainCabin";
 
 interface Shot { azimuth: number; distance: number; height: number; focus: number; offset: number; fov: number }
 const SHOT_SECONDS = 6;
@@ -52,7 +53,24 @@ export class VictoryCamera {
   }
 
   /** 将导演轨迹转换为场景坐标，保留完整主体、窄屏构图及碰撞约束。 */
-  update(pose: ActorPose, seconds: number, aspect: number, reducedMotion: boolean, assetRotation = 0) {
+  update(pose: ActorPose, seconds: number, aspect: number, reducedMotion: boolean, assetRotation = 0, onTrain = false, viewportHeight = 720) {
+    if (onTrain) {
+      const t = reducedMotion ? 0 : Math.max(0, seconds - 1.5);
+      const direction = pose.z < 15 ? 1 : -1;
+      // Reserve the top result and bottom actions, including short landscape screens.
+      const visibleFraction = Math.min(.72, Math.max(160, viewportHeight - (viewportHeight <= 500 ? 190 : 270)) / viewportHeight);
+      const fitDistance = 2.05 / (2 * Math.tan(23 * Math.PI / 180) * visibleFraction);
+      const distance = Math.max(fitDistance, (3.2 + Math.sin(t / 5) * 0.15) * Math.max(1, 0.65 / Math.max(0.3, aspect)));
+      this.focus.set(pose.x, pose.y + 0.85, pose.z);
+      this.desired.set(pose.x + Math.sin(t / 7) * 0.04, pose.y + 1.15 + Math.sin(t / 6) * 0.16, pose.z + direction * distance);
+      const entrance = reducedMotion || !this.captured ? 1 : smooth((seconds - this.capturedAt) / 1.5);
+      this.position.lerpVectors(this.start, this.desired, entrance);
+      constrainCabinCamera(this.position, pose);
+      // Keep the subject centred while the initial view enters the narrow aisle.
+      this.target.copy(this.focus);
+      this.fov = 46;
+      return;
+    }
     sampleShot(reducedMotion ? 6 : Math.max(0, seconds - 1.5), this.shot);
     const shot = this.shot, yaw = pose.yaw + assetRotation * Math.PI / 180 + shot.azimuth * Math.PI / 180;
     const distance = shot.distance * Math.max(1, 0.85 / Math.max(0.3, aspect));

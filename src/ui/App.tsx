@@ -35,6 +35,7 @@ import type { RenderOptions } from "./render";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
 import { JourneyReview } from "./JourneyReview";
+import { JourneyEnd } from "./JourneyEnd";
 import { getSessionHeadMessage, type HeadMessageMode } from "./headMessages";
 import styles from "./App.module.css";
 
@@ -213,7 +214,7 @@ export function App() {
   const broadcast = useBroadcast(session, watching);
   const won = report?.status === "success";
   const recordExpanded = recordState?.generation === session.generation ? recordState.expanded : false;
-  const expandedReview = !!report && (reviewState?.generation === session.generation ? reviewState.expanded : true);
+  const expandedReview = !!report && reviewState?.generation === session.generation && reviewState.expanded;
   const messageMode: HeadMessageMode = watching ? recordExpanded ? "icons" : "full" : thought ? "icons" : "hidden";
   optionsRef.current = {
     showVision, showTrail, thinking: runner?.phase === "thinking", trail: session.engine.trail,
@@ -375,7 +376,7 @@ export function App() {
         {!watching && flow.stage !== "launch" && (
           <Dialog.Root open={j.drawer} onOpenChange={j.setDrawer}>
             <Dialog.Trigger asChild>
-              <button className={styles.settingsTrigger} aria-label="打开设置">
+              <button className={styles.settingsTrigger} aria-label="打开设置" hidden={ended}>
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d="M9.8 2.8h4.4l.6 2.1c.5.2.9.4 1.4.6l2-1 3.1 3.1-1 2c.2.5.4.9.6 1.4l2.1.6v4.4l-2.1.6c-.2.5-.4.9-.6 1.4l1 2-3.1 3.1-2-1c-.5.2-.9.4-1.4.6l-.6 2.1H9.8l-.6-2.1c-.5-.2-.9-.4-1.4-.6l-2 1-3.1-3.1 1-2c-.2-.5-.4-.9-.6-1.4L1 15.2v-4.4l2.1-.6c.2-.5.4-.9.6-1.4l-1-2 3.1-3.1 2 1c.5-.2.9-.4 1.4-.6z" transform="translate(1 1) scale(.92)" fill="currentColor" />
                   <circle cx="12" cy="12" r="3.1" fill="white" />
@@ -536,7 +537,7 @@ export function App() {
               {sceneIndex === 0 && (
                 <span className={styles.goalPill}>
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></svg>
-                  {settings.timeLimitSeconds} 秒内抵达下层站台
+                  {settings.timeLimitSeconds} 秒内登上地铁
                 </span>
               )}
               <button className={`primary ${styles.enterScene}`} disabled={sceneIndex !== 0} onClick={j.enterScene}>
@@ -633,7 +634,7 @@ export function App() {
           <section key="guidance" className={`${styles.preparation} ${styles.panel}`}>
             <span className={styles.eyebrow}>给角色一个方向</span>
             <h1>这一次，怎么走？</h1>
-            <p>目标：{settings.timeLimitSeconds} 秒内抵达下层站台。</p>
+            <p>目标：{settings.timeLimitSeconds} 秒内登上地铁。</p>
             {kind === "offline" ? (
               <>
                 <p>离线体验按固定策略行动，不读取指导。</p>
@@ -847,7 +848,9 @@ export function App() {
               <strong>{clock}</strong>
               <progress max={settings.timeLimitSeconds} value={remaining} />
               <span>
-                {session.engine.player.passedGate
+                {session.engine.player.onPlatform
+                  ? session.engine.player.activity.kind === "boarding" ? "正在登车" : "前往车门登车"
+                  : session.engine.player.passedGate
                   ? "前往下层站台"
                   : session.engine.player.screened
                     ? "选择闸机"
@@ -899,23 +902,17 @@ export function App() {
             </div>
           </>
         )}
-        {won && renderer === "3d" && (
+        {won && renderer === "3d" && !expandedReview && (
           <div className={styles.victoryControls} aria-label="胜利镜头控制">
-            <button onClick={() => j.setCamera((c) => ({ ...c, mode: c.mode === "follow" ? "overview" : "follow", command: (c.command ?? 0) + 1 }))}>
-              {j.camera.mode === "follow" ? "总览" : "跟随"}
-            </button>
             <button onClick={() => j.setCamera((c) => ({ ...c, mode: "follow", reset: c.reset + 1, command: (c.command ?? 0) + 1 }))}>回正</button>
           </div>
         )}
         {report && (
           <>
-          <div className={styles.endActions} aria-label="本局结束操作" hidden={expandedReview}>
-            <button ref={reviewTrigger} aria-expanded={expandedReview} onClick={() => {
-              if (expandedReview) closeReview();
-              else setReviewState({ generation: session.generation, expanded: true });
-            }}>{expandedReview ? "收起复盘" : "行程复盘"}</button>
-            <button className="primary" onClick={() => j.retry({ twoDimensional: renderer === "2d" })}>再来一局</button>
-          </div>
+          <JourneyEnd key={`end-${session.generation}`} ref={reviewTrigger} report={report} hidden={expandedReview}
+            onReview={() => setReviewState({ generation: session.generation, expanded: true })}
+            onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
+            onEdit={() => { j.edit(); if (kind === "offline") j.setDrawer(true); }} onLobby={j.returnLobby} />
           <JourneyReview key={session.generation} report={report} engine={session.engine} review={j.review} open={expandedReview} onClose={closeReview}
             onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
             onSameScenario={() => j.retry({ sameScenario: true, twoDimensional: renderer === "2d" })}

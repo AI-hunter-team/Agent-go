@@ -13,9 +13,25 @@ export function describeReviewAction(action: AgentAction) {
 }
 
 export function reportOutcome(report: GameReport) {
-  if (report.status === "success") return { title: "顺利到站", detail: "已下楼到达站台", tone: "success" };
+  if (report.status === "success") return report.goal === "board_train"
+    ? { title: "成功登车", detail: "已登上地铁，进入车厢", tone: "success" }
+    : { title: "顺利到站", detail: "已下楼到达站台（旧版终点）", tone: "success" };
   if (report.failReason === "玩家结束了本局") return { title: "本局已结束", detail: "你主动结束了这次旅程", tone: "stopped" };
-  return { title: "这次没能到站", detail: report.failReason ?? "未完成旅程", tone: "failed" };
+  return { title: report.goal === "board_train" ? "这次没能登车" : "这次没能到站", detail: report.failReason ?? "未完成旅程", tone: "failed" };
+}
+
+/** Result landing copy is derived from settled facts; technical timeouts are not missed trains. */
+export function journeyEndOutcome(report: GameReport) {
+  const outcome = reportOutcome(report);
+  const missedDeadline = outcome.tone === "failed" && (
+    /^超时：\d+(?:\.\d+)? 秒内未登上地铁$/.test(report.failReason ?? "") || report.failReason === "超过截止时间"
+  );
+  return {
+    ...outcome,
+    title: missedDeadline && report.goal === "board_train" ? "没赶上这趟车" : outcome.title,
+    label: outcome.tone === "failed" ? "挑战失败" : "本局已结束",
+    marker: missedDeadline ? "clock" : "cross",
+  };
 }
 
 export function decisionAttempts(report: GameReport, decision: DecisionRecord) {

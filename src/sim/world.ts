@@ -1,5 +1,5 @@
 import type { FacilityStatus, GameEvent, PassengerKind, Persona, Trigger, TriggerKind, Vec } from "../shared/types";
-import { angleTo, dist, lineOfSight } from "./geometry";
+import { angleTo, dist, lineOfSight, moveToward } from "./geometry";
 import { generatePersona } from "./persona";
 import { zoneOf, type Zone, GATE_X, WIDTH, ATTRACTIONS, SIGHT_OCCLUDERS, FACILITIES, STAIRS_BOTTOM, STAIRS_REACH, STAIRS_SECONDS, STAIRS_TOP, QUEUE_SPACING, type FacilityDef } from "./layout";
 import { findPath } from "./nav";
@@ -11,11 +11,13 @@ import { DEFAULT_LOADOUT, resolveLoadout, type Loadout } from "../shared/interac
 import { ITEM_DEFS } from "./content/items";
 import { ItemSystem } from "./items";
 import { ITEM_SPOTS } from "./layout";
+import { PLAYER_TRAIN_DOORS, TRAIN_CENTRE_X, TRAIN_AISLE_X } from "./layout";
 import { clearOfPeople, clearServiceExit, detourAroundQueues, personRadius, steer, type MovingBody } from "./movement";
 
 export type Activity =
   | { kind: "idle" }
   | { kind: "walking"; path: Vec[]; label: string }
+  | { kind: "boarding"; path: Vec[] }
   | { kind: "to_queue"; facility: string; path: Vec[] }
   | { kind: "queued"; facility: string }
   | { kind: "service"; facility: string }
@@ -41,6 +43,7 @@ export interface Person {
   screened: boolean;
   passedGate: boolean;
   onPlatform: boolean;
+  onTrain: boolean;
   /** Stable train-door assignment once an NPC starts boarding. */
   boardingDoor?: number;
   irritable: boolean;
@@ -197,6 +200,7 @@ export class World {
       screened: false,
       passedGate: false,
       onPlatform: false,
+      onTrain: false,
       irritable: persona ? persona.traits.temper > 0.6 : opts.irritable ?? false,
       persona,
       facing: opts.facing ?? 0,
@@ -428,9 +432,35 @@ export class World {
       case "walking": {
         if (this.followPath(p, a.path, stride)) {
           p.activity = { kind: "idle" };
-          this.personEvent(p, "arrived", `已到达${a.label}`);
+          const door = p.isPlayer && p.onPlatform && PLAYER_TRAIN_DOORS.find(d => dist(p.pos, d.pos) < 0.05);
+          if (door) {
+            // Cross the open door at its centre, skirt the centre pole, then
+            // stand in the aisle. Only this controlled path may leave the platform.
+            const insideX = TRAIN_CENTRE_X - 0.55;
+            p.activity = { kind: "boarding", path: [
+              { x: insideX, y: door.pos.y },
+              { x: insideX, y: door.pos.y + 1.25 },
+              { x: TRAIN_AISLE_X, y: door.pos.y + 1.25 },
+            ] };
+            this.personEvent(p, "arrived", `已到达${door.label}，正在登车`);
+          } else this.personEvent(p, "arrived", `已到达${a.label}`);
         }
         if (!p.isPlayer && p.passedGate && !p.onPlatform && dist(p.pos, STAIRS_TOP) <= STAIRS_REACH) this.descendStairs(p);
+        break;
+      }
+      case "boarding": {
+        const target = a.path[0];
+        if (!target) break;
+        const next = moveToward(p.pos, target, stride);
+        if (!clearOfPeople(p.pos, next, personRadius(p.kind), this.collisionBodies(p.id))) break;
+        p.facing = angleTo(p.pos, next);
+        p.pos = next;
+        if (dist(p.pos, target) < 1e-6) a.path.shift();
+        if (!a.path.length) {
+          p.onTrain = true;
+          p.activity = { kind: "done" };
+          this.personEvent(p, "arrived", "已登上地铁，进入车厢过道");
+        }
         break;
       }
       case "to_queue": {
@@ -485,7 +515,7 @@ export class World {
         if (a.remaining <= 1e-9) {
           p.pos = { ...end };
           p.onPlatform = true;
-          p.activity = { kind: p.isPlayer ? "done" : "idle" };
+          p.activity = { kind: "idle" };
           this.personEvent(p, "arrived", "已下楼梯，到达下层站台");
         }
         break;

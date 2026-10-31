@@ -10,6 +10,7 @@ export interface WorldReviewSnapshot {
 }
 export interface ReviewInput {
   status: "failed";
+  goal?: "board_train";
   seed: number;
   guidance: string;
   elapsed: number;
@@ -44,6 +45,7 @@ export class ReviewFailure extends Error {
 export function buildReviewInput(report: GameReport): ReviewInput {
   if (report.status !== "failed") throw new Error("仅对已失败的对局生成复盘");
   return structuredClone({
+    ...(report.goal ? { goal: report.goal } : {}),
     status: "failed", seed: report.seed, guidance: report.guidance, elapsed: report.elapsed,
     failReason: report.failReason ?? "原因未记录", timeBreakdown: report.timeBreakdown,
     decisions: report.decisions.map(d => ({ index: d.index, t: d.t,
@@ -67,7 +69,8 @@ export function validateReviewInput(value: unknown): asserts value is ReviewInpu
     || guidanceError(value.guidance) || !finite(value.elapsed) || value.elapsed > 3600 || !text(value.failReason)
     || !object(value.timeBreakdown) || !Object.values(value.timeBreakdown).every(finite)
     || !list(value.decisions, 120) || !list(value.events, 2000) || !list(value.worldSnapshots, 300)
-    || Object.keys(value).some(k => !["status", "seed", "guidance", "elapsed", "failReason", "timeBreakdown", "decisions", "events", "worldSnapshots"].includes(k))
+    || (value.goal !== undefined && value.goal !== "board_train")
+    || Object.keys(value).some(k => !["goal", "status", "seed", "guidance", "elapsed", "failReason", "timeBreakdown", "decisions", "events", "worldSnapshots"].includes(k))
     || JSON.stringify(value).length > 600_000) return fail();
   const within = (t: unknown) => finite(t) && t <= (value.elapsed as number) + 0.001;
   if (!value.decisions.every(d => object(d) && Number.isSafeInteger(d.index) && (d.index as number) >= 1 && within(d.t)

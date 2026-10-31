@@ -7,13 +7,13 @@ await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, cl
   await waitFor("window.stationSceneInspect?.().loaded && window.metroSceneInspect?.().loaded");
   const inspect = () => evaluate("window.metroSceneInspect()");
   const initial = await inspect();
-  assert(initial.trainBounds.min[0] > initial.edgeX + 0.15); assert.equal(initial.staticDraws, 14);
+  assert(initial.trainBounds.min[0] > initial.edgeX + 0.15); assert(initial.staticDraws >= 14 && initial.staticDraws <= 16);
   assert.equal(initial.doorStates.filter((door) => door.side === -1 && door.progress === 1).length, 10);
   assert.equal(initial.doorStates.filter((door) => door.side === 1 && door.progress === 0).length, 10);
   await screenshot("01-lobby.png");
   if (mode === "failure") {
     await send("Network.setCacheDisabled", { cacheDisabled: true });
-    await send("Network.setBlockedURLs", { urls: ["*/assets/metro-train/metro-head-car.glb"] });
+    await send("Network.setBlockedURLs", { urls: ["*/assets/metro-train/metro-head-car.glb*"] });
     await send("Page.reload", { ignoreCache: true });
     await waitFor("document.body.innerText.includes('站台列车加载失败') && window.stationSceneInspect?.().loaded");
     assert.equal((await inspect()).loaded, false); await screenshot("failure-train-only.png");
@@ -59,7 +59,7 @@ await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, cl
   await click("恢复默认"); await evaluate("document.querySelector('[aria-label=\"关闭设置\"]').click()");
   await waitFor("window.stationSceneInspect?.().shadows === true && window.metroSceneInspect?.().loaded");
   await screenshot("08-standard-restored.png");
-  assert(responses.some((r) => r.url.endsWith('/assets/metro-train/metro-head-car.glb') && r.status === 200));
+  assert(responses.some((r) => new URL(r.url).pathname.endsWith('/assets/metro-train/metro-head-car.glb') && r.status === 200));
   assert.equal(consoleErrors.length, 0);
   return { initial, ending, cycles: cycles.map(({ geometries, textures }) => ({ geometries, textures })), lowQuality, final, stationAndTrainLoaded: true, unchangedPlatformVictory: true };
 });

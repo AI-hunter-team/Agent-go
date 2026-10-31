@@ -98,12 +98,12 @@ export function ReportSummary({ report, onAdopt, replay, records, active = true,
       <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
         {report.status === "success" ? (
           <>
-            <span>已下楼到达站台</span>
+            <span>{reportOutcome(report).detail}</span>
             <strong>{report.score!.toFixed(1)} 秒</strong>
           </>
         ) : (
           <>
-            <span>{reportOutcome(report).tone === "stopped" ? "本局已结束 · 无成绩" : "本次未抵达站台 · 无成绩"}</span>
+            <span>{reportOutcome(report).tone === "stopped" ? "本局已结束 · 无成绩" : report.goal === "board_train" ? "本次未登上地铁 · 无成绩" : "本次未抵达站台 · 无成绩"}</span>
             <strong className="reason-text">{report.failReason}</strong>
           </>
         )}

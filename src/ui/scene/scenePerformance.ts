@@ -92,6 +92,12 @@ export class ScenePerformance {
     this.cinematicDismissed = true; this.cameraResumeAt = null; this.cameraHeld = false; this.notify();
   }
 
+  /** Return to the cabin shot without restarting the dance or its clock. */
+  restoreCamera() {
+    if (this.victoryAt === null) return;
+    this.cinematicDismissed = false; this.cameraResumeAt = null; this.cameraHeld = false; this.notify();
+  }
+
   /** 拖动临时接管；滚轮每次重置静置时间，按住时不抢回镜头。 */
   interactCamera(held = false) {
     if (this.victoryAt === null) return;

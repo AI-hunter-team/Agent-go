@@ -23,6 +23,8 @@
 
 ## 架构与接口入口
 
+当前终点的本地变更见[技术方案 §21](MVP技术方案.md#21-登车终点与车厢庆祝onboard-victory-001)：到站台后仍需实际登上地铁才获胜。它覆盖历史“到站台即成功”说明；软件/浏览器证据及是否合入分别见对应任务与验证记录。
+
 当前模型接入与思考预算由[技术方案 §17](MVP技术方案.md#17-responses-与思考设置responses-001)维护：统一 Responses、默认 DeepSeek Flash / 关闭思考，以及页面档位与会话绑定。该任务的代码/验证/合入状态见 [RESPONSES-001](tasks/RESPONSES-001.md)，旧模型章节和历史成绩不证明新接口真实验收。
 
 项目为 npm 管理的 TypeScript Web 应用：React/Vite + Three.js/R3F/Drei 三维展示、Radix 定制 UI、浏览器模拟器和 Express 模型代理；Canvas 2D 保留作调试，Vitest 在 Node 环境运行测试。当前三维展示与内部快照入口见 [技术方案 §15](MVP技术方案.md)，后续楼梯、协商、回放和报告差异见 [§16](MVP技术方案.md#16-当前集成差异pr-remaining-001)，目录职责和脚本见 [开发流程](DEVELOPMENT.md)。

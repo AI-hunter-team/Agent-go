@@ -1,7 +1,7 @@
 import type { FacilityObservation, Observation, Vec } from "../shared/types";
 import { compass, dist, lineOfSight } from "./geometry";
 import type { GuardSystem } from "./guards";
-import { ATTRACTIONS, BOARDING_INTERVAL, ESCALATOR_SECONDS, ESCALATOR_APPROACH, SIGHT_OCCLUDERS, STAIRS_SECONDS, STAIRS_TOP, ZONE_LABEL, zoneOf } from "./layout";
+import { ATTRACTIONS, BOARDING_INTERVAL, ESCALATOR_SECONDS, ESCALATOR_APPROACH, SIGHT_OCCLUDERS, STAIRS_SECONDS, STAIRS_TOP, ZONE_LABEL, zoneOf, PLAYER_TRAIN_DOORS } from "./layout";
 import { nearestNode } from "./nav";
 import { PROFILES, RULES, multiplierOf } from "./scenario";
 import { round1, type Facility, type Person, type World } from "./world";
@@ -58,6 +58,8 @@ export function describeActivity(world: World, p: Person): string {
       return "空闲，等待指令";
     case "walking":
       return `正在走向${a.label}`;
+    case "boarding":
+      return "正在登车，走入车厢过道";
     case "to_queue":
       return `正在走向 ${a.facility} 队尾`;
     case "queued": {
@@ -81,7 +83,7 @@ export function describeActivity(world: World, p: Person): string {
     case "escalator": return `正在乘扶梯（剩余 ${round1(a.remaining)} 秒）`;
     case "distracted": return `正在关注 ${a.attraction}（剩余 ${round1(a.remaining)} 秒，可继续赶路）`;
     case "done":
-      return "已进入站台";
+      return p.onTrain ? "已登上地铁" : "已进入站台";
   }
 }
 
@@ -102,6 +104,8 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       hasTicket: p.hasTicket,
       screened: p.screened,
       passedGate: p.passedGate,
+      onPlatform: p.onPlatform,
+      onTrain: p.onTrain,
       queue: q ? { facility: q.facility.def.id, position: q.index + 1, length: q.facility.queue.length } : null,
       elapsed: round1(world.t),
       timeLeft: round1(Math.max(0, world.timeLimitSeconds - world.t)),
@@ -117,6 +121,8 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
     attractions: ATTRACTIONS.filter(a => p.screened && !p.passedGate && playerCanSee(p.pos, a.approach)).map(a => ({
       id: a.id, label: a.label, cue: a.cue, distance: round1(dist(p.pos, a.approach)), approach: { ...a.approach }, canLinger: dist(p.pos, a.approach) <= 2.5,
     })),
+    trainDoors: PLAYER_TRAIN_DOORS.filter(d => p.onPlatform && playerCanSee(p.pos, d.pos, world.lightAt))
+      .map(d => ({ id: d.id, label: d.label, position: { ...d.pos }, distance: round1(dist(p.pos, d.pos)) })),
     routes: [
       { id: "stairs" as const, label: "楼梯", node: "STAIRS_TOP", position: STAIRS_TOP, travelSeconds: STAIRS_SECONDS, queueLength: 0, boardingInterval: 0 },
       { id: "escalator" as const, label: "扶梯", node: "ESCALATOR_TOP", position: ESCALATOR_APPROACH, travelSeconds: ESCALATOR_SECONDS,

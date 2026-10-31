@@ -68,12 +68,12 @@ describe("IV2 phase 2 world flows",()=>{
   expect(e.executor.outcomes.every(o=>o.ok)).toBe(true);
  });
  test.each([[false,10],[true,5]] as const)("escalator walking=%s takes %s seconds",(walking,seconds)=>{
-  const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};expect(e.applyAction({type:"traverse",route:"escalator",walking,reason:""}).ok).toBe(true);run(e,seconds-.1);expect(e.player.onPlatform).toBe(false);run(e,.2);expect(e.status).toBe("success");expect(e.player.pos.y).toBe(ESCALATOR_TOP.y);
+  const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};expect(e.applyAction({type:"traverse",route:"escalator",walking,reason:""}).ok).toBe(true);run(e,seconds-.1);expect(e.player.onPlatform).toBe(false);run(e,.2);expect(e.status).toBe("running");expect(e.player.onPlatform).toBe(true);expect(e.player.pos.y).toBe(ESCALATOR_TOP.y);
  });
  test("mid-escalator side exit continues stairs; slide reaches platform in 2 seconds",()=>{
   const e=createFixtureEngine();e.player.passedGate=true;e.player.pos={...ESCALATOR_TOP};e.applyAction({type:"traverse",route:"escalator",reason:""});run(e,3);
-  expect(plan(e,{op:"vault",obstacle:"escalator_side"}).ok).toBe(true);run(e,1.1);expect(e.events.events.some(v=>v.kind==="escalator_exit"&&v.severity==="suspicious")).toBe(true);expect(e.player.activity.kind).toBe("stairs");run(e,5);expect(e.status).toBe("success");
-  const s=createFixtureEngine();s.player.passedGate=true;s.player.pos={...STAIRS_TOP};expect(plan(s,{op:"slide_handrail"}).ok).toBe(true);run(s,1.9);expect(s.player.onPlatform).toBe(false);run(s,.2);expect(s.status).toBe("success");
+  expect(plan(e,{op:"vault",obstacle:"escalator_side"}).ok).toBe(true);run(e,1.1);expect(e.events.events.some(v=>v.kind==="escalator_exit"&&v.severity==="suspicious")).toBe(true);expect(e.player.activity.kind).toBe("stairs");run(e,5);expect(e.status).toBe("running");expect(e.player.onPlatform).toBe(true);
+  const s=createFixtureEngine();s.player.passedGate=true;s.player.pos={...STAIRS_TOP};expect(plan(s,{op:"slide_handrail"}).ok).toBe(true);run(s,1.9);expect(s.player.onPlatform).toBe(false);run(s,.2);expect(s.status).toBe("running");expect(s.player.onPlatform).toBe(true);
  });
  test("power scripts reduce and restore shared sight and emit environment facts",()=>{
   const scenario=emptyScenario();scenario.events=[{t:.1,type:"power",zone:"concourse",duration:1}];const e=createFixtureEngine(scenario);

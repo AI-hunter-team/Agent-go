@@ -5,9 +5,11 @@ import { createHash } from "node:crypto";
 import { Box3, Mesh, Vector3 } from "three";
 import { batchMetroCar, createMetroCar, METRO, type MetroCarKind } from "../../src/assets/metro-train/index";
 import { exportGlb } from "../station-kit/glb";
+import { generateCabinTextures } from "./cabinTextures";
 
 const directory = fileURLToPath(new URL("../../public/assets/metro-train/", import.meta.url));
 await mkdir(directory, { recursive: true });
+await generateCabinTextures(directory);
 const assets = [];
 for (const kind of ["head", "trailer"] as MetroCarKind[]) {
   const root = batchMetroCar(createMetroCar(kind)); root.updateMatrixWorld(true);
@@ -16,7 +18,7 @@ for (const kind of ["head", "trailer"] as MetroCarKind[]) {
   const slots = new Set<string>(), anchors: object[] = [];
   root.traverse((node) => {
     if (node.userData.role === "metroDoor") doors++;
-    if (node.userData.role === "anchor") anchors.push({ name: node.name, position: node.position.toArray() });
+    if (node.userData.role === "anchor") anchors.push({ name: node.name, position: node.getWorldPosition(new Vector3()).toArray() });
     if (node instanceof Mesh) {
       meshes++; triangles += (node.geometry.index?.count ?? node.geometry.getAttribute("position").count) / 3;
       if (!Array.isArray(node.material)) slots.add(node.material.name);
@@ -25,13 +27,13 @@ for (const kind of ["head", "trailer"] as MetroCarKind[]) {
     }
   });
   if (doors !== 20) throw new Error(`Expected 20 independently moving door leaves, got ${doors}`);
-  if (size.z > 3.2 || size.x < 22.7 || size.x > 23.6) throw new Error("Unexpected car proportions");
+  if (size.z < 3.6 || size.z > 3.85 || size.x < 22.7 || size.x > 23.6 || triangles > 100000) throw new Error("Unexpected car proportions or geometry budget");
   const { bytes } = await exportGlb(root, directory), file = `metro-${kind}-car.glb`;
   await writeFile(join(directory, file), bytes);
-  assets.push({ kind, file, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), bounds: { min: box.min.toArray(), max: box.max.toArray(), size: size.toArray() }, meshes, triangles, doorLeaves: doors, materialSlots: [...slots], anchors });
+  assets.push({ kind, file, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), bounds: { min: box.min.toArray(), max: box.max.toArray(), size: size.toArray() }, meshes, triangles, doorLeaves: doors, materialSlots: [...slots], cabin: root.userData.cabin, anchors });
 }
 const manifest = {
-  version: 1, title: "Agent Go · 青绿线地铁外观小样", status: "design-prototype", units: "metres", upAxis: "Y", forward: "+X",
+  version: 2, title: "Agent Go · 青绿线精细车厢", status: "game-integrated-cabin", units: "metres", upAxis: "Y", forward: "+X",
   railTop: 0, passengerFloor: METRO.floor, nominal: METRO,
   doorMotion: { role: "metroDoor", formula: "position.x = closedX + travel * clamp(progress, 0, 1)", range: [0, 1] },
   previewConsist: "Three-car display only; not an assertion of a real operating formation", assets,
@@ -39,7 +41,7 @@ const manifest = {
 await writeFile(join(directory, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 await writeFile(join(directory, "sources.json"), JSON.stringify({
   geometry: "Original procedural geometry authored for Agent Go; Chinese metro inspired, not an exact vehicle replica",
-  sourceFiles: ["src/assets/metro-train/index.ts", "scripts/metro-train/build.ts"], exporter: "scripts/station-kit/glb.ts",
+  sourceFiles: ["src/assets/metro-train/index.ts", "src/assets/metro-train/interior.ts", "src/shared/metro.ts", "scripts/metro-train/build.ts", "scripts/metro-train/cabinTextures.ts"], exporter: "scripts/station-kit/glb.ts",
   thirdPartyArt: [], referencesOnly: [
     "https://www.crrcgc.cc/zj/2025-01/06/article_2025010615113095490.html",
     "https://crrcgc.cc/pz/2023-08/04/article_30174B96C76E4BF186517B4E720C420E.html",

@@ -167,7 +167,7 @@ export class TransitSystem {
       if (a.remaining <= 1e-9) {
         p.pos = { ...ESCALATOR_BOTTOM };
         p.onPlatform = true;
-        p.activity = { kind: p.isPlayer ? "done" : "idle" };
+        p.activity = { kind: "idle" };
         if (p.isPlayer) this.world.notifyPlayer("arrived", "已乘扶梯到达下层站台");
       }
       return true;

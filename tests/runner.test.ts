@@ -80,6 +80,8 @@ describe("GameRunner", () => {
   test("the integrated map has a legal route within the 150-second dense default", async () => {
     const agent = new ScriptedAgent(async ({ observation }) => {
       const p = observation.self;
+      if (p.activity.startsWith("正在登车")) return ok({ type: "wait", seconds: 20, reason: "完成登车" });
+      if (p.onPlatform) return ok({ type: "move_to", target: "TRAIN_1", reason: "登上地铁" });
       if (p.activity.includes("办理") || p.activity.startsWith("正在下楼梯")) return ok({ type: "wait", seconds: 5, reason: "等候当前动作" });
       if (p.passedGate) return ok(Math.hypot(p.position.x - 61, p.position.y - 9) <= .8
         ? { type: "descend_stairs", reason: "下行" }
@@ -90,6 +92,9 @@ describe("GameRunner", () => {
     await runner.runToEnd();
     expect(runner.engine.settings).toEqual({ timeLimitSeconds: 150, extraQueuePeople: 3 });
     expect(runner.engine.status).toBe("success");
+    expect(runner.engine.player.onTrain).toBe(true);
+    expect(runner.report().goal).toBe("board_train");
+    expect(runner.report().debug!.attempts.some(a => a.stage === "boarding")).toBe(true);
     // Guard footprints and door traffic affect route time; the supported contract is the configured deadline.
     expect(runner.engine.score).toBeLessThan(runner.engine.settings.timeLimitSeconds);
     expect(runner.engine.creative.violations).toHaveLength(0);
@@ -267,7 +272,7 @@ test("debug accounts for first attempts, retries and classification exactly once
   expect(debug.summary.aiWaitMs).toBe(100);
   expect(debug.summary.includingPreparationMs).toBe(200);
   expect(debug.summary.byOperationMs).toEqual({ decision: 20, retry: 30, classification: 50, negotiation: 0, interpret: 0, npc_respond: 0, review: 0, review_draft: 0 });
-  expect(debug.summary.byStageMs).toEqual({ ticket: 100, security: 0, gate: 0, stairs: 0 });
+  expect(debug.summary.byStageMs).toEqual({ ticket: 100, security: 0, gate: 0, stairs: 0, boarding: 0 });
   expect(debug.summary.slowestAttempt).toEqual({ index: 3, durationMs: 50 });
   expect(debug.attempts[0].error).toBe("no tool call");
   expect(debug.attempts[2].error).toContain("classifier offline");
