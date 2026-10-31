@@ -1,6 +1,6 @@
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import type { Engine } from "../sim/engine";
-import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_WALL, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
+import { FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_BARRIERS, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
 import { RULES } from "../sim/scenario";
 
 // Palette follows the chosen visual direction (design/ui-concepts-v3, 方案 02):
@@ -87,7 +87,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
 
   // Structures
   ctx.fillStyle = COLORS.securityEdge;
-  for (const r of SECURITY_WALL) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
+  for (const r of SECURITY_BARRIERS) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
   ctx.fillStyle = COLORS.ochre;
   for (const r of GATE_BARRIERS) ctx.fillRect(px(r.x), px(r.y), px(r.w), px(r.h));
   ctx.fillStyle = COLORS.green;

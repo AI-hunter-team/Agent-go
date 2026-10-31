@@ -6,6 +6,7 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [STATION-INTEGRATION-001](STATION-INTEGRATION-001.md) | 固定栏杆、33 GLB、正式站厅接入与视线/占地回归；开发/生产浏览器整局、回放、失败重试及本机性能 |
 | [PR18-MERGE-001](PR18-MERGE-001.md) | 名称统一 PR 与最新 main 的文档冲突解决及集成验证；最终合入见原 PR |
 | [BRAND-002](BRAND-002.md) | 英文名agent-go及包/下载/素材生成标识统一；验证范围与结果见报告 |
 | [NPC-PR-001](NPC-PR-001.md) | 人物修复与最新 main 兼容、PR/CI/合并及已合并分支清理，进行中 |
