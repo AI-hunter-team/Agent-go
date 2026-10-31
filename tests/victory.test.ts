@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { Bone, Box3, Vector3 } from "three";
+import { AnimationClip, Bone, Box3, NumberKeyframeTrack, Vector3 } from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { ScenePerformance } from "../src/ui/scene/scenePerformance";
@@ -40,10 +40,71 @@ function player() {
 /** 统一普通展示参数，使各验证只设置实际变化的状态。 */
 function frame(overrides: Partial<AnimationFrame> = {}): AnimationFrame {
   return { motion: "idle", delta: 1 / 30, speed: 1, frozen: false, reducedMotion: false, dance: "", victoryTime: 0, greetingTime: null,
-    danceTime: overrides.victoryTime ?? 0, previousDance: "", previousDanceTime: 0, ...overrides };
+    danceTime: overrides.victoryTime ?? 0, previousDance: "", previousDanceTime: 0, defeatTime: null, ...overrides };
 }
 
 describe("胜利和问候的独立展示", () => {
+  // 选角问候只由新请求触发，不能因重挂载或无片段模型而循环。
+  it("选角首帧直接问候、进行中不重置，结束后可再播且减少动态不播放", () => {
+    const state = new ScenePerformance(); state.sync(1, false);
+    state.setClips([], 2.83, "fish");
+    expect(state.greetSelection("1", false)).toBe(true);
+    state.advance(0); state.advance(0.1);
+    state.setClips([], 2.83, "fish");
+    expect(state.greetSelection("1", false)).toBe(false); expect(state.greetingTime).toBeCloseTo(0.1);
+    expect(state.greetSelection("2", false)).toBe(false); expect(state.greetingTime).toBeCloseTo(0.1);
+    expect(state.greetingImmediate).toBe(true);
+    for (let i = 0; i < 30; i++) state.advance(0.1);
+    expect(state.greetSelection("3", false)).toBe(true); expect(state.greetingTime).toBe(0);
+    state.setClips([], 0, "doubao");
+    expect(state.greetSelection("4", false)).toBe(false); expect(state.greetingTime).toBeNull();
+    state.setClips([], 2.83, "fish");
+    expect(state.greetSelection("5", true)).toBe(true); expect(state.greetingTime).toBeNull();
+    expect(state.greetSelection(undefined, false)).toBe(false);
+    const model = new Bone(), animator = new AvatarAnimator(model, [new AnimationClip("greet", 1, [new NumberKeyframeTrack(".position[x]", [0, 1], [2, 2])])]);
+    animator.update(frame({ greetingTime: 0, greetingImmediate: true }));
+    expect(model.position.x).toBe(2);
+    animator.dispose();
+  });
+
+  // 真实失败独立计时，主动结束与新一局不能继承失败展示。
+  it("失败只播放一次，隐藏暂停、重挂载保留、播完休眠且新局清理", () => {
+    const state = new ScenePerformance(); state.setClips([], 0, "fish", 5.58);
+    state.sync(1, false); expect(state.defeatTime).toBeNull();
+    state.sync(1, false, true); state.advance(0); state.advance(0.1);
+    expect(state.defeatTime).toBeCloseTo(0.1); expect(state.greet(false)).toBe(false);
+    expect(state.needsFrames(false)).toBe(true); expect(state.needsFrames(true)).toBe(false);
+    state.setVisible(false); state.advance(20); state.setVisible(true); state.advance(20);
+    expect(state.defeatTime).toBeCloseTo(0.1);
+    state.setClips([], 0, "fish", 5.58); state.sync(1, false, true);
+    expect(state.defeatTime).toBeCloseTo(0.1);
+    for (let i = 0; i < 60; i++) state.advance(0.1);
+    expect(state.defeatTime).toBe(5.58); expect(state.needsFrames(false)).toBe(false);
+    state.sync(2, false); expect(state.defeatTime).toBeNull(); expect(state.greet(false)).toBe(true);
+  });
+
+  // 用实际新片段核对冻结世界中的骨骼变化、末帧停留及减少动态分支。
+  it("真实失败动作保持原地、播放后停留末帧，减少动态直接显示同一姿势", () => {
+    const { model, animator, guard, bones } = player();
+    const defeat = animator.performances.defeat!;
+    expect(defeat.name).toBe("defeat_03.001"); expect(defeat.duration).toBeCloseTo(5.583333, 4);
+    const hips = bones.find((bone) => /Hips$/.test(bone.name))!;
+    model.updateMatrixWorld(true); const anchor = hips.getWorldPosition(new Vector3());
+    animator.update(frame({ frozen: true, speed: 4, defeatTime: 0.5 })); guard();
+    const initial = bones.map((bone) => bone.quaternion.clone());
+    animator.update(frame({ frozen: true, speed: 4, defeatTime: 2 })); guard(); model.updateMatrixWorld(true);
+    expect(bones.some((bone, i) => bone.quaternion.angleTo(initial[i]) > 0.05)).toBe(true);
+    const position = hips.getWorldPosition(new Vector3());
+    expect(position.x).toBeCloseTo(anchor.x, 5); expect(position.z).toBeCloseTo(anchor.z, 5);
+    animator.update(frame({ frozen: true, defeatTime: defeat.duration })); guard();
+    const end = bones.map((bone) => bone.quaternion.clone());
+    for (const overrides of [{ defeatTime: 30 }, { defeatTime: 0, reducedMotion: true }]) {
+      animator.update(frame({ frozen: true, ...overrides })); guard();
+      expect(Math.max(...bones.map((bone, i) => bone.quaternion.clone().normalize().angleTo(end[i].clone().normalize())))).toBeLessThan(0.0001);
+    }
+    animator.dispose();
+  });
+
   it("各车门登车后桌面和窄屏的庆祝镜头始终留在车厢过道内", () => {
     for (const door of PLAYER_TRAIN_DOORS) for (const aspect of [16 / 9, 390 / 844, 320 / 568]) {
       const pose = { x: TRAIN_AISLE_X, y: -2, z: door.pos.y + 1.25, yaw: 0 };

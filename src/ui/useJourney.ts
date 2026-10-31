@@ -36,6 +36,13 @@ export const CHARACTERS = [
     description: "独特造型 · 自在前行",
   },
   {
+    id: "doubao",
+    name: "豆包",
+    url: "/models/doubao.glb",
+    mark: "豆",
+    description: "",
+  },
+  {
     id: "custom",
     name: "自定义角色",
     url: "",

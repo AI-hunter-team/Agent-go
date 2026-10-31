@@ -24,10 +24,11 @@ function sample(points:Triple[],progress:number,out:Vector3){
 export class ControlRoomState {
   stage:JourneyStage="lobby"; active=true; elapsed=0; time=0; delta=0; walking=false; notified=false; handoff=false; door=0; moving=false;
   pose:ActorPose={x:0,y:0,z:0,yaw:0};
-  fov=52;readonly eye=new Vector3(...LOUNGE.eye);readonly target=new Vector3(...LOUNGE.target);
+  fov=50;readonly eye=new Vector3(...LOUNGE.eye);readonly target=new Vector3(...LOUNGE.target);
   readonly actor=new Vector3(...LOUNGE.actor);readonly desiredEye=new Vector3();readonly desiredTarget=new Vector3();
   private departureRoute:Triple[]=cameraRoute.map(p=>[...p]);
   private previous:JourneyStage="lobby";private heading=0;
+  /** 按旅程阶段更新实时镜头与连续入站；首页使用参考图的低位近景。 */
   update(stage:JourneyStage,delta:number,ready:boolean,fast:boolean,dock:ReturnType<typeof entranceDock>,narrow:boolean){
     if(stage!==this.previous){if(stage==="launch"){this.departureRoute[0]=this.eye.toArray();this.elapsed=0;this.notified=false;this.handoff=false;}else if(stage!=="watch"){this.elapsed=0;this.door=0;this.heading=0;}this.previous=stage;}
     this.stage=stage;this.active=stage!=="watch";this.delta=Math.max(0,Math.min(.1,delta));this.time+=this.delta;
@@ -52,7 +53,7 @@ export class ControlRoomState {
         this.desiredTarget.set(...(character?[-5.65,.65,3.5] as Triple:LOUNGE.narrowTarget));
       }
     }
-    this.fov=stage==="launch"?(narrow?58:52)+(58-(narrow?58:52))*Math.min(1,this.elapsed/8):narrow?58:52;
+    this.fov=stage==="launch"?(narrow?58:50)+(58-(narrow?58:50))*Math.min(1,this.elapsed/8):narrow?58:50;
 
     if(stage==="world"){this.desiredEye.copy(this.eye);this.desiredTarget.copy(this.target);}
     const blend=1-Math.exp(-this.delta*(stage==="launch"?9:7));

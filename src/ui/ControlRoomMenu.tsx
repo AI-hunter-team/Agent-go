@@ -2,23 +2,27 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useRef, useState } from "react";
 import type { SavedWorld } from "./worldLibrary";
 import styles from "./ControlRoom.module.css";
+import { BrandMark } from "./BrandMark";
 interface Props {
   worlds:SavedWorld[];loaded:boolean;storageError:string;selectedName?:string;
   onAppearance:()=>void;onCreate:()=>void;onSelect:(world:SavedWorld)=>void;onContinue:()=>void;
   onRename:(world:SavedWorld,name:string)=>void;onDelete:(id:string)=>void;
 }
+/** 首页三个主入口沿用世界与外观回调，世界列表承接继续准备操作。 */
 export function ControlRoomMenu(p:Props){
   const lastFocus=useRef<HTMLElement|null>(null);
   const [list,setList]=useState(false),[edit,setEdit]=useState<{world:SavedWorld;mode:"rename"|"delete"}|null>(null),[name,setName]=useState("");
   return <>
+    <div className={styles.homeVeil} aria-hidden="true"/>
+    <BrandMark className={styles.homeBrand}/>
     <nav className={styles.welcome} aria-label="出发休息室">
-      <button className="primary" disabled={!p.loaded} onClick={p.onCreate}><span>创建世界</span><span aria-hidden="true">→</span></button>
+      <button className="primary" disabled={!p.loaded} onClick={p.onCreate}><span>创建世界</span><img src="/assets/icons/arrow-forward.svg" alt="" width="40" height="40"/></button>
       <button aria-label="我的世界" onClick={()=>setList(true)}><span>我的世界</span>{p.worlds.length>0&&<small>{p.worlds.length}</small>}</button>
       <button onClick={p.onAppearance}><span>角色外观</span></button>
-      {p.selectedName&&<button className={styles.continueWorld} onClick={p.onContinue}>继续准备 →<small>{p.selectedName}</small></button>}
       {p.storageError&&<p role="status" className={styles.storageNotice}>{p.storageError}</p>}
     </nav>
     <Dialog.Root open={list} onOpenChange={setList}><Dialog.Portal><Dialog.Overlay className={styles.workspaceShade}/><Dialog.Content className={styles.worldManager} aria-describedby={undefined}><span className={styles.kicker}>LOCAL WORLDS</span><Dialog.Title>我的世界</Dialog.Title><p className={styles.hint}>保存于当前浏览器；每次进入都从新的旅程开始。</p>
+      {p.selectedName&&<button className={styles.continueWorld} onClick={()=>{setList(false);p.onContinue();}}>继续准备：{p.selectedName}</button>}
       <button className="primary full-width" onClick={p.onCreate}>＋ 创建新世界</button>
       {!p.loaded?<p role="status">正在读取世界…</p>:!p.worlds.length?<p>还没有世界。先创建第一座车站。</p>:<div className={styles.worldList}>{p.worlds.map(world=><article key={world.id} className={styles.worldCard}>
         <button className={styles.selectWorld} onClick={()=>{setList(false);p.onSelect(world);}}><strong>{world.name}</strong><span>种子 · {world.source.value}</span><small>{world.world.generatorVersion} · {new Date(world.updatedAt).toLocaleDateString("zh-CN")}</small></button>

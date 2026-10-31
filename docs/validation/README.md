@@ -6,6 +6,8 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [CHARACTER-HOME-PR-001](CHARACTER-HOME-PR-001.md) | 首页与豆包/Idle/失败/问候整合最新PR68，修复门框黄线穿模；904项、类型/构建与生成车站实际成功/失败验证 |
+| [HOME-MATCH-001](HOME-MATCH-001.md) | 全实时3D参考首页、菜单与材质取景重建；功能检查通过，严格1:1视觉差异保留 |
 | [STATION-DETAIL-PR-001](STATION-DETAIL-PR-001.md) | 站内细节与登车主线、小地图及两种旧世界摘要整合验证 |
 | [STATION-DETAIL-001](STATION-DETAIL-001.md) | 45类原创站内模型、贴图、摆放与展厅的来源工作树历史验证；登车规则以整合验证为准 |
 | [CONTROLROOM-005](CONTROLROOM-005.md) | 首页菜单桌面/窄屏底色统一与按钮流程检查 |
@@ -19,6 +21,10 @@
 | [CONTROLROOM-001](CONTROLROOM-001.md) | 控制室、本机世界列表、沙盘、连续入场、740测试及新旧启动50种子对照；本地验证 |
 | [DOCS-SYNC-001](DOCS-SYNC-001.md) | 2026-11-01 文档与主线状态同步：仓库滞后核对、合入对照、源码一致性修正与全量链接审计；纯文档 |
 | [GUIDANCE-DIALOGUE-PR-001](GUIDANCE-DIALOGUE-PR-001.md) | 指导重试与多 NPC 对话整合最新 main，最终781项/类型/构建通过；窄屏报告按钮遮挡修复与无费用浏览器复验，PR #61交付证据 |
+| [DOUBAO-IDLE-001](DOUBAO-IDLE-001.md) | 豆包静止Idle与默认自然站姿，原行走数据保持；17项/类型/构建/真实选角站姿通过，本地未提交 |
+| [SELECTION-GREETING-001](SELECTION-GREETING-001.md) | 选角模型就绪后播放自身问候，重复选择/重建去重/无片段与减少动态；23项、类型/构建及真实选角通过 |
+| [DOUBAO-PRESET-001](DOUBAO-PRESET-001.md) | 豆包GLB与角色预设追加，14项/类型/构建、实际加载与切换通过；本地main未提交 |
+| [FAILURE-ANIMATION-001](FAILURE-ANIMATION-001.md) | 用户失败GLB合入默认大肥鱼，单次播放/末帧/减少动态及重试；747项、类型/构建与离线自然超时检查；本地main未提交 |
 | [ONBOARD-PR-001](ONBOARD-PR-001.md) | 登车终点、精细车厢和结束界面统一PR交付；提交/主线整合/CI状态见报告，不自动合并 |
 | [JOURNEY-FAILURE-001](JOURNEY-FAILURE-001.md) | 失败结束展示、真实120秒超时、主动复盘/重试/调整入口和四种尺寸；739项检查，本地未提交；失败动作待后续素材 |
 | [METRO-CABIN-002](METRO-CABIN-002.md) | 精细车厢与游戏化宽高、实际GLB双模型零错误/警告、738项及149.0秒实际登车；桌面/手机实图；本地未提交 |

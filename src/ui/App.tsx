@@ -74,6 +74,7 @@ class SceneBoundary extends Component<
   }
 }
 
+/** 编排旅程及设置入口，首页使用与参考图一致的实体图标。 */
 export function App() {
   const {
     settings: display,
@@ -98,6 +99,7 @@ export function App() {
     ended,
     report,
   } = j;
+  const [selectionGreeting, setSelectionGreeting] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
   const [modelLoading, setModelLoading] = useState<ModelLoadingState>({
@@ -200,8 +202,10 @@ export function App() {
     setAssetError("");
     setSceneAttempt((v) => v + 1);
   };
+  /** 切换角色并为本次选择生成新标记，同一角色再次点选也可问候。 */
   const chooseCharacter = (id: string) => {
     j.setCharacterId(id);
+    setSelectionGreeting(value => value + 1);
     setAssetError("");
   };
   const broadcast = useBroadcast(session, watching);
@@ -281,6 +285,7 @@ export function App() {
                 <GameScene
                   session={session}
                   camera={j.camera}
+                  greetingRequest={flow.stage === "character" ? `${j.camera.reset}:${selectionGreeting}` : undefined}
                   stage={flow.stage}
                   launchReady={j.launchReady}
                   fastEntry={j.fastEntry}
@@ -353,7 +358,7 @@ export function App() {
         {!watching && flow.stage !== "launch" && (
           <Dialog.Root open={j.drawer} onOpenChange={j.setDrawer}>
             <Dialog.Trigger asChild>
-              <button className={styles.settingsTrigger} aria-label="打开设置" hidden={ended}>⚙ <span>设置</span></button>
+              <button className={styles.settingsTrigger} aria-label="打开设置" hidden={ended}><img src="/assets/icons/settings.svg" alt="" width="32" height="32"/> <span>设置</span></button>
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="drawer-overlay" />

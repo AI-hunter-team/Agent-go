@@ -209,5 +209,7 @@
 @media(max-width:760px){.mapRail{top:16px;right:12px;width:170px;max-height:calc(100dvh - 340px);gap:6px}.mapRail .timer{padding:9px 12px;gap:3px}.mapRail .timer strong{font-size:30px}.broadcast{top:auto;bottom:calc(25dvh + 140px);max-width:none;width:auto}}
 
 /* Keep the lounge settings in the approved lower-left position despite the legacy lobby rule. */
-.app[data-stage=lobby] .settingsTrigger { top:auto; bottom:20px; left:6.3%; width:auto; height:40px; background:#f6f3eabf; border:0; }
+.app[data-stage=lobby] .settingsTrigger { top:auto; bottom:8.5%; left:4.78%; width:auto; height:46px; background:transparent; border:0; padding:0; color:#565958; gap:18px; font-size:30px; }
+.app[data-stage=lobby] .settingsTrigger span {font-size:24px;font-weight:650;margin-left:0}
+.settingsTrigger img{width:32px;height:32px;opacity:.66}
 @media(max-width:600px){.app[data-stage=lobby] .settingsTrigger{top:auto;bottom:12px;left:20px;width:auto;height:36px}}
