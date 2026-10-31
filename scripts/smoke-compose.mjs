@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 
+/** 执行针对独立冒烟实例的 Docker 命令。 */
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }).trim();
 const base = process.env.SMOKE_BASE_URL || `http://127.0.0.1:${process.env.APP_PORT || 8080}`;
 const response = await fetch(base);
@@ -30,20 +31,21 @@ async function checkContainer() {
   const upstream = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     if (req.headers.authorization !== "Bearer compose-fake-key") { res.writeHead(401); res.end("{}"); return; }
-    if (req.url === "/v1/models") { res.end(JSON.stringify({ data: [{ id: "compose-fake-model" }] })); return; }
+    if (req.url === "/models") { res.end(JSON.stringify({ data: [{ id: "compose-fake-model" }] })); return; }
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const request = JSON.parse(raw);
-    assert.equal(req.url, "/v1/chat/completions");
+    assert.equal(req.url, "/responses");
     assert.equal(request.model, "compose-fake-model");
-    res.end(JSON.stringify({ choices: [{ finish_reason: "tool_calls", message: {
-      role: "assistant", content: null, tool_calls: [{ id: "fake-call", type: "function", function: {
+    assert.equal(request.reasoning.effort, "none");
+    assert.equal(request.max_output_tokens, 4096);
+    res.end(JSON.stringify({ status: "completed", output: [{ call_id: "fake-call", type: "function_call",
         name: "wait", arguments: JSON.stringify({ seconds: 1, reason: "Compose 模拟验证" }),
-      } }],
-    } }] }));
+    }] }));
   });
   await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   const api = `http://127.0.0.1:${process.env.PORT}`;
+  /** 在容器内调用应用，凭据仅传给本地伪供应商。 */
   const call = async (path, body, token, method = body === undefined ? "GET" : "POST") => {
     const res = await fetch(api + path, { method, headers: { "content-type": "application/json", ...(token ? { "x-model-config": token } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body) });

@@ -1,57 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
-import type { CreativeClassification, CreativeMechanic, CutInDialogueRequest, NormalizedGuidance, NpcReply, Observation } from "../src/shared/types";
-import { baseParams, type ClaudeConfig } from "./claude";
-import { assertSafeText, SAFETY_SYSTEM_PROMPT, untrustedData, validateNormalized } from "./security";
+import type { CreativeMechanic } from "../src/shared/types";
+import { SAFETY_SYSTEM_PROMPT } from "./security";
 import { GAME_OBJECTIVE } from "./objective";
 
-async function structuredCall<T>(
-  client: Anthropic,
-  cfg: ClaudeConfig,
-  opts: {
-    system: string;
-    user: string;
-    schema: Record<string, unknown>;
-    maxTokens: number;
-    validate: (value: unknown) => value is T;
-    onResponse?: (response: Anthropic.Beta.BetaMessage) => void;
-  },
-): Promise<T> {
-  // DeepSeek's Anthropic endpoint ignores output_config.format. A named tool
-  // carries the schema and returns an object without parsing model-written text.
-  const useTool = cfg.model.startsWith("deepseek-");
-  const response = await client.beta.messages.create({
-    ...baseParams(cfg),
-    max_tokens: opts.maxTokens,
-    ...(useTool
-      ? {
-          thinking: { type: "disabled" as const },
-          tools: [{ name: "structured_output", description: "提交符合指定结构的结果。", input_schema: { ...opts.schema, type: "object" as const } }],
-          tool_choice: { type: "tool" as const, name: "structured_output" },
-        }
-      : {
-          thinking: { type: "adaptive" as const },
-          output_config: { effort: "low" as const, format: { type: "json_schema" as const, schema: opts.schema } },
-        }),
-    system: opts.system,
-    messages: [{ role: "user", content: opts.user }],
-  }, { maxRetries: 0 });
-  opts.onResponse?.(response);
-  if (response.stop_reason === "refusal") throw new Error("模型拒绝了这次请求");
-  if (response.stop_reason === "max_tokens") throw new Error("输出被截断");
-  let result: unknown;
-  if (useTool) {
-    const tool = response.content.find((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use" && b.name === "structured_output");
-    result = tool?.input;
-  } else {
-    const text = response.content
-      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-    result = JSON.parse(text);
-  }
-  if (!opts.validate(result)) throw new Error("模型未返回有效的结构化结果，请重试");
-  return result;
-}
 
 const stringList = { type: "array", items: { type: "string" } };
 
@@ -82,27 +32,6 @@ ${GAME_OBJECTIVE}
 - summary 一两句话；initialPlan 是 3–5 步可随反馈调整的开局方案，只基于公开信息。按原策略尽快到达终点，只有决策确需现场信息时才安排观察，不为凑步骤增加绕路或固定检查点，不预设未观察到的情况或宣布成功。
 - 全部用中文，简洁。`;
 
-export async function normalizeGuidance(client: Anthropic, cfg: ClaudeConfig, text: string): Promise<NormalizedGuidance> {
-  assertSafeText(text);
-  const data = await structuredCall<NormalizedGuidance>(client, cfg, {
-    system: GUIDANCE_SYSTEM,
-    user: untrustedData("玩家指导原文", { text }),
-    schema: GUIDANCE_SCHEMA,
-    maxTokens: 4096,
-    validate: (value): value is NormalizedGuidance => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-      const g = value as Record<string, unknown>;
-      return typeof g.summary === "string" && typeof g.risk === "string"
-        && ["priorities", "rules", "creativeIdeas", "notExecutable", "initialPlan"].every((key) => {
-          const items = g[key];
-          return Array.isArray(items) && items.every((item) => typeof item === "string");
-        });
-    },
-  });
-  validateNormalized(data);
-  if (!data) throw new Error("模型返回的指导格式无效");
-  return data;
-}
 
 /** Closed mechanic list. Only the environment sees it; the agent is never shown it. */
 const MECHANICS: Record<Exclude<CreativeMechanic, "unsupported">, string> = {
@@ -128,30 +57,6 @@ ${Object.entries(MECHANICS)
   .join("\n")}
 - unsupported：不属于以上任何一类（例如飞行、破坏设施、贿赂、伪造车票等），reason 用一句中文说明环境里没有这种可执行方式。`;
 
-export async function classifyIntent(
-  client: Anthropic,
-  cfg: ClaudeConfig,
-  intent: string,
-  observation: Observation | null,
-): Promise<CreativeClassification> {
-  assertSafeText(intent);
-  const context = { intent, zone: observation?.self.zone, activity: observation?.self.activity };
-  assertSafeText(JSON.stringify(context));
-  const r = await structuredCall<{ mechanic: CreativeMechanic; reason: string }>(client, cfg, {
-    system: CLASSIFY_SYSTEM,
-    user: untrustedData("行动及角色位置", context),
-    schema: CLASSIFY_SCHEMA,
-    maxTokens: 1024,
-    validate: (value): value is { mechanic: CreativeMechanic; reason: string } => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-      const r = value as Record<string, unknown>;
-      return typeof r.mechanic === "string" && typeof r.reason === "string";
-    },
-  });
-  if (!r || typeof r.reason !== "string") throw new Error("模型返回的意图分类格式无效");
-  const mechanic: CreativeMechanic = Object.hasOwn(MECHANICS, r.mechanic) ? r.mechanic : "unsupported";
-  return { mechanic, reason: r.reason, source: "llm" };
-}
 
 export const NPC_SCHEMA = {
   type: "object",
@@ -172,46 +77,3 @@ export const NPC_SYSTEM = `${SAFETY_SYSTEM_PROMPT}\n\n你是地铁站队伍中�
 - accepted：布尔值，只有你明确允许对方排在你前面时才为 true；否则为 false。
 - reply：你直接对玩家角色说的一两句中文，符合你的性格，明确表达这次同意或拒绝，至多 500 字。不要代替环境宣布对方已经插队成功。
 - reason：一句简短中文，说明你这个决定的主要原因，至多 300 字。这是公开的决定说明，不要输出隐藏思维过程。`;
-
-/** One NPC response per request; malformed or unavailable responses never grant permission. */
-export async function negotiateNpc(client: Anthropic, cfg: ClaudeConfig, request: CutInDialogueRequest): Promise<NpcReply> {
-  let metadata: Pick<NpcReply, "model" | "usage" | "output"> = { model: cfg.model, usage: null };
-  try {
-    const result = await structuredCall<{ accepted: boolean; reply: string; reason: string }>(client, { ...cfg, fallback: false }, {
-      system: NPC_SYSTEM,
-      user: untrustedData("NPC 对话资料", request),
-      schema: NPC_SCHEMA,
-      maxTokens: 1024,
-      onResponse: (response) => {
-        const usage = response.usage;
-        metadata = {
-          model: response.model || cfg.model,
-          usage: usage ? {
-            inputTokens: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0),
-            outputTokens: usage.output_tokens ?? 0,
-            thinkingTokens: usage.output_tokens_details?.thinking_tokens ?? null,
-            cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-          } : null,
-          output: { id: response.id ?? null, stopReason: response.stop_reason ?? null, content: structuredClone(response.content) },
-        };
-      },
-      validate: (value): value is { accepted: boolean; reply: string; reason: string } => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-        const result = value as Record<string, unknown>;
-        return typeof result.accepted === "boolean"
-          && typeof result.reply === "string" && Boolean(result.reply.trim()) && [...result.reply].length <= 500
-          && typeof result.reason === "string" && Boolean(result.reason.trim()) && [...result.reason].length <= 300
-          && Object.keys(result).every((key) => ["accepted", "reply", "reason"].includes(key));
-      },
-    });
-    return { ...result, source: "llm", ...metadata };
-  } catch (error) {
-    return {
-      accepted: false,
-      reply: "暂时无法答复，请保持原来的排队位置。",
-      reason: `NPC 对话失败，未获得插队许可：${error instanceof Error ? error.message : String(error)}`,
-      source: "error",
-      ...metadata,
-    };
-  }
-}

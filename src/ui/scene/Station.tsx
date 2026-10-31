@@ -45,7 +45,7 @@ function ImportedStation({ kit, session, overview }: { kit: StationKit; session:
     if (new URLSearchParams(location.search).get("debug") !== "1") return;
     const inspect = () => ({
       loaded: true, overview, ...staticGroup.userData, gpuGeometries: gl.info.memory.geometries, gpuTextures: gl.info.memory.textures,
-      drawCalls: gl.info.render.calls, triangles: gl.info.render.triangles, camera: camera.position.toArray(),
+      drawCalls: gl.info.render.calls, renderedFrames: gl.info.render.frame, triangles: gl.info.render.triangles, camera: camera.position.toArray(),
       shadows: gl.shadowMap.enabled, dpr: gl.getPixelRatio(), gpu,
       t: session.engine.t, phase: session.runner?.phase, player: { position: { ...session.engine.player.pos }, activity: session.engine.player.activity.kind, screened: session.engine.player.screened, passedGate: session.engine.player.passedGate, onPlatform: session.engine.player.onPlatform },
       devices: devices.map((root) => {

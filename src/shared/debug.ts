@@ -18,6 +18,8 @@ export interface ModelCallDebug {
   providerRequestId: string | null;
   returnedModel: string | null;
   stopReason: string | null;
+  /** 最终响应中的工具数量，旧报告可能没有此字段。 */
+  toolCallCount?: number;
   usage: DecisionUsage | null;
   /** Optional for compatibility with older report exports. First body chunk, not first token. */
   streaming?: boolean;

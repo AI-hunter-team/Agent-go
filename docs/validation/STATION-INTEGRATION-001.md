@@ -1,6 +1,6 @@
 # STATION-INTEGRATION-001 验证报告
 
-状态：本地验证快照（2026-10-31，Asia/Shanghai），不代表合入或其他设备验收。任务：[简报](../tasks/STATION-INTEGRATION-001.md)。
+状态：本地及PR集成验证快照（2026-10-31，Asia/Shanghai），最终远端合入见PR；不代表其他设备验收。任务：[简报](../tasks/STATION-INTEGRATION-001.md)。原始429项测试及不限帧性能属于开工基线，合入新main后的结果见末节。
 
 ## 版本与环境
 
@@ -59,3 +59,14 @@
 - 本次不调用真实模型、不部署；原浏览器与硬件验证边界继续适用。
 - PR准备再次执行 `npm run typecheck`、`npm test`（46文件/429项）、`npm run build`、`git diff --cached --check`，全部通过。实现提交为 `b41ed89`，后续仅补充PR交接链接；代码检查证据适用同一实现。
 - [PR #23](https://github.com/AI-hunter-team/Agent-go/pull/23) 为远端CI、审查和最终合入证据入口。GitHub确认无内容冲突；不虚构人工批准或尚未完成的CI结果。
+
+## main前进后的冲突与集成复验
+
+- CI期间main合入PR #22至 `67a7703934c3d449d5a0ecb552f9a088eff18995`，产生5处实际冲突：App重试提示、GameScene场景与绘制调度、浏览器fixture、技术方案章节、中央任务记录。逐处合并后保留Responses接口、节能预设、按需绘制/限帧/简化乘客，以及本任务布光、栏杆和失败重试。
+- `npm ci` 首次因旧验收fixture占用esbuild而EPERM失败；停止本任务旧进程后成功。根依赖变化只继承main，未额外升级依赖。
+- 集成工作区 `npm run typecheck`、`npm test`（46文件/411项）、`npm run build`、独立预览构建全部通过；与旧版429项的差别来自main替换模型协议测试。本任务12项素材测试保留并通过。diff及冲突标记检查通过。
+- 浏览器脚本适配上游图标按钮及节能预设；性能改为观察实际WebGL帧计数变化，避免将原生动画回调频率误认为限帧后的绘制频率。帧间隔包含暂停与空闲，不能视为GPU单帧耗时。
+- 新生产fixture保留伪Responses拦截；素材失败单次提示及重试通过，33模型独立预览重新载入/包络/三布局及资源稳定性通过。证据新增 `merged-failure/`、`merged-preview/`，预览使用SwiftShader。
+- 同机RTX 5090 Laptop GPU生产版本复验（`game-check.mjs ... full`）：节能预设确认为low/30FPS/simpleCrowd/lowFrequencyHud/reducedMotion；seed 28在99.1秒到 `(57,15)` 下层站台；暂停时世界时间2.4秒保持，安检、过闸、独立闸翼开合、open/closed/broken及回放通过；27个开放原型加载，控制台error为0。视角切换3轮几何120→120、纹理36→36。证据为 `merged-production/`，实际生产截图已查看。
+- 新限帧版本60.0038秒观察到750次WebGL绘制计数变化，混合运行/暂停/赛后空闲平均12.50次/秒，P95绘制间隔33.5ms。由于整局4倍速约25秒结束，其余时间按需渲染休眠，该均值不表示运行期间仅12.50FPS，也不是GPU耗时或帧率保证。前文239.79FPS仅为旧不限帧版本的历史样本。
+- PR初始实现的自动代码审查报告未发现问题；并非人工批准，也不替代新main集成后的本节复验。远端最终提交的CI及合入结果以PR为准。

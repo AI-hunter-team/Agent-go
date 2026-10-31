@@ -4,20 +4,20 @@ import { createApp } from "./app";
 import { createLlm, createNpcLlm } from "./llm";
 import { SessionStore } from "./sessions";
 import { debugLoggerFromEnv } from "./debug";
-import { configFromEnv } from "./claude";
+import { configFromEnv, npcConfigFromEnv } from "./modelSettings";
 
 const llm = createLlm();
 const npcLlm = createNpcLlm();
 const debugLogger = debugLoggerFromEnv();
-const provider = process.env.AGENT_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "anthropic");
+const provider = "responses";
+if (process.env.DECISION_THINKING_TOKENS !== undefined) console.warn("DECISION_THINKING_TOKENS 已停用；使用 OPENAI_REASONING_EFFORT 与 DECISION_MAX_TOKENS。");
 const config = configFromEnv({ ...process.env, AGENT_MODEL: llm?.model ?? process.env.AGENT_MODEL });
+const npcConfig = npcConfigFromEnv();
 const app = createApp({ llm, npcLlm, sessions: new SessionStore(), frontendDir: process.env.NODE_ENV === "production" ? resolve("dist") : undefined, debugLogger, modelParameters: {
   provider,
-  ...config, model: llm?.model ?? null, effort: provider === "openai" ? config.reasoningEffort : "low", timeoutMs: 20_000, transportRetries: 0,
+  ...config, model: llm?.model ?? null, effort: config.reasoningEffort, timeoutMs: 20_000, transportRetries: 0,
 }, npcModelParameters: {
-  provider: process.env.NPC_PROVIDER || (process.env.NPC_OPENAI_API_KEY ? "openai" : "anthropic"),
-  model: npcLlm?.model ?? null, maxTokens: 1024, fallback: false,
-  ...(npcLlm?.model === "kimi-k2.6" ? { thinking: { type: "disabled" }, effort: null } : { effort: "low" }),
+  ...npcConfig, provider, model: npcLlm?.model ?? null, effort: npcConfig.reasoningEffort,
   timeoutMs: 20_000, transportRetries: 0,
 } });
 
@@ -31,6 +31,7 @@ const server = app.listen(port, host, () => {
 });
 
 let closing = false;
+/** 优雅停止 HTTP 服务，最多等待 10 秒释放连接。 */
 const shutdown = () => {
   if (closing) return;
   closing = true;
