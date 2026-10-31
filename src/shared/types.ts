@@ -1,6 +1,7 @@
 // Types shared by the simulation, the agents, the API server and the UI.
 import type { OperationDebug, RunDebug } from "./debug";
 import type { GameSettings } from "./gameSettings";
+import type { DraftResult, ReviewAttempt, ReviewResult, WorldReviewSnapshot } from "./review";
 
 export interface Vec {
   x: number;
@@ -239,6 +240,13 @@ export interface TrailPoint extends Vec {
 }
 
 export interface GameReport {
+  /** Global history, exposed only after the run ends. Older reports may omit it. */
+  worldSnapshots?: WorldReviewSnapshot[];
+  review?: ReviewResult;
+  reviewDraft?: DraftResult;
+  reviewDraftHistory?: DraftResult[];
+  reviewAttempts?: ReviewAttempt[];
+  selectedStrategyIds?: string[];
   /** Missing only on recordings made before configurable difficulty. */
   settings?: GameSettings;
   debug?: RunDebug;

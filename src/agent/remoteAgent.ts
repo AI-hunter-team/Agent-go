@@ -11,6 +11,8 @@ import type {
 import type { OperationDebug } from "../shared/debug";
 import type { GameSettings } from "../shared/gameSettings";
 import type { ReasoningEffort } from "../shared/modelConfig";
+import type { DraftResult, ReviewInput, ReviewResult, ReviewStrategy } from "../shared/review";
+import { ReviewFailure } from "../shared/review";
 import { classifyByKeywords } from "../sim/intent";
 import type { Agent, Classifier, NpcNegotiator } from "./agent";
 
@@ -61,6 +63,7 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
   catch { throw new Error("API 服务返回格式异常，请检查服务是否已启动"); }
   // NPC failures also carry their raw model response and paid usage for the run log.
   if (!res.ok && !(path === "/api/npc/negotiate" && data?.source === "error" && data?.accepted === false)) {
+    if (path.startsWith("/api/review")) throw new ReviewFailure(data?.error ?? `HTTP ${res.status}`, data?.attempt ?? null);
     throw new Error(data?.error ?? `HTTP ${res.status}`);
   }
   return data as T;
@@ -68,6 +71,8 @@ async function api<T>(path: string, init: { method?: string; body?: unknown; con
 
 export const Api = {
   /** 验证凭据并获取模型列表。 */
+  review: (input: ReviewInput) => api<ReviewResult>("/api/review", { body: { input } }),
+  draftGuidance: (guidance: string, strategies: ReviewStrategy[]) => api<DraftResult>("/api/review/guidance", { body: { guidance, strategies } }),
   verifyModel: (baseUrl: string, apiKey: string) => api<{ token: string; baseUrl: string; models: string[] }>("/api/model/verify", { body: { baseUrl, apiKey }, configToken: null }),
   /** 释放尚未使用的配置；活跃对局的凭据保留到局后。 */
   discardModel: (token: string) => discardUnused(token),

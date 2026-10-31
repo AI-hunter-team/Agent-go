@@ -16,9 +16,12 @@ import type { Session, SessionStore } from "./sessions";
 import { DebugLogger, traceOperation } from "./debug";
 import { ModelConfigError, ModelConfigStore } from "./modelConfig";
 import { assertSafeText, SafetyError, validateNormalized } from "./security";
+import { ReviewFailure, validateDraft, validateReview, validateReviewInput, validateStrategies, type DraftResult, type ReviewInput, type ReviewResult, type ReviewStrategy } from "../src/shared/review";
 
 /** Model-backed operations. Absent when no credentials are configured. */
 export interface LlmService {
+  review?(input: ReviewInput): Promise<ReviewResult>;
+  draftGuidance?(guidance: string, strategies: ReviewStrategy[]): Promise<DraftResult>;
   readonly model: string;
   decide(session: Session, turn: AgentTurn): Promise<DecisionResult>;
   normalize(text: string): Promise<NormalizedGuidance>;
@@ -119,6 +122,39 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
   app.get("/api/health", wrap((req, res) => {
     const { llm } = runtime(req);
     res.json({ llm: llm !== null, model: llm?.model ?? null });
+  }));
+
+  // Independent analysis calls: the run's session has already been disposed.
+  app.post("/api/review", wrap(async (req, res) => {
+    const input: unknown = req.body?.input;
+    try { validateReviewInput(input); } catch { return void res.status(400).json({ error: "复盘资料格式无效或超出限制" }); }
+    assertSafeText(JSON.stringify(input));
+    const current = runtime(req);
+    if (!current.llm?.review) return void res.status(503).json({ error: "请先连接模型，再生成失败复盘" });
+    let returned: ReviewResult | null = null;
+    try {
+      const { value } = await traceOperation({ operation: "review", runId: null, sessionId: null }, { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.review!(input));
+      returned = value;
+      validateReview(value.analysis, input);
+      assertSafeText(JSON.stringify(value.analysis));
+      res.json(value);
+    } catch (error) { res.status(502).json({ error: "复盘生成失败，模型可能不可用或返回格式异常，请重试", attempt: error instanceof ReviewFailure ? error.attempt : returned ? { model: returned.model, usage: returned.usage, latencyMs: returned.latencyMs, operation: "review", status: "error" } : null }); }
+  }));
+
+  app.post("/api/review/guidance", wrap(async (req, res) => {
+    const { guidance, strategies } = req.body ?? {};
+    try { if (guidanceError(guidance)) throw new Error(); validateStrategies(strategies); }
+    catch { return void res.status(400).json({ error: "请提供原指导并选择 1–3 条有效建议" }); }
+    assertSafeText(JSON.stringify({ guidance, strategies }));
+    const current = runtime(req);
+    if (!current.llm?.draftGuidance) return void res.status(503).json({ error: "请先连接模型，再合并指导草稿" });
+    let returned: DraftResult | null = null;
+    try {
+      const { value } = await traceOperation({ operation: "review_draft", runId: null, sessionId: null }, { guidance, strategies, modelParameters: current.parameters }, debugLogger, () => current.llm!.draftGuidance!(guidance, strategies));
+      returned = value;
+      validateDraft(value); assertSafeText(value.guidance);
+      res.json(value);
+    } catch (error) { res.status(502).json({ error: "指导草稿生成失败或超过 300 字，请重试", attempt: error instanceof ReviewFailure ? error.attempt : returned ? { model: returned.model, usage: returned.usage, latencyMs: returned.latencyMs, operation: "draft", status: "error" } : null }); }
   }));
 
   app.post(
