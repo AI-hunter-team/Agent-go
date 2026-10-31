@@ -27,6 +27,7 @@ import { InteractionPanel } from "./InteractionPanel";
 import type { RenderOptions } from "./render";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
+import { DialogueDock } from "./DialogueDock";
 import { ReportSummary, EventTimeline } from "./ReportView";
 import { TrajectoryReplayView } from "./TrajectoryReplay";
 import { getSessionHeadMessage, type HeadMessageMode } from "./headMessages";
@@ -683,6 +684,7 @@ export function App() {
         )}
         {watching && runner && (
           <>
+            <DialogueDock key={`dialogue-${session.generation}`} session={session} />
             {broadcast && (
               <div className={styles.broadcast} role="status">
                 ◖ 现场播报：{broadcast}

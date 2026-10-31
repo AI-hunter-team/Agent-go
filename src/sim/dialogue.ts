@@ -169,6 +169,16 @@ export class DialogueSystem {
       ok: false,
       text: error
     };
+    const effectPending = !error && result.ok && !!accepted && (step.goal === "yield" || step.goal === "bribe" && !response.give);
+    result.dialogue = {
+      npcId: step.npcId,
+      goal: step.goal,
+      message: step.message,
+      reply: typeof response?.reply === "string" ? response.reply : "无有效回复",
+      decision: response?.decision ?? "refuse",
+      goalAchieved: !error && result.ok && !!accepted && !effectPending,
+      ...(effectPending ? { effectPending: true } : {}),
+    };
     const history = this.history.get(step.npcId) ?? [];
     history.push({
       message: step.message,

@@ -203,7 +203,7 @@ export class ResponsesLlmService implements LlmService {
     const schema = { type: "object", additionalProperties: false, properties: {
       understanding: { type: "string" }, actions: { type: "array", items: { type: "string" } }, adjustment: { type: "string" },
     }, required: ["understanding", "actions", "adjustment"] };
-    const prompt = "为地铁通行游戏生成简短初始策略。只基于公开规则和玩家指导，不知道队伍效率、隐藏人物性格或未来事件。忠实保留非常规策略，不自行改写成守序路线；行动仍由模拟器裁定。understanding说明对指导的理解，actions列出准备尝试的行动，adjustment说明遇到变化的调整方向。各字段及行动均不超过1000字符，actions最多8项，全部内容保持简短。自主模式自行选择策略。不要宣称已观察到现场或保证成功。";
+    const prompt = "为地铁通行游戏生成简短初始策略。只基于公开规则和玩家指导，不知道队伍效率、隐藏人物性格或未来事件。忠实保留玩家要求、否定条件和失败后的行动条件；不能把明确要求改为可选建议，不能自行添加被拒就放弃或重试次数等退出条件。玩家要求被拒后改变话术时，在actions及adjustment中保留调整后再交涉，针对公开回复调整请求内容而非只换称呼。忠实保留非常规策略，不自行改写成守序路线；行动仍由模拟器裁定。understanding说明对指导的理解，actions列出准备尝试的行动，adjustment说明遇到变化的调整方向。各字段及行动均不超过1000字符，actions最多8项，全部内容保持简短。自主模式自行选择策略。不要宣称已观察到现场或保证成功。";
     const data = await this.structured(prompt, untrustedData("公开规则与指导", {
       guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
       timeLimitSeconds: input.settings.timeLimitSeconds, goal: "抵达下层站台", extraQueuePeople: input.settings.extraQueuePeople,

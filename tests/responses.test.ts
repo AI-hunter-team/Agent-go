@@ -8,6 +8,18 @@ import { Engine } from "../src/sim/engine";
 import { cfg, fake, response, toolCall, turn } from "./responsesSupport";
 
 describe("Responses decisions", () => {
+  test("the model receives public refusal progress and the unexecuted candidate correction", async () => {
+    const { service, requests } = fake([response()]);
+    const progress = {
+      instruction: "插队，被拒后换话术", status: "pending" as const, npcId: "p21", goal: "yield" as const,
+      sameNpc: false, remaining: 1, history: [{ npcId: "p21", goal: "yield" as const, message: "能先走吗", reply: "我也赶时间", decision: "refuse" as const, goalAchieved: false }],
+    };
+    await service.decide(new SessionStore().create("插队，被拒后换话术", null), { ...turn(), dialogueFollowThrough: progress, correction: "直接等待的候选动作未执行" });
+    const rendered = requests[0].body.input.at(-1).content as string;
+    const observation = JSON.parse(rendered.split("\n")[1]);
+    expect(observation.dialogueFollowThrough).toEqual(progress);
+    expect(JSON.parse(rendered.split("\n")[3])).toEqual({ correction: "直接等待的候选动作未执行" });
+  });
   test("uses DeepSeek root, disabled reasoning and one strict required function", async () => {
     const { service, requests } = fake([response()]);
     const result = await service.decide(new SessionStore().create("", null), turn());

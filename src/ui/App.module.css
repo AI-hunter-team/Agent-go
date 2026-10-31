@@ -43,7 +43,8 @@
 .sceneCardLabel { min-width: 0; display: grid; gap: 2px; }
 .sceneCardLabel strong { color: #26313d; font-size: 13px; white-space: nowrap; }
 .sceneCardLabel small { color: #78828a; font-size: 9px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
-.preparation { position: absolute; right: 5%; top: 50%; transform: translateY(-50%); width: min(480px, 41vw); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 32px; animation: panel-in .55s cubic-bezier(.22,.8,.26,1) both; isolation: isolate; }
+/* Keep centering independent of the entrance animation's transform. */
+.preparation { position: absolute; right: 5%; top: 50%; translate: 0 -50%; width: min(480px, 41vw); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 32px; animation: panel-in .55s cubic-bezier(.22,.8,.26,1) both; isolation: isolate; }
 .preparation::after { content: ''; position: absolute; z-index: -1; inset: -18px -24px; pointer-events: none; background: linear-gradient(100deg, transparent 0%, #fff8df00 34%, #fff8df90 48%, transparent 63%); transform: translateX(-70%); animation: panel-trail .72s cubic-bezier(.2,.8,.25,1) both; }
 .preparation h1 { font-size: clamp(26px, 2.7vw, 39px); line-height: 1.3; letter-spacing: -.045em; margin: 12px 0; }
 .preparation h2 { font-size: 26px; margin-top: 26px; }
@@ -119,7 +120,7 @@
 @keyframes caption-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes review-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 900px) {
-  .preparation { right: 24px; width: 45vw; padding: 24px; }
+  .preparation { right: 24px; width: min(440px, calc(100% - 48px)); padding: 24px; }
   .action { width: 250px; padding: 16px; }
   .broadcast { top: 235px; left: auto; right: 24px; transform: none; width: 220px; }
   .actionCollapsed { width: auto; padding: 6px; }
@@ -136,7 +137,7 @@
   .brand { font-size: 19px; }
   .topLeft button { font-size: 12px; }
   .settingsTrigger { left: 16px; top: 74px; width: 40px; height: 40px; }
-  .preparation { top: auto; bottom: 12px; left: 12px; right: 12px; transform: none; width: auto; padding: 20px; max-height: 58dvh; border-radius: 24px; }
+  .preparation { top: auto; bottom: 12px; left: 12px; right: 12px; translate: none; transform: none; width: auto; padding: 20px; max-height: 58dvh; border-radius: 24px; }
   .preparation h1 { font-size: 27px; }
   .preparation h2 { margin: 12px 0; font-size: 22px; }
   .preparation :global(.field) { margin: 14px 0; }

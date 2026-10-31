@@ -32,14 +32,14 @@ export function AlertBadge({id,session,messageMode="full",thought}:{id:string;se
       speech.current.style.display=message?"flex":"none";
       if(message) {
         speech.current.dataset.kind=message.kind;
-        speech.current.dataset.mode=messageMode;
+        speech.current.dataset.mode=message.text ? messageMode : "icons";
         speech.current.dataset.pending=String(message.pending);
         const label=`${id==="player"?"Agent":`NPC ${id}`} · ${message.kind==="speech"?"对话":message.pending?"思考中":"决策说明"}`;
         speech.current.setAttribute("aria-label",label);
         speech.current.title=label;
       }
     }
-    if(text.current) text.current.textContent=message?.text??(messageMode==="full"&&message?.pending?"思考中…":"");
+    if(text.current) text.current.textContent=message?.text??"";
   });
   return <group ref={group}><Html center style={{pointerEvents:"none"}} zIndexRange={[20,0]}>
     <div ref={badge} style={{display:"none",width:22,height:22,padding:5,border:"1px solid",borderRadius:"50%",boxShadow:"0 1px 4px #292d2a"}}><i style={{display:"block"}} /></div>

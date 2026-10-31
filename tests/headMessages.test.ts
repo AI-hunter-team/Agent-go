@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { getHeadMessage, getSessionHeadMessage, type HeadMessageInput } from "../src/ui/headMessages";
+import { getHeadMessage, getSessionHeadMessage, getHeadMessageDeadlines, type HeadMessageInput } from "../src/ui/headMessages";
 import { GameSession } from "../src/ui/gameSession";
 import { GameRunner } from "../src/agent/runner";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
@@ -37,7 +37,7 @@ test("actual NPC replies win over same-time simulation settlement messages", () 
     utterance: { t: 12, text: "你先走吧。" } }))).toMatchObject({ text: "你先走吧。" });
 });
 
-test("returned replies replace the player's request bubble while retaining each NPC's latest reply", () => {
+test("returned replies keep only the latest NPC text and demote an older NPC to an icon", () => {
   const session = new GameSession(1);
   session.engine.world.t = 12;
   const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
@@ -51,9 +51,89 @@ test("returned replies replace the player's request bubble while retaining each 
   session.engine.world.log("speech", "p1：已经执行让位", true);
   session.engine.world.t = 12;
   session.presentation.settle(session.engine);
-  expect(getSessionHeadMessage(session, "p1", "full")).toMatchObject({ text: "可以，你先走吧。" });
+  expect(getSessionHeadMessage(session, "p1", "full")).toMatchObject({ text: null });
   expect(getSessionHeadMessage(session, "p2", "full")).toMatchObject({ text: "向前走。" });
   expect(getSessionHeadMessage(session, "player", "full")).toBeNull();
+});
+
+test("real time expires speech while the game clock is frozen", () => {
+  const session = new GameSession(1);
+  session.engine.world.t = 12;
+  const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
+  session.runner = runner;
+  runner.interactionDialogues.push({ t: 12, request: dialogueFixture(), response: { reply: "可以", decision: "accept", give: null, want: null, reason: "hidden", source: "offline" } });
+  expect(getSessionHeadMessage(session, "n1", "full", null, 100)).toMatchObject({ text: "可以" });
+  expect(getSessionHeadMessage(session, "n1", "full", null, 4101)).toBeNull();
+  expect(session.engine.t).toBe(12);
+});
+
+test("a burst of five NPC replies shows one short text and at most two icons", () => {
+  const session = new GameSession(1);
+  session.engine.world.t = 12;
+  const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
+  session.runner = runner;
+  for (let i = 1; i <= 5; i++) {
+    const request = dialogueFixture(); request.npc.id = `n${i}`;
+    runner.interactionDialogues.push({ t: 12, request, response: { reply: "这是一段比较长的完整答复。".repeat(10), decision: "refuse", give: null, want: null, reason: "hidden", source: "offline" } });
+  }
+  const messages = [1, 2, 3, 4, 5].map(i => getSessionHeadMessage(session, `n${i}`, "full", null, 100)).filter(Boolean);
+  expect(messages).toHaveLength(3);
+  expect(messages.filter(message => message?.text)).toHaveLength(1);
+  expect([...(messages.find(message => message?.text)?.text ?? "")]).toHaveLength(48);
+  expect([1, 2, 3, 4].map(i => getSessionHeadMessage(session, `n${i}`, "full", null, 2601)).filter(Boolean)).toHaveLength(0);
+});
+
+test("an identical new reply is a new turn, while a new game removes all old bubbles", () => {
+  const session = new GameSession(1);
+  session.engine.world.t = 12;
+  const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent)); session.runner = runner;
+  const record = { t: 12, request: dialogueFixture(), response: { reply: "不行", decision: "refuse" as const, give: null, want: null, reason: "hidden", source: "offline" as const } };
+  runner.interactionDialogues.push(record);
+  getSessionHeadMessage(session, "n1", "full", null, 0);
+  expect(getSessionHeadMessage(session, "n1", "full", null, 4100)).toBeNull();
+  runner.interactionDialogues.push(structuredClone(record));
+  expect(getSessionHeadMessage(session, "n1", "full", null, 4200)).toMatchObject({ text: "不行" });
+  session.preview(2);
+  expect(getSessionHeadMessage(session, "n1", "full", null, 4300)).toBeNull();
+});
+
+test("speeding the simulation to 4x does not shorten an already displayed real-time bubble", () => {
+  const session = new GameSession(1);
+  session.engine.world.t = 12;
+  const runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent)); session.runner = runner;
+  runner.interactionDialogues.push({ t: 12, request: dialogueFixture(), response: { reply: "请先排队", decision: "refuse", give: null, want: null, reason: "hidden", source: "offline" } });
+  expect(getSessionHeadMessage(session, "n1", "full", null, 100)).toMatchObject({ text: "请先排队" });
+  session.engine.world.t = 16.1;
+  expect(getSessionHeadMessage(session, "n1", "full", null, 1125)).toMatchObject({ text: "请先排队" });
+  session.engine.world.t = 29;
+  expect(getSessionHeadMessage(session, "n1", "full", null, 4101)).toBeNull();
+});
+
+test("registering wakeup deadlines before the first canvas frame prevents a stale reply on tab return", () => {
+  const session = new GameSession(1); session.engine.world.t = 12;
+  session.runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
+  session.runner.interactionDialogues.push({ t: 12, request: dialogueFixture(), response: { reply: "请排队", decision: "refuse", give: null, want: null, reason: "hidden", source: "offline" } });
+  expect(getHeadMessageDeadlines(session, 100)).toEqual([4100]);
+  expect(getSessionHeadMessage(session, "n1", "full", null, 5000)).toBeNull();
+  expect(getHeadMessageDeadlines(session, 5000)).toEqual([]);
+});
+
+test("a background speaker keeps its real deadline when a 4x scene snapshot drops the old speech", () => {
+  const session = new GameSession(1); session.engine.world.t = 12;
+  session.engine.world.log("speech", "p1：请排队", true); session.presentation.settle(session.engine);
+  expect(getSessionHeadMessage(session, "p1", "full", null, 100)).toMatchObject({ text: null });
+  session.engine.world.t = 16.1; session.presentation.settle(session.engine);
+  expect(getSessionHeadMessage(session, "p1", "full", null, 1125)).not.toBeNull();
+  expect(getSessionHeadMessage(session, "p1", "full", null, 2601)).toBeNull();
+});
+
+test("background chatter does not take the full-text slot from the current conversation", () => {
+  const session = new GameSession(1); session.engine.world.t = 12;
+  session.runner = new GameRunner(session.engine, new HeuristicAgent(), async intent => classifyByKeywords(intent));
+  session.runner.interactionDialogues.push({ t: 12, request: dialogueFixture(), response: { reply: "请排队", decision: "refuse", give: null, want: null, reason: "hidden", source: "offline" } });
+  session.engine.world.log("speech", "p9：有人在赶车", true); session.presentation.settle(session.engine);
+  expect(getSessionHeadMessage(session, "n1", "full", null, 100)).toMatchObject({ text: "请排队" });
+  expect(getSessionHeadMessage(session, "p9", "full", null, 100)).toMatchObject({ text: null });
 });
 
 test("a new question hides the same NPC's previous reply until the replacement arrives", () => {
