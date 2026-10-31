@@ -65,10 +65,15 @@
 .launch span { font-size: 14px; }
 .action { position: absolute; z-index: 30; left: 24px; top: 28px; width: min(310px, 24vw); padding: 22px; max-height: calc(100dvh - 160px); overflow: auto; animation: panel-in .55s cubic-bezier(.22,.8,.26,1) both; }
 .actionCollapsed { width: auto; max-width: calc(100% - 244px); padding: 6px; }
+.actionInfo { display: flex; margin-bottom: 10px; }
+.actionInfo > * { flex: 1; }
+.actionInfo button { width: 100%; text-align: left; }
 .recordToggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; margin-bottom: 12px; text-align: left; font-weight: 700; }
 .recordToggle svg { width: 18px; height: 18px; flex-shrink: 0; }
 .recordToggle[aria-expanded=true] svg { transform: rotate(180deg); }
 .actionCollapsed .recordToggle { margin-bottom: 0; }
+.actionCollapsed .actionInfo { margin-bottom: 0; }
+.actionCollapsed .actionInfo button { min-height: 40px; padding: 8px 10px; font-size: 12px; }
 .action h2 { font-size: 21px; margin: 8px 0; }
 .action h3 { margin: 16px 0 4px; }
 .action p { font-size: 13px; }
@@ -161,6 +166,8 @@
   .action { top: 16px; left: 12px; right: auto; bottom: auto; width: calc(100% - 180px); padding: 12px; max-height: 40dvh; }
   .actionCollapsed { width: auto; max-width: calc(100% - 180px); padding: 6px; }
   .recordToggle { gap: 6px; padding: 8px; font-size: 12px; }
+  .actionInfo { margin-bottom: 4px; }
+  .actionInfo button { min-height: 40px; padding: 8px; font-size: 12px; }
   .action h2 { font-size: 17px; margin: 4px 0; }
   .action h3 { margin-top: 6px; }
   .action .phase { padding: 4px 0; margin: 4px 0; }
