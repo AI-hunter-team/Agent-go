@@ -20,6 +20,7 @@ import { FrameMetrics } from "./frameMetrics";
 import { Hint, Modal, TooltipProvider } from "./overlays";
 import type { ViewOptions } from "./presentation";
 import { useGameSession } from "./useGameSession";
+import { randomSeed } from "./seed";
 import styles from "./App.module.css";
 
 const GameScene = lazy(() => import("./scene/GameScene"));
@@ -44,7 +45,7 @@ export function App() {
   const [agentKind, setAgentKind] = useState<AgentChoice>("offline");
   const [showModelConfig, setShowModelConfig] = useState(false);
   const preparationRef = useRef<{ runId: string; durationMs: number; server: OperationDebug | null } | null>(null);
-  const [seed, setSeed] = useState(1);
+  const [seed, setSeed] = useState(session.engine.seed);
   const settings = DEFAULT_GAME_SETTINGS;
   const [guidance, setGuidance] = useState("");
   const [normalized, setNormalized] = useState<NormalizedGuidance | null>(null);
@@ -128,7 +129,11 @@ export function App() {
     } catch (failure) { if (request === requests.current) setError(`开局失败：${(failure as Error).message}`); }
     finally { if (request === requests.current) setBusy(null); }
   };
-  const edit = () => { requests.current++; preparationRef.current = null; setIntent("setup"); setError(null); session.preview(seed); };
+  const edit = () => {
+    requests.current++; preparationRef.current = null; setIntent("setup"); setError(null);
+    const nextSeed = randomSeed(seed);
+    setSeed(nextSeed); session.preview(nextSeed);
+  };
   const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
   const applyAsset = (path: string) => {
     if (path && (!path.startsWith("/models/") || path.includes("..") || !/\.(gltf|glb)$/i.test(path))) { setAssetError("请输入 /models/ 下的 .glb 或 .gltf 文件路径。"); return; }

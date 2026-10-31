@@ -10,7 +10,7 @@ import { ReportSummary, EventTimeline } from "../src/ui/ReportView";
 const props = { onRetry: () => undefined, onEdit: () => undefined };
 
 test("a completed run renders a score, breakdown and export action", async () => {
-  const runner = new GameRunner(new Engine(9), new HeuristicAgent(), offlineClassifier);
+  const runner = new GameRunner(new Engine(28), new HeuristicAgent(), offlineClassifier);
   await runner.runToEnd();
   const report = runner.report();
   const html = renderToStaticMarkup(createElement(ReportSummary, { ...props, report }));

@@ -27,6 +27,9 @@ p { margin: 10px 0; line-height: 1.8; }
 .field > span { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 600; }
 .field > small { font-size: 10px; font-weight: 400; color: var(--muted); line-height: 1.7; }
 .field.inline small { font-size: 10px; }
+.seed-controls { display: flex; align-items: center; gap: 8px; }
+.seed-controls input { flex: 1; }
+.seed-controls button { flex-shrink: 0; white-space: nowrap; }
 .count { font-size: 10px; font-style: normal; color: var(--muted); font-weight: 400; }
 .over { color: var(--brick); }
 .segmented { display: flex; padding: 3px; background: #e8e5d8; border: 1px solid var(--line); border-radius: 2px; gap: 3px; }

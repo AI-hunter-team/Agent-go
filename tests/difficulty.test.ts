@@ -21,7 +21,8 @@ test("adds exactly N people to each initially open lane including empty ones", (
     expect(crowded.world.facility(id)!.queue).toHaveLength(expected);
   }
   expect(crowded.world.facility("TVM-3")!.queue).toHaveLength(2);
-  expect(crowded.world.facility("G3")!.queue).toHaveLength(0);
+  const [brokenGate] = Object.keys(buildScenario(1).initialStatus);
+  expect(crowded.world.facility(brokenGate)!.queue).toHaveLength(0);
 });
 
 test("zero extra people preserves the old scenario and extra crowd does not alter background arrivals", () => {
