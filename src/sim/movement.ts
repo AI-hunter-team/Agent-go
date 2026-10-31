@@ -1,12 +1,11 @@
 import type { PassengerKind, Vec } from "../shared/types";
 import { dist, moveToward, segmentIntersectsRect, type Rect } from "./geometry";
-import { FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_WALL, WIDTH } from "./layout";
+import { FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS, SECURITY_BARRIERS, WIDTH } from "./layout";
+import { facilitySolids } from "./facilityGeometry";
 
 export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
 export const personRadius = (kind: PassengerKind | "guard") => kind === "luggage" ? 0.48 : 0.32;
-const furniture: Rect[] = FACILITIES.flatMap((f) => f.kind === "tvm"
-  ? [{ x: f.pos.x - 0.175, y: f.pos.y - 0.41, w: 0.35, h: 0.82 }]
-  : f.kind === "security" ? [{ x: f.pos.x - 0.88, y: f.pos.y + 0.55, w: 1.4, h: 0.5 }] : []);
+const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos));
 const floorEdges: Rect[] = [
   { x: 48, y: -1, w: 9, h: 14 }, { x: 48, y: 17, w: 9, h: HEIGHT - 16 },
 ];
@@ -16,7 +15,7 @@ export const SCENERY_OBSTACLES: readonly Rect[] = [...MOVE_BLOCKERS.slice(0, 3),
 
 /** Service may cross its scanner/gate opening, but never a solid side barrier. */
 export function clearServiceExit(from: Vec, to: Vec, radius: number): boolean {
-  return [...SECURITY_WALL, ...GATE_BARRIERS, ...solids].every((obstacle) => {
+  return [...SECURITY_BARRIERS, ...GATE_BARRIERS, ...solids].every((obstacle) => {
     const r = { x: obstacle.x - radius, y: obstacle.y - radius, w: obstacle.w + 2 * radius, h: obstacle.h + 2 * radius };
     return !segmentIntersectsRect(from, to, r);
   });

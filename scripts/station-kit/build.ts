@@ -27,7 +27,7 @@ for (const asset of ASSETS) {
         meshCount++; triangles += (node.geometry.index?.count ?? node.geometry.getAttribute("position").count) / 3;
         if (!Array.isArray(node.material)) slots.add(node.material.name);
       }
-      if (node.userData.role === "anchor") anchors.push({ name: node.name, position: node.position.toArray() });
+      if (node.userData.role === "anchor") anchors.push({ name: node.name, position: node.getWorldPosition(new Vector3()).toArray() });
     });
     entries.push({
       ...asset, state, file, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"),
@@ -42,6 +42,7 @@ const manifest = {
   source: "Original procedural geometry and seeded textures; no third-party textures or character models included.",
   gridMetres: 3, wallHeightMetres: 3.5, pillarFootprintMetres: [2, 2],
   showroomCeilingMetres: 4.25, structuralFrameHeightMetres: 4.2,
+  railing: { heightMetres: 1.1, straightModuleMetres: 3, maximumBalusterSpacingMetres: 0.14, connectionAnchors: ["anchor_start", "anchor_end"], passage: "Blocks walking, permits sight; preserve post thickness when fitting spans." },
   gateAnimation: { nodeRoles: "gateHinge", property: "rotation.y", angleRadians: "sign * progress * PI * 0.48", progress: [0, 1] },
   currentGameMapping: "Rotate device roots -PI/2 about Y to face the existing -X station approach; simulation anchors remain authoritative.",
   materials: maps, assets: entries,

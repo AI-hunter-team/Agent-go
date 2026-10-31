@@ -1,5 +1,6 @@
 /** Local browser acceptance fixture. No SDK client, dotenv, credentials or paid calls. */
 import { setTimeout as delay } from "node:timers/promises";
+import { resolve } from "node:path";
 import { createApp, type LlmService } from "../server/app";
 import { SessionStore, type Session } from "../server/sessions";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
@@ -29,5 +30,7 @@ const llm: LlmService = {
   async classify(intent) { return classifyByKeywords(intent); },
 };
 const sessions = new SessionStore();
-const app = createApp({ llm, sessions });
-app.listen(8891, "127.0.0.1", () => console.log("Browser acceptance fixture on 127.0.0.1:8891. No paid model calls."));
+const frontendDir = process.env.BROWSER_FIXTURE_FRONTEND ? resolve(process.env.BROWSER_FIXTURE_FRONTEND) : undefined;
+const port = Number(process.env.BROWSER_FIXTURE_PORT ?? 8891);
+const app = createApp({ llm, sessions, frontendDir });
+app.listen(port, "127.0.0.1", () => console.log(`Browser acceptance fixture on 127.0.0.1:${port}. No paid model calls.`));

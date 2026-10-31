@@ -134,7 +134,7 @@ export function App() {
     const nextSeed = randomSeed(seed);
     setSeed(nextSeed); session.preview(nextSeed);
   };
-  const retryScene = () => { setSceneFailure(null); setSceneAttempt((value) => value + 1); };
+  const retryScene = () => { setSceneFailure(null); setAssetError(""); setSceneAttempt((value) => value + 1); };
   const applyAsset = (path: string) => {
     if (path && (!path.startsWith("/models/") || path.includes("..") || !/\.(gltf|glb)$/i.test(path))) { setAssetError("请输入 /models/ 下的 .glb 或 .gltf 文件路径。"); return; }
     setAssetError(""); setAssetInput(path); setAssetUrl(path ? `${path}?v=${Date.now()}` : "");
@@ -177,6 +177,7 @@ export function App() {
         <div className={styles.ticketHeading}><span>METRO / JOURNEY</span><span>NO. {String(seed).padStart(4, "0")}</span></div>
         <div className={styles.sidebarBody}>
           {error && <div className="error" role="alert">{error}</div>}
+          {assetError && <div className="error" role="status">{assetError}<button onClick={retryScene}>重试三维素材</button></div>}
           {intent === "setup" && showModelConfig && <ModelConfigPanel health={health} onClose={() => setShowModelConfig(false)} onEnabled={(value) => {
             setHealth(value);
             setAgentKind(value.llm ? "llm" : "offline");
@@ -200,11 +201,11 @@ export function App() {
               <h3>决策记录</h3><DecisionLog decisions={runner.decisions} />{ended && <EventTimeline report={runner.report()} />}
             </Modal>
           </>}
-          {debug && <details className={styles.debug}><summary>开发调试</summary><div className="row"><button onClick={() => setRenderer((value) => value === "3d" ? "2d" : "3d")}>切换到 {renderer === "3d" ? "2D" : "3D"}</button><button onClick={retryScene}>重建三维画面</button></div><label className="check"><input type="checkbox" checked={showVision} onChange={(event) => setShowVision(event.target.checked)} />视距示意（未裁剪遮挡）</label><label className="check"><input type="checkbox" checked={showTrail} onChange={(event) => setShowTrail(event.target.checked)} />角色轨迹</label><label className="field"><span>角色模型路径</span><input value={assetInput} onChange={(event) => setAssetInput(event.target.value)} placeholder="/models/character.glb" /></label><div className="row"><button onClick={() => applyAsset(assetInput)}>应用模型</button><button onClick={() => applyAsset("/models/sample-sculpture.gltf")}>加载样例</button><button onClick={() => applyAsset("")}>几何占位</button></div>{assetError && <p role="status" className="error">{assetError}</p>}<div className="row"><button disabled={metrics.active} onClick={() => { metrics.start(); session.notify(); }}>采样 60 秒</button><button onClick={() => downloadMetrics(metrics)}>导出性能记录</button></div><pre>{JSON.stringify(metrics.summary(), null, 2)}</pre></details>}
+          {debug && <details className={styles.debug}><summary>开发调试</summary><div className="row"><button onClick={() => setRenderer((value) => value === "3d" ? "2d" : "3d")}>切换到 {renderer === "3d" ? "2D" : "3D"}</button><button onClick={retryScene}>重建三维画面</button></div><label className="check"><input type="checkbox" checked={showVision} onChange={(event) => setShowVision(event.target.checked)} />视距示意（未裁剪遮挡）</label><label className="check"><input type="checkbox" checked={showTrail} onChange={(event) => setShowTrail(event.target.checked)} />角色轨迹</label><label className="field"><span>角色模型路径</span><input value={assetInput} onChange={(event) => setAssetInput(event.target.value)} placeholder="/models/character.glb" /></label><div className="row"><button onClick={() => applyAsset(assetInput)}>应用模型</button><button onClick={() => applyAsset("/models/sample-sculpture.gltf")}>加载样例</button><button onClick={() => applyAsset("")}>几何占位</button></div><div className="row"><button disabled={metrics.active} onClick={() => { metrics.start(); session.notify(); }}>采样 60 秒</button><button onClick={() => downloadMetrics(metrics)}>导出性能记录</button></div><pre>{JSON.stringify(metrics.summary(), null, 2)}</pre></details>}
         </div>
         <div className={styles.ticketFoot}><span>一步一步，直到抵达。</span><div className={styles.barcode} aria-hidden="true" /></div>
       </aside>
     </main>
-    <footer className={styles.footer}><span>自然语言指导 · 自主行动 · 动态世界</span><span>{playing ? "观看角色，发现计划之外的可能。" : "场景与角色使用几何占位，后续接入正式资产。"}</span><span>TRANSIT THEATRE / V1</span></footer>
+    <footer className={styles.footer}><span>自然语言指导 · 自主行动 · 动态世界</span><span>{playing ? "观看角色，发现计划之外的可能。" : "站厅已接入正式素材，角色模型可在开发调试中替换。"}</span><span>TRANSIT THEATRE / V1</span></footer>
   </div></TooltipProvider>;
 }
