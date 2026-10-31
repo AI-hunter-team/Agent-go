@@ -41,6 +41,8 @@ export interface Person {
   screened: boolean;
   passedGate: boolean;
   onPlatform: boolean;
+  /** Stable train-door assignment once an NPC starts boarding. */
+  boardingDoor?: number;
   irritable: boolean;
   activity: Activity;
   persona?: Persona;

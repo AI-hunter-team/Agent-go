@@ -12,6 +12,13 @@ export const SECURITY_X = 26;
 export const GATE_X = 44;
 export const STAIRS_X = 62;
 export const PLATFORM_X = 72;
+/** Platform-side train doors used by NPC boarding. The train is parked beyond
+ * the platform edge, so passengers stop just inside the edge before leaving. */
+// The simulation's walkable platform begins at x=72; entering the train is a
+// short platform-side transition, so passengers leave the collision world
+// before they can block the stairs or the platform approach.
+export const TRAIN_BOARDING_X = PLATFORM_X + 2.5;
+export const TRAIN_DOOR_Z = [7, 10.55, 14.1, 17.65, 21.2] as const;
 export const STAIRS_TOP: Vec = { x: 61, y: 9 };
 export const STAIRS_BOTTOM: Vec = { x: 73, y: 9 };
 export const ESCALATOR_TOP: Vec = { x: 61, y: 22 };
