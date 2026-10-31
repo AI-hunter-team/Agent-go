@@ -4,6 +4,7 @@ import { REACTION_RULES as R } from "./content/alertRules";
 import type { EventBus } from "./events";
 import { angleTo, dist, inViewCone, lineOfSight } from "./geometry";
 import type { GuardSystem } from "./guards";
+import { personRadius } from "./movement";
 
 
 import { DT, INTERACTION_RULES, PERCEPTION_RULES } from "./scenario";
@@ -98,13 +99,31 @@ export class NpcBrain {
       npc.facing = angleTo(npc.pos,a.point);
       a.remaining -= DT;
       if (a.action === "report") {
-        const guards = this.guards.guards.filter((g) => !g.incapacitated).sort((x,y) => dist(x.pos,npc.pos)-dist(y.pos,npc.pos));
+        const guards = this.guards.guards.filter((g) => !g.incapacitated && (g.pos.floorId ?? "concourse") === (npc.pos.floorId ?? "concourse")).sort((x,y) => dist(x.pos,npc.pos)-dist(y.pos,npc.pos));
         const close = guards.find((g) => dist(g.pos,npc.pos) <= PERCEPTION_RULES.shoutRadius && lineOfSight(g.pos,npc.pos,this.world.layout.SIGHT_OCCLUDERS));
         if (close) {
           this.bus.emit({ t: this.world.t, kind: "report", severity: "violation", actorId: id, targetId: close.def.id, aboutId: a.subjectId, aboutPos: { ...a.point }, pos: { ...npc.pos }, loudness: 8, causeId: a.causeId });
           this.finish(id); continue;
         }
-        if (guards[0]) this.walk(npc,a,guards[0].pos,2);
+        const end = a.path.at(-1);
+        if (!end || !guards.some(g => dist(end, g.pos) < PERCEPTION_RULES.shoutRadius - .3 && lineOfSight(end, g.pos, this.world.layout.SIGHT_OCCLUDERS))) {
+          a.path = [];
+          for (const guard of guards) {
+            const direct = this.world.navigation.findPath(npc.pos, guard.pos, personRadius(npc.kind));
+            if (direct) { a.path = direct; break; }
+            // A guard behind security need not be reached bodily: use a reachable place within earshot.
+            const candidates = [...this.world.layout.NAV_NODES.map(n => n.pos), ...this.world.layout.FACILITIES.map(f => f.head)]
+              .filter(point => dist(point, guard.pos) < PERCEPTION_RULES.shoutRadius - .3 && lineOfSight(point, guard.pos, this.world.layout.SIGHT_OCCLUDERS))
+              .sort((x, y) => dist(x, npc.pos) - dist(y, npc.pos));
+            for (const point of candidates) {
+              const path = this.world.navigation.findPath(npc.pos, point, personRadius(npc.kind));
+              if (path) { a.path = path; break; }
+            }
+            if (a.path.length) break;
+          }
+        }
+        const approach = a.path.at(-1);
+        if (approach) this.walk(npc, a, approach, .2);
       } else if (a.action === "keep_distance" || a.action === "flee") {
         const distance = a.action === "flee" ? R.fleeDistance : R.distance;
         const d = dist(npc.pos,a.point);

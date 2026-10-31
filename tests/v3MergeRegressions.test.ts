@@ -55,3 +55,29 @@ test("the rendered lounge junction leaves the timed follow view and untimed side
     disposeControlAsset(passage); disposeSurfaceGeometry(landing); palette.dispose();
   }
 });
+
+
+test("a reporter leaves the ticket head to approach a guard across security", () => {
+  const d = station(17), e = new Engine(17, {}, emptyScenario(17), undefined, d);
+  const f = e.world.facility("TVM-1")!, n = e.world.addPerson("luggage", { ...f.def.head });
+  n.activity = { kind: "queued", facility: f.def.id }; f.queue.push(n.id);
+  e.player.pos = { ...f.def.head, y: f.def.head.y + 3 };
+  expect(e.world.navigation.findPath(n.pos, e.guards.guards[0].pos, .48)).toBeNull();
+  e.npcBrain.react(n, e.player, { observerId: n.id, subjectId: "player", level: "red", ring: 0, hiddenFor: 0, since: 0, causeEventId: "fixture", reaction: null }, e.player.pos, "report");
+  expect(e.applyAction({ type: "join_queue", facility: f.def.id, reason: "" }).ok).toBe(true);
+  for (let i = 0; i < 300; i++) {
+    e.world.t += .1; e.npcBrain.step(); e.world.stepPeopleAndFacilities();
+  }
+  expect(e.events.events.some(event => event.kind === "report" && event.actorId === n.id)).toBe(true);
+  expect(e.player.hasTicket).toBe(true);
+});
+
+test("a report cannot cross the floor slab to a nearby guard", () => {
+  const d = station(1), e = new Engine(1, {}, emptyScenario(1), undefined, d);
+  const n = e.world.addPerson("normal", { ...d.layout.ENTRANCE });
+  e.guards.guards.splice(1);
+  e.guards.guards[0].pos = { ...n.pos, floorId: "platform" };
+  e.npcBrain.react(n, e.player, { observerId: n.id, subjectId: "player", level: "red", ring: 0, hiddenFor: 0, since: 0, causeEventId: "fixture", reaction: null }, e.player.pos, "report");
+  e.npcBrain.step();
+  expect(e.events.events.some(event => event.kind === "report")).toBe(false);
+});
