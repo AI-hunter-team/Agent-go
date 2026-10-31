@@ -73,6 +73,7 @@ test("queued and serving actors turn toward their facility after arriving from t
   for (const facilityId of ["TVM-2", "S2", "G2"]) for (const kind of ["queued", "service"] as const) {
     const engine = new Engine(1);
     engine.world.persons.clear();
+    engine.world.items.items.clear();
     const f = engine.world.facility(facilityId)!;
     const p = engine.world.addPerson("player", { x: f.def.head.x, y: f.def.head.y - 1 }, { isPlayer: true });
     const buffer = new PresentationBuffer(engine);

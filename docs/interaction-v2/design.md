@@ -328,6 +328,7 @@ export interface ItemDef {
 export type ItemLocation =
   | { type: "held"; personId: string; slot: "pocket" | "hand" | "bag" }
   | { type: "ground"; pos: Vec }
+  | { type: "container"; containerId: string } // 丢下的背包内物品；不可直接从远处取出
   | { type: "spot"; spotId: string };
 
 export interface Item {

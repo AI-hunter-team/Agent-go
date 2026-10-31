@@ -5,6 +5,8 @@ import { findPath } from "./nav";
 import { Rng } from "./rng";
 import { DT, PROFILES, STATUS_LABEL, multiplierOf } from "./scenario";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { ItemSystem } from "./items";
+import { ITEM_SPOTS } from "./layout";
 import { clearOfPeople, clearServiceExit, detourAroundQueues, personRadius, steer, type MovingBody } from "./movement";
 
 export type Activity =
@@ -24,7 +26,8 @@ export interface Person {
   isPlayer: boolean;
   pos: Vec;
   speed: number;
-  hasTicket: boolean;
+  readonly hasTicket: boolean;
+  readonly ticketUsed: boolean;
   screened: boolean;
   passedGate: boolean;
   onPlatform: boolean;
@@ -47,6 +50,7 @@ export interface Facility {
 export class World {
   t = 0;
   readonly rng: Rng;
+  readonly items: ItemSystem;
   readonly persons = new Map<string, Person>();
   readonly facilities = new Map<string, Facility>();
   readonly events: GameEvent[] = [];
@@ -109,6 +113,8 @@ export class World {
 
   constructor(seed: number, readonly timeLimitSeconds = DEFAULT_GAME_SETTINGS.timeLimitSeconds) {
     this.rng = new Rng(seed);
+    this.items = new ItemSystem((id) => this.persons.get(id), () => this.t);
+    for (const spot of ITEM_SPOTS) for (const kind of spot.stock) this.items.spawn(kind, { type: "spot", spotId: spot.id }, null);
     for (const def of FACILITIES) {
       this.facilities.set(def.id, { def, status: "open", note: null, queue: [], serving: null, pendingRecheck: null });
     }
@@ -119,13 +125,15 @@ export class World {
   addPerson(kind: PassengerKind, pos: Vec, opts: { isPlayer?: boolean; hasTicket?: boolean; irritable?: boolean } = {}): Person {
     const profile = PROFILES[kind];
     const sample = (r: [number, number]) => this.rng.range(r[0], r[1]);
+    const items = this.items;
     const person: Person = {
       id: opts.isPlayer ? "player" : `p${this.nextId++}`,
       kind,
       isPlayer: opts.isPlayer ?? false,
       pos: { ...pos },
       speed: profile.speed,
-      hasTicket: opts.hasTicket ?? false,
+      get hasTicket() { return items.hasValidTicket(this.id); },
+      get ticketUsed() { return items.holdings(this.id).some((i) => i.kind === "ticket" && i.used === true); },
       screened: false,
       passedGate: false,
       onPlatform: false,
@@ -134,6 +142,11 @@ export class World {
       serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
     };
     this.persons.set(person.id, person);
+    if (person.isPlayer) {
+      this.items.spawn("backpack", { type: "held", personId: person.id, slot: "bag" }, person.id);
+      this.items.spawn("coins", { type: "held", personId: person.id, slot: "pocket" }, person.id);
+    }
+    if (opts.hasTicket) this.items.spawn("ticket", { type: "held", personId: person.id, slot: "pocket" }, person.id);
     return person;
   }
 
@@ -360,7 +373,7 @@ export class World {
         const exit = p ? exits.find((point) => clearServiceExit(p.pos, point, personRadius(p.kind)) && clearOfPeople(p.pos, point, personRadius(p.kind), this.collisionBodies(p.id))) : nominal;
         if (!exit) return;
         f.serving = null;
-        if (p) { this.completeService(f, p); p.pos = exit; }
+        if (p && this.completeService(f, p)) p.pos = exit;
       }
       return;
     }
@@ -394,7 +407,7 @@ export class World {
   private completeService(f: Facility, p: Person) {
     switch (f.def.kind) {
       case "tvm":
-        p.hasTicket = true;
+        this.items.spawn("ticket", { type: "held", personId: p.id, slot: "pocket" }, p.id);
         p.pos = { x: f.def.head.x, y: f.def.head.y + 1.3 };
         p.activity = { kind: "idle" };
         this.personEvent(p, "service_done", `在 ${f.def.id} 买到单程票`);
@@ -406,6 +419,11 @@ export class World {
         this.personEvent(p, "service_done", `通过 ${f.def.id} 安检，进入安检后大厅`);
         break;
       case "gate":
+        if (!this.items.useTicket(p.id)) {
+          p.activity = { kind: "idle" };
+          this.personEvent(p, "service_rejected", `${f.def.id} 拒绝通行：车票已离开持有人`);
+          return false;
+        }
         p.pos = { ...f.def.exit! };
         p.passedGate = true;
         p.onPlatform = false;
@@ -414,6 +432,7 @@ export class World {
         this.personEvent(p, "service_done", `刷票通过 ${f.def.id}，到达上层平台；请前往 STAIRS_TOP 下楼梯进入站台`);
         break;
     }
+    return true;
   }
 }
 

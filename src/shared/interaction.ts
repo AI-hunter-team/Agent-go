@@ -25,6 +25,7 @@ export interface ItemDef {
 export type ItemLocation =
   | { type: "held"; personId: string; slot: "pocket" | "hand" | "bag" }
   | { type: "ground"; pos: Vec }
+  | { type: "container"; containerId: string }
   | { type: "spot"; spotId: string };
 
 export interface Item {

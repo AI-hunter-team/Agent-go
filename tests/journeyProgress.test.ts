@@ -20,7 +20,7 @@ test("the normal journey explicitly includes a gate step before entering the pla
 
 test("passing security advances to the gate stage, not straight to the platform", () => {
   const engine = new Engine(1);
-  engine.player.hasTicket = true;
+  engine.world.items.spawn("ticket", { type: "held", personId: engine.player.id, slot: "pocket" }, engine.player.id);
   expect(render(engine)).toContain("当前阶段：安检");
   engine.player.screened = true;
   expect(render(engine)).toContain("当前阶段：过闸机");
@@ -33,7 +33,8 @@ test("passing security advances to the gate stage, not straight to the platform"
 
 test("passing a gate completes only the gate step and advances to stairs", () => {
   const engine = new Engine(1);
-  Object.assign(engine.player, { hasTicket: true, screened: true, passedGate: true });
+  engine.world.items.spawn("ticket", { type: "held", personId: engine.player.id, slot: "pocket" }, engine.player.id);
+  Object.assign(engine.player, { screened: true, passedGate: true });
   let html = render(engine);
   expect(html).toContain('aria-label="过闸机：已完成"');
   expect(html).toContain('aria-label="下楼梯：进行中"');
@@ -47,7 +48,7 @@ test("passing a gate completes only the gate step and advances to stairs", () =>
 
 test("only platform arrival completes the stairs and platform steps", () => {
   const engine = new Engine(1);
-  engine.player.hasTicket = true;
+  engine.world.items.spawn("ticket", { type: "held", personId: engine.player.id, slot: "pocket" }, engine.player.id);
   engine.player.screened = true;
   engine.player.onPlatform = true;
   engine.status = "success";

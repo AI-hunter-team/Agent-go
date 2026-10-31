@@ -1,4 +1,4 @@
-import type { FacilityKind, Vec } from "../shared/types";
+import type { FacilityKind, ItemSpot, Vec } from "../shared/types";
 import type { Rect } from "./geometry";
 
 // Station layout, in metres. See docs/MVP技术方案.md §5.2.
@@ -19,6 +19,11 @@ export const STAIRS_REACH = 0.8;
 export const QUEUE_SPACING = 0.8;
 
 export const ENTRANCE: Vec = { x: 2, y: 15 };
+
+export const ITEM_SPOTS: ItemSpot[] = [
+  { id: "convenience", label: "售票厅便利架", pos: { x: 7, y: 3 }, stock: ["newspaper", "snack", "water_bottle"], takeSeconds: 1.5 },
+  { id: "lost-property", label: "长椅旁失物", pos: { x: 8, y: 27 }, stock: ["umbrella"], takeSeconds: 1.5 },
+];
 
 export interface FacilityDef {
   id: string;

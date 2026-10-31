@@ -5,6 +5,7 @@ import { SIGHT_OCCLUDERS, ZONE_LABEL, zoneOf } from "./layout";
 import { nearestNode } from "./nav";
 import { PROFILES, RULES, multiplierOf } from "./scenario";
 import { round1, type Facility, type Person, type World } from "./world";
+import { BAG_CAPACITY } from "./content/items";
 
 /** The player character's sight: 360°, limited range, blocked by walls and pillars. */
 export function playerCanSee(from: Vec, to: Vec): boolean {
@@ -83,6 +84,8 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
   return {
     t: round1(world.t),
     self: {
+      inventory: world.items.holdings(p.id).map((i) => ({ id: i.id, kind: i.kind, slot: world.items.slot(i) })),
+      bag: { has: Boolean(world.items.bag(p.id)), used: world.items.bagUsed(p.id), capacity: BAG_CAPACITY },
       position: { x: round1(p.pos.x), y: round1(p.pos.y) },
       zone: ZONE_LABEL[zoneOf(p.pos)],
       nearestNode: node ? `${node.id}（${node.label}）` : "无",
@@ -94,6 +97,7 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       elapsed: round1(world.t),
       timeLeft: round1(Math.max(0, world.timeLimitSeconds - world.t)),
     },
+    items: world.items.visibleItems(p.pos),
     facilities: visibleFacilities(world, p.pos).map((f) => observeFacility(world, f, p.pos)),
     guards: guards.guards
       .filter((g) => playerCanSee(p.pos, g.pos))

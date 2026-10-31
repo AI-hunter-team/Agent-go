@@ -2,7 +2,7 @@ import type { GameStatus } from "../shared/types";
 import type { Person } from "../sim/world";
 
 export interface JourneyProgressProps {
-  player: Pick<Person, "hasTicket" | "screened" | "passedGate" | "onPlatform" | "activity">;
+  player: Pick<Person, "hasTicket" | "screened" | "passedGate" | "onPlatform" | "activity"> & { ticketUsed?: boolean };
   status: GameStatus;
 }
 
@@ -11,7 +11,7 @@ export function JourneyProgress({ player, status }: JourneyProgressProps) {
   const a = player.activity;
   const facility = "facility" in a ? a.facility : "";
   const current = player.onPlatform ? 4 : player.passedGate ? 3 : player.screened || facility.startsWith("G") ? 2 : player.hasTicket || facility.startsWith("S") ? 1 : 0;
-  const complete = [player.hasTicket, player.screened, player.passedGate || player.onPlatform, player.onPlatform, player.onPlatform];
+  const complete = [player.hasTicket || player.ticketUsed, player.screened, player.passedGate || player.onPlatform, player.onPlatform, player.onPlatform];
   let gateDetail = "前往闸机，排队后验票通行";
   if (facility.startsWith("G")) {
     gateDetail = a.kind === "service" ? `${facility} 验票通行中` : a.kind === "queued" ? `${facility} 排队中` : `前往 ${facility} 队尾`;
