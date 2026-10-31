@@ -21,7 +21,13 @@ import { CHARACTERS, useJourney } from "./useJourney";
 import { useBroadcast } from "./useBroadcast";
 import { randomSeed } from "./seed";
 import { FrameMetrics } from "./frameMetrics";
-import { Modal, TooltipProvider } from "./overlays";
+import { Modal, ProgressBar, TooltipProvider } from "./overlays";
+import {
+  clampModelProgress,
+  modelResourceKey,
+  shouldShowModelLoadingOverlay,
+  type ModelLoadingState,
+} from "./modelLoading";
 import { MapCanvas } from "./MapCanvas";
 import { DecisionLog } from "./DecisionLog";
 import { InteractionPanel } from "./InteractionPanel";
@@ -107,6 +113,12 @@ export function App() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [sceneError, setSceneError] = useState<string | null>(null);
   const [assetError, setAssetError] = useState("");
+  const [modelLoading, setModelLoading] = useState<ModelLoadingState>({
+    url: null,
+    status: "idle",
+    progress: 0,
+  });
+  const loadedModelUrls = useRef(new Set<string>());
   const [reviewState, setReviewState] = useState<{ generation: number; expanded: boolean } | null>(null);
   const [recordState, setRecordState] = useState<{ generation: number; expanded: boolean } | null>(null);
   const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 600px)").matches);
@@ -143,12 +155,47 @@ export function App() {
   const interactionDialogue = runner?.interactionDialogues.at(-1);
   const latestText =
     latest?.action?.reason || latest?.result?.text || "等待下一次决定";
+  const onModelLoadStart = useCallback((url: string) => {
+    const key = modelResourceKey(url);
+    if (loadedModelUrls.current.has(key)) return;
+    setModelLoading((current) =>
+      current.url === key && current.status === "loading"
+        ? current
+        : { url: key, status: "loading", progress: 0 },
+    );
+  }, []);
+  const onModelProgress = useCallback((progress: number) => {
+    setModelLoading((current) =>
+      current.status === "loading"
+        ? { ...current, progress: clampModelProgress(progress) }
+        : current,
+    );
+  }, []);
+  const onModelLoaded = useCallback((url: string) => {
+    const key = modelResourceKey(url);
+    loadedModelUrls.current.add(key);
+    setModelLoading((current) =>
+      current.url === key ? { ...current, status: "loaded", progress: 100 } : current,
+    );
+  }, []);
   const onAssetError = useCallback(
-    (message: string) => setAssetError(message),
+    (message: string, url?: string) => {
+      setAssetError(message);
+      if (!url) return;
+      const key = modelResourceKey(url);
+      setModelLoading((current) =>
+        current.url === key ? { ...current, status: "failed" } : current,
+      );
+    },
     [],
   );
   const onSceneError = useCallback(
-    (message = "三维画面暂时不可用") => setSceneError(message),
+    (message = "三维画面暂时不可用") => {
+      setSceneError(message);
+      setModelLoading((current) =>
+        current.status === "loading" ? { ...current, status: "failed" } : current,
+      );
+    },
     [],
   );
   const retryScene = () => {
@@ -223,6 +270,10 @@ export function App() {
       </button>
     </section>
   );
+  const showModelLoading =
+    renderer === "3d" &&
+    !sceneError &&
+    shouldShowModelLoadingOverlay(modelLoading);
 
   return (
     <TooltipProvider>
@@ -268,6 +319,9 @@ export function App() {
                     guardAssetUrl={guardAvatar.url}
                     guardAssetRotation={guardAvatar.rotation}
                     onAssetError={onAssetError}
+                    onModelLoadStart={onModelLoadStart}
+                    onModelProgress={onModelProgress}
+                    onModelLoaded={onModelLoaded}
                     onGuardAssetError={guardAvatar.onError}
                     onStationAssetError={onAssetError}
                     onFailure={onSceneError}
@@ -282,6 +336,23 @@ export function App() {
               </SceneBoundary>
             )}
           </div>
+          {showModelLoading && (
+            <div className={styles.modelLoadingOverlay} role="status" aria-live="polite">
+              <div className={styles.modelLoadingCard}>
+                <div className={styles.modelLoadingHeading}>
+                  <span>正在加载模型</span>
+                  <strong>{modelLoading.progress}%</strong>
+                </div>
+                <ProgressBar
+                  value={modelLoading.progress}
+                  label="模型加载进度"
+                  className={styles.modelProgress}
+                  fillClassName={styles.modelProgressFill}
+                />
+                <p>正在准备角色形象，请稍候…</p>
+              </div>
+            </div>
+          )}
         </div>
         {!watching && !ended && flow.stage !== "lobby" && (
           <div className={styles.topLeft}>

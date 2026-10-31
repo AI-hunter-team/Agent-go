@@ -22,4 +22,9 @@ export function Modal({ title, description, trigger, children, wide = false }: {
 export function Hint({ text, children }: { text: string; children: ReactElement }) {
   return <Tooltip.Root><Tooltip.Trigger asChild>{children}</Tooltip.Trigger><Tooltip.Portal><Tooltip.Content className="tooltip" sideOffset={8}>{text}<Tooltip.Arrow /></Tooltip.Content></Tooltip.Portal></Tooltip.Root>;
 }
+/** 统一进度条语义和无障碍属性，视觉样式由调用方按当前界面上下文提供。 */
+export function ProgressBar({ value, label, className, fillClassName }: { value: number; label: string; className: string; fillClassName: string }) {
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+  return <div className={className} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={safeValue}><span className={fillClassName} style={{ width: `${safeValue}%` }} /></div>;
+}
 export const TooltipProvider = Tooltip.Provider;
