@@ -60,6 +60,7 @@ export const FACILITY_MULTIPLIER: Record<string, number> = { S1: 0.8, S2: 1.0, S
 export const multiplierOf = (facilityId: string) => FACILITY_MULTIPLIER[facilityId] ?? 1;
 
 export interface GuardDef {
+  role?: "guard" | "security_staff";
   id: string;
   label: string;
   /** One point = stationary; two = straight back-and-forth; longer routes loop. */
@@ -83,6 +84,12 @@ export const GUARDS: GuardDef[] = [
     speed: 0.9,
     pauseSeconds: 2,
   },
+];
+
+export const SECURITY_STAFF: GuardDef[] = [
+  { id: "security-S1", label: "1号安检员", role: "security_staff", route: [{ x: 28.5, y: 3.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
+  { id: "security-S2", label: "2号安检员", role: "security_staff", route: [{ x: 28.5, y: 12.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
+  { id: "security-S3", label: "3号安检员", role: "security_staff", route: [{ x: 28.5, y: 26.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0 },
 ];
 
 export interface NpcSpawn {

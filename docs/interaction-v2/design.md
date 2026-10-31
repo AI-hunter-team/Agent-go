@@ -387,6 +387,7 @@ export interface WorldEvent {
   causeId?: string;
   /** report 专用：被描述的对象。 */
   aboutId?: string;
+  aboutPos?: Vec; // 报告携带的最后已知地点，不跟踪对象隐藏的实时位置
 }
 
 /** 持续动作在执行期间登记；看到行为者即可归因。 */

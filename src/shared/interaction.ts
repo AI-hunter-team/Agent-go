@@ -77,6 +77,8 @@ export interface WorldEvent {
   causeId?: string;
   /** Subject described by a report, not necessarily its speaker. */
   aboutId?: string;
+  /** Last known subject position carried by a report; never a live hidden position. */
+  aboutPos?: Vec;
 }
 
 export interface OngoingAct {

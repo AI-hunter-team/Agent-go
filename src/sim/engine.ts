@@ -10,6 +10,9 @@ import type {
   Trigger,
   Vec,
 } from "../shared/types";
+import { EventBus } from "./events";
+import { PerceptionSystem, type Observer } from "./perception";
+import { AlertSystem } from "./alert";
 import { CreativeSystem } from "./creative";
 import { GuardSystem } from "./guards";
 import { ENTRANCE, FACILITIES, NAV_NODES, queueSlot } from "./layout";
@@ -17,15 +20,9 @@ import { findPath, nodeById } from "./nav";
 import { personRadius } from "./movement";
 import { NpcDirector } from "./npc";
 import { buildObservation, visibleFacilities } from "./observation";
-import { DT, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
+import { DT, GUARDS, SECURITY_STAFF, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
 import { World, round1, type Person } from "./world";
 import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
-
-const MECHANIC_LABEL: Record<CreativeMechanic, string> = {
-  cut_in_line: "插队",
-  jump_gate: "翻越闸机",
-  unsupported: "不支持的行动",
-};
 
 /**
  * The single source of truth for a run. The agent only requests actions through
@@ -34,7 +31,10 @@ const MECHANIC_LABEL: Record<CreativeMechanic, string> = {
 export class Engine {
   readonly settings: Readonly<GameSettings>;
   readonly world: World;
-  readonly guards = new GuardSystem();
+  readonly guards = new GuardSystem([...GUARDS, ...SECURITY_STAFF]);
+  readonly events = new EventBus();
+  readonly perception: PerceptionSystem;
+  readonly alerts: AlertSystem;
   readonly npcs: NpcDirector;
   readonly creative: CreativeSystem;
   readonly player: Person;
@@ -56,7 +56,9 @@ export class Engine {
     this.settings = resolveGameSettings(settings);
     this.world = new World(seed, this.settings.timeLimitSeconds);
     this.npcs = new NpcDirector(this.world, scenarioOverride ?? buildScenario(seed, this.settings));
-    this.creative = new CreativeSystem(this.world, this.guards);
+    this.perception = new PerceptionSystem(this.events, (id) => this.world.persons.get(id) ?? this.guards.guards.find((g) => g.def.id === id));
+    this.alerts = new AlertSystem(this.events, (id) => this.guards.guards.find((g) => g.def.id === id)?.role ?? (this.world.persons.has(id) && id !== "player" ? "npc" : undefined), () => this.t);
+    this.creative = new CreativeSystem(this.world, this.guards, this.events, () => this.resolveInteractions(0));
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
     this.recordTrail();
     this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内进入站台。");
@@ -66,6 +68,33 @@ export class Engine {
 
   get t(): number {
     return this.world.t;
+  }
+
+  resolveInteractions(dt = DT) {
+    const observers: Observer[] = [
+      ...[...this.world.persons.values()].filter((p) => !p.isPlayer).map((p) => ({ id: p.id, role: "npc" as const, pos: p.pos, facing: p.facing, incapacitated: p.incapacitated })),
+      ...this.guards.guards.map((g) => ({ id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated })),
+    ];
+    const percepts = this.perception.step(observers);
+    const result = this.alerts.step(percepts, (a, b) => {
+      const observer = observers.find((o) => o.id === a);
+      const subject = this.world.persons.get(b) ?? this.guards.guards.find((g) => g.def.id === b);
+      return Boolean(observer && subject && this.perception.canSee(observer, subject.pos));
+    }, dt, (id) => (observers.find((o) => o.id === id)?.incapacitated ?? 0) > 0);
+    this.guards.respond(percepts, this.alerts, this.events);
+    for (const record of this.alerts.records.values()) {
+      const guard = this.guards.guards.find((g) => g.def.id === record.observerId);
+      const subject = this.world.persons.get(record.subjectId);
+      if (guard && subject && this.guards.canSee(guard, subject.pos)) this.guards.watch(guard, subject.id, subject.pos);
+    }
+    return result.guardRed;
+  }
+
+  private failForGuard(guardId: string, eventId: string) {
+    const guard = this.guards.guards.find((g) => g.def.id === guardId);
+    const kind = this.events.get(eventId)?.kind;
+    const action = kind === "vault" ? "翻越闸机" : kind === "strike" || kind === "knockout" ? "击打行为" : "违规行为";
+    this.end("failed", `被${guard?.def.label ?? guardId}确认${action}，判负`);
   }
 
   // ------------------------------------------------------------- stepping
@@ -79,16 +108,13 @@ export class Engine {
     this.npcs.step();
     w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, radius: personRadius("guard") }));
     w.stepPeopleAndFacilities();
-    this.guards.step([...w.persons.values()].map((p) => ({ id: p.id, pos: p.pos, from: w.tickStarts.get(p.id), radius: personRadius(p.kind) })));
+    this.guards.step([...w.persons.values()].map((p) => ({ id: p.id, pos: p.pos, from: w.tickStarts.get(p.id), radius: personRadius(p.kind) })), (id) => w.persons.get(id), w.t);
     w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, from: w.collisionGuards.find((old) => old.id === g.def.id)?.pos, radius: personRadius("guard") }));
     this.creative.step(this.player);
     this.account(activityBefore);
 
-    if (this.creative.caught) {
-      const c = this.creative.caught;
-      this.end("failed", `${MECHANIC_LABEL[c.mechanic]}被${c.guard}发现，判负`);
-      return;
-    }
+    const red = this.resolveInteractions();
+    if (red?.subjectId === "player") { this.failForGuard(red.guardId, red.causeEventId); return; }
     if (this.player.onPlatform) {
       this.score = w.t;
       this.end("success", null);
@@ -245,7 +271,10 @@ export class Engine {
         return { ok: false, text: "请通过 NPC 协商流程请求让位" };
       case "attempt_creative": {
         if (!mechanic) return { ok: false, text: "创造性行动尚未归类" };
-        return this.creative.start(p, mechanic, action.reason);
+        const result = this.creative.start(p, mechanic, action.reason);
+        const red = this.resolveInteractions(0);
+        if (red?.subjectId === "player") this.failForGuard(red.guardId, red.causeEventId);
+        return result;
       }
     }
   }

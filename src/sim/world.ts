@@ -36,6 +36,7 @@ export interface Person {
   activity: Activity;
   persona?: Persona;
   facing: number;
+  incapacitated: number;
   /** Actual service durations, sampled once from the profile ranges. Hidden from the agent. */
   serviceTime: { tvm: number; security: number; gate: number };
 }
@@ -55,6 +56,7 @@ export class World {
   readonly rng: Rng;
   readonly items: ItemSystem;
   private readonly personaRng: Rng;
+  private readonly wakeAt = new Map<string, number>();
   readonly persons = new Map<string, Person>();
   readonly facilities = new Map<string, Facility>();
   readonly events: GameEvent[] = [];
@@ -148,6 +150,7 @@ export class World {
       irritable: persona ? persona.traits.temper > 0.6 : opts.irritable ?? false,
       persona,
       facing: opts.facing ?? 0,
+      incapacitated: 0,
       activity: { kind: "idle" },
       serviceTime: { tvm: sample(profile.tvm), security: sample(profile.security), gate: sample(profile.gate) },
     };
@@ -162,6 +165,14 @@ export class World {
 
   get player(): Person | undefined {
     return this.persons.get("player");
+  }
+
+  knockOut(p: Person, seconds: number) {
+    this.removeFromQueue(p);
+    for (const f of this.facilities.values()) if (f.serving?.personId === p.id) f.serving = null;
+    p.activity = { kind: "idle" };
+    p.incapacitated = seconds;
+    this.wakeAt.set(p.id, this.t + seconds);
   }
 
   facility(id: string): Facility | undefined {
@@ -279,6 +290,11 @@ export class World {
   }
 
   private stepPerson(p: Person) {
+    if (p.incapacitated > 0) {
+      p.incapacitated = Math.max(0, this.wakeAt.has(p.id) ? this.wakeAt.get(p.id)! - this.t : p.incapacitated - DT);
+      if (p.incapacitated <= 1e-9) { p.incapacitated = 0; this.wakeAt.delete(p.id); }
+      else return;
+    }
     const a = p.activity;
     const stride = p.speed * DT;
     switch (a.kind) {

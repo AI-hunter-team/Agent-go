@@ -103,6 +103,7 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       .filter((g) => playerCanSee(p.pos, g.pos))
       .map((g) => ({
         id: g.def.id,
+        doing: g.incapacitated > 0 ? "倒地不动" : g.mode === "watch" ? "盯着目标" : g.mode === "investigate" ? "前往动静处查看" : "巡逻",
         position: { x: round1(g.pos.x), y: round1(g.pos.y) },
         facing: `面朝${compass(g.facing)}`,
         distance: round1(dist(p.pos, g.pos)),

@@ -4,6 +4,10 @@ import { GATE_X, HEIGHT, zoneOf } from "./layout";
 import { DT, RULES } from "./scenario";
 import { prepareCutIn } from "./negotiation";
 import { round1, type Person, type World } from "./world";
+import { EventBus } from "./events";
+import { PerceptionSystem } from "./perception";
+import { AlertSystem } from "./alert";
+import type { AlertSignals } from "../shared/types";
 
 export interface Violation {
   t: number;
@@ -20,11 +24,24 @@ export class CreativeSystem {
   caught: { guard: string; mechanic: CreativeMechanic } | null = null;
   private consentTarget: string | null = null;
   private current: Violation | null = null;
+  private checkVisibility: () => AlertSignals["guardRed"];
 
   constructor(
     private world: World,
     private guards: GuardSystem,
-  ) {}
+    private bus = new EventBus(),
+    checkVisibility?: () => AlertSignals["guardRed"],
+  ) {
+    const perception = new PerceptionSystem(bus, (id) => world.persons.get(id));
+    const alerts = new AlertSystem(bus, (id) => guards.guards.find((g) => g.def.id === id)?.role, () => world.t);
+    this.checkVisibility = checkVisibility ?? (() => {
+      const observers = guards.guards.map((g) => ({ id: g.def.id, role: g.role, pos: g.pos, facing: g.facing, incapacitated: g.incapacitated }));
+      return alerts.step(perception.step(observers), (observer, subject) => {
+        const g = guards.guards.find((entry) => entry.def.id === observer), p = world.persons.get(subject);
+        return Boolean(g && p && guards.canSee(g, p.pos));
+      }, 0).guardRed;
+    });
+  }
 
   start(p: Person, mechanic: CreativeMechanic, reason: string): ActionResult {
     if (mechanic === "unsupported") return { ok: false, text: `环境不支持这种行动：${reason}` };
@@ -58,7 +75,7 @@ export class CreativeSystem {
     p.activity = { kind: "creative", mechanic: "jump_gate", remaining: RULES.jumpGateSeconds, facility: "", dest };
     this.begin("jump_gate");
     // A guard may turn on the very next tick; seeing the start still counts.
-    this.detect(p);
+    this.perceiveAct();
     return { ok: true, text: "开始翻越闸机" };
   }
 
@@ -66,6 +83,9 @@ export class CreativeSystem {
     this.current = { t: round1(this.world.t), mechanic, detected: false };
     this.violations.push(this.current);
     this.world.log("violation", mechanic === "jump_gate" ? "角色开始翻越闸机" : "角色开始插队", false);
+    const p = this.world.player!;
+    const event = this.bus.emit({ t: this.world.t, kind: "vault", severity: "violation", actorId: p.id, pos: { ...p.pos }, loudness: 0 });
+    this.bus.beginAct({ actorId: p.id, kind: event.kind, severity: event.severity, eventId: event.id });
   }
 
   /** Advance an ongoing act and run detection. Call once per step after guards move. */
@@ -85,7 +105,7 @@ export class CreativeSystem {
       }
       const frac = Math.min(1, DT / Math.max(a.remaining + DT, DT));
       p.pos = { x: p.pos.x + (a.dest.x - p.pos.x) * frac, y: p.pos.y + (a.dest.y - p.pos.y) * frac };
-      this.detect(p);
+      this.perceiveAct();
       if (this.caught) return;
       if (a.remaining <= 1e-9) this.finish(p, a);
       return;
@@ -95,6 +115,7 @@ export class CreativeSystem {
   private finish(p: Person, a: Extract<Person["activity"], { kind: "creative" }>) {
     const w = this.world;
     if (a.mechanic === "jump_gate") {
+      this.bus.endAct(p.id);
       p.pos = { ...a.dest };
       p.passedGate = true;
       p.activity = { kind: "idle" };
@@ -119,9 +140,10 @@ export class CreativeSystem {
     this.current = null;
   }
 
-  private detect(p: Person) {
+  private perceiveAct() {
     if (!this.current || this.caught) return;
-    const g = this.guards.seenBy(p.pos);
+    const red = this.checkVisibility();
+    const g = red?.subjectId === "player" ? this.guards.guards.find((entry) => entry.def.id === red.guardId) : null;
     if (!g) return;
     this.current.detected = true;
     this.caught = { guard: g.def.label, mechanic: this.current.mechanic };
