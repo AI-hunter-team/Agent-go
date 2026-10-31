@@ -1,6 +1,6 @@
 # BLACKOUT-SWITCH-001：Agent 操作电闸触发限时熄灯
 
-状态：PR #45 已合入；回退场景电闸去重修复待合入
+状态：已合入（PR #45、PR #48）
 
 ## 目标与分工
 
@@ -34,4 +34,4 @@
 
 ## 交接
 
-- PR #45 已于 `883b265` 合入 `main`。后续检查发现回退场景把电闸放在 `Device` 内会导致每个设施重复渲染；修复已移到 `StationFallback` 根组，当前由 follow-up PR 独立合入。
+- PR #45 已于 `883b265` 合入 `main`。后续检查发现回退场景把电闸放在 `Device` 内会导致每个设施重复渲染；修复已移到 `StationFallback` 根组，已由 follow-up PR #48 独立合入。
