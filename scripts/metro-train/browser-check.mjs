@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import { browserCheck } from "../station-kit/browser-harness.mjs";
+
+const [chrome, output = "tmp/metro-train-browser", address = "http://127.0.0.1:5197"] = process.argv.slice(2);
+if (!chrome) throw new Error("Pass the local Chromium executable as the first argument");
+await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, click, screenshot, consoleErrors, responses }) => {
+  await waitFor("window.metroPreviewInspect?.().loaded");
+  const inspect = () => evaluate("window.metroPreviewInspect()");
+  const initial = await inspect(); assert.equal(initial.doors, 20); assert(initial.triangles > 1000);
+  await screenshot("01-head-perspective.png");
+  await click("车头近景"); await screenshot("02-head-front.png");
+  await click("侧面"); await screenshot("03-head-side.png");
+  await click("打开双侧车门 ↔"); await waitFor("window.metroPreviewInspect().doorProgress === 1");
+  const opened = await inspect();
+  assert(opened.positions.every((p) => Math.abs(p.x - p.closedX - p.travel) < 0.00001));
+  await screenshot("04-head-open.png");
+  await click("中间车"); assert.equal((await inspect()).doors, 20); await screenshot("05-trailer.png");
+  await click("三车示意"); await click("整车"); assert.equal((await inspect()).doors, 60); await screenshot("06-consist.png");
+  await click("中国红"); assert.deepEqual((await inspect()).colors, ["b1443b"]);
+  await click("深蓝"); assert.deepEqual((await inspect()).colors, ["315c88"]);
+  await click("青绿"); await click("车头车"); await click("关闭双侧车门 ↔");
+  await waitFor("window.metroPreviewInspect().doorProgress === 0");
+  assert((await inspect()).positions.every((p) => p.x === p.closedX));
+  await click("车顶"); await screenshot("07-roof.png"); await click("整车");
+  const download = await evaluate("document.querySelector('#download').href");
+  assert.equal((await fetch(download)).status, 200);
+  await send("Emulation.setDeviceMetricsOverride", { width: 480, height: 860, deviceScaleFactor: 1, mobile: false });
+  await screenshot("08-mobile.png");
+  assert(await evaluate("document.documentElement.scrollWidth <= innerWidth"));
+  assert.equal(consoleErrors.length, 0); assert(!responses.some((r) => r.status >= 400));
+  await send("Emulation.setDeviceMetricsOverride", { width: 1500, height: 1060, deviceScaleFactor: 1, mobile: false });
+  await screenshot("09-final.png");
+  return { initial, opened: { progress: opened.doorProgress, doors: opened.doors }, loadedGlbResponses: responses.filter((r) => r.url.endsWith('.glb')), final: await inspect(), mobileNoOverflow: true };
+});

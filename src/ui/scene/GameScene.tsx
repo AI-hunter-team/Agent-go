@@ -12,6 +12,7 @@ import type { GameSession } from "../gameSession";
 import type { FrameMetrics } from "../frameMetrics";
 import { sampleActor } from "../presentation";
 import { Station } from "./Station";
+import { MetroPlatform } from "./MetroPlatform";
 import { Character } from "./Character";
 import { SimpleCrowd } from "./SimpleCrowd";
 import { FollowCamera } from "./followCamera";
@@ -370,6 +371,7 @@ function Contents(props: SceneProps) {
     <StationLighting standard={props.quality === "standard"} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} />
     <Station session={session} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
+    <MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
     {actors.filter(a=>a.id!=="player").map(a=><AlertBadge key={a.id} id={a.id} session={session}/>)}
     <SceneItems session={session}/>
     {props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
