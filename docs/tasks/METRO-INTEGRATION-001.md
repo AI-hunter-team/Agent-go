@@ -1,6 +1,6 @@
 # METRO-INTEGRATION-001：青绿线列车接入正式站台
 
-状态：实现及所列验证完成，按用户追加授权准备提交、推送和创建 PR；未合入 main。
+状态：已提交、推送并创建 [PR #38](https://github.com/AI-hunter-team/Agent-go/pull/38)，待审查；未合入 main。
 
 ## 目标、负责人及基线
 
@@ -47,3 +47,5 @@
 - 开始交付前 fetch origin/main，远端仍为 `1032a9155aec1801249054da63a98ffbbd96b093`，与接入基线相同，无须整合其他功能。
 - 重新执行提交前类型、完整测试、构建和暂存 diff 检查；原浏览器验证仍适用于未变更的实现，结果保留在原报告并追加本次交付状态。
 - 主工作区的 NPC-DETAIL-001 改动和所有其他任务工作区继续保留；只提交本简报声明的路径。
+- 功能提交：`4835ba7fdb968c427ec98409e5d55667ad5dbff8`，已普通推送至 `origin/codex/metro-train-integration`；[PR #38](https://github.com/AI-hunter-team/Agent-go/pull/38) 为非草稿、目标 main，未执行合并或部署。
+- 上方本地未提交交接为原接入验收快照；本节为后续交付状态。链接补全文档不更改已验证的代码和模型。

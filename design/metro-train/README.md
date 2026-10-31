@@ -1,6 +1,6 @@
 # 中国城市地铁 · 青绿线列车小样
 
-状态：用户已选中国城市地铁与青绿色线路色，并于 2026-10-31 授权接入及创建 PR。游戏场景停站展示已完成，正在 PR 交付，尚未合入 main；独立设计预览继续可用。
+状态：用户已选中国城市地铁与青绿色线路色，并于 2026-10-31 授权接入及创建 PR。游戏场景停站展示已完成，[PR #38](https://github.com/AI-hunter-team/Agent-go/pull/38) 待审查，尚未合入 main；独立设计预览继续可用。
 
 任务边界见 [METRO-TRAIN-001](../../docs/tasks/METRO-TRAIN-001.md)，实际检查见 [验证报告](../../docs/validation/METRO-TRAIN-001.md)。
 
