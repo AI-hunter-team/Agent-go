@@ -587,7 +587,7 @@ export class ActionExecutor {
     }
     if (s.op === "snatch" || s.op === "push" || s.op === "strike") return this.settleContest(a, s);
     if (s.op === "slide_handrail") {
-      p.pos = { ...a.dest! }; p.onPlatform = true; p.activity = { kind: "done" };
+      p.pos = { ...a.dest! }; p.onPlatform = true; p.activity = { kind: "idle" };
       return { ok: true, text: "沿扶手滑到下层站台" };
     }
     if (s.op === "vault") {

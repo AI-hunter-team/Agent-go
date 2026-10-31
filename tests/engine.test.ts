@@ -58,7 +58,7 @@ describe("engine", () => {
     expect(e.player.pos.x).toBeLessThan(tail.x);
   });
 
-  test("a scripted orderly run descends after the gate and is scored on platform arrival", () => {
+  test("a scripted orderly run descends after the gate and is scored after boarding", () => {
     const e = new Engine(1, { timeLimitSeconds: 180, extraQueuePeople: 0 });
     e.takeTriggers();
     const plan: AgentAction[] = [
@@ -67,15 +67,17 @@ describe("engine", () => {
       { type: "join_queue", facility: [...e.world.facilities.values()].filter((f) => f.def.kind === "gate" && f.status === "open").at(-1)!.def.id, reason: "" },
       { type: "move_to", target: "STAIRS_TOP", reason: "" },
       { type: "descend_stairs", reason: "" },
+      { type: "move_to", target: "TRAIN_1", reason: "登车" },
     ];
     let stage = 0;
     act(e, plan[0]);
     while (e.status === "running") {
       const triggers = runUntilTrigger(e);
-      if ((triggers.some((t) => t.kind === "service_done") && stage < 3) || (stage === 3 && triggers.some((t) => t.kind === "arrived"))) act(e, plan[++stage]);
+      if ((triggers.some((t) => t.kind === "service_done") && stage < 3) || (stage === 3 && triggers.some((t) => t.kind === "arrived")) || (stage === 4 && e.player.onPlatform)) act(e, plan[++stage]);
       if (triggers.length === 0) break;
     }
     expect(e.status).toBe("success");
+    expect(e.player.onTrain).toBe(true);
     expect(e.score).toBe(e.t);
     expect(e.score).toBeGreaterThan(20);
     expect(e.score).toBeLessThan(180);

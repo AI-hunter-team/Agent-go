@@ -12,7 +12,7 @@ test("a completed run renders a score, breakdown and export action", async () =>
   await runner.runToEnd();
   const report = runner.report();
   const html = renderToStaticMarkup(createElement(ReportSummary, { report }));
-  expect(html).toContain("已下楼到达站台");
+  expect(html).toContain("已登上地铁，进入车厢");
   expect(html).toContain((report.timeBreakdown.escalator ?? 0) > 0 ? "乘扶梯" : "下楼梯");
   expect([4, 6]).toContain((report.timeBreakdown.stairs ?? 0) + (report.timeBreakdown.escalator ?? 0));
   expect(html).toContain(report.score!.toFixed(1));

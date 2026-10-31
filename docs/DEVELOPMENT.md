@@ -94,7 +94,9 @@ GitHub Actions 配置在 [ci.yml](../.github/workflows/ci.yml)：面向 `main` �
 
 CI 使用 `npm test -- --maxWorkers=2 --testTimeout=15000`，与已验收整局模拟命令保持一致：限制并发并为单项测试提供 15 秒等待预算，避免托管机器上的完整对局触及 Vitest 默认 5 秒。测试内容、断言和产品时限不变；`npm test` 脚本自身仍为 `vitest run`。此调整的实际阻塞与结果见 [ALL-LOCAL-001](validation/ALL-LOCAL-001.md)。
 
-`gameSession.test.ts` 的六个种子报告对照分别串行执行两个完整对局，单独设置30秒墙钟预算以适应Windows运行波动；其余测试仍使用上述默认预算，完整报告比较与产品时限不变。实际失败及修复证据见 [CI-SESSION-001](validation/CI-SESSION-001.md)。
+`gameSession.test.ts` 的六个种子报告对照分别串行执行两个完整对局，单独设置30秒墙钟预算以适应Windows运行波动；其余用例除下述双整局场景外仍使用上述默认预算，完整报告比较与产品时限不变。实际失败及修复证据见 [CI-SESSION-001](validation/CI-SESSION-001.md)。
+
+`heuristicAgent.test.ts` 中固定拥挤场景的失败/可行路线用例同样连续运行两个完整对局，单独使用30秒墙钟预算，其两个种子、全部断言和游戏截止保持不变；其他离线策略用例沿用默认预算。Windows超过15秒的实际失败及修复验证见 [ONBOARD-PR-001](validation/ONBOARD-PR-001.md#合入前windows检查与修复)。
 
 当前仍无 lint、格式化、Markdown 链接检查、浏览器自动验收或统一 `check` 脚本。文档可使用一次性本地链接审计，但需记录其方法，不能声称仓库已有相应 npm 命令；需要新增工具时另开任务。
 

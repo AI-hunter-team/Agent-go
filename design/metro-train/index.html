@@ -1,20 +1,20 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><link rel="icon" href="data:," /><title>青绿线 · 地铁模型设计台</title></head>
 <body>
-<header><a class="brand" href="#">AGENT GO <span>/ 车辆设计</span></a><span class="phase">01 — 外观小样</span></header>
+<header><a class="brand" href="#">AGENT GO <span>/ 车辆设计</span></a><span class="phase">02 — 精细车厢</span></header>
 <main>
   <section class="viewer" aria-label="可旋转的三维列车预览">
     <div id="canvas"></div><div class="scene-label"><span class="line-badge">01</span><div><strong>青绿线</strong><span>CHINESE METRO / DESIGN STUDY</span></div></div>
-    <div class="view-switch" aria-label="相机视角"><button data-view="perspective" class="active">整车</button><button data-view="front">车头近景</button><button data-view="side">侧面</button><button data-view="roof">车顶</button></div>
+    <div class="view-switch" aria-label="相机视角"><button data-view="perspective" class="active">整车</button><button data-view="front">车头近景</button><button data-view="side">侧面</button><button data-view="roof">车顶</button><button data-view="interior">车厢内部</button></div>
     <div class="viewer-footer"><span id="status" role="status">正在载入实际 GLB 模型…</span><span>拖动旋转 · 滚轮缩放 · 右键平移</span></div>
   </section>
   <aside>
-    <div class="eyebrow">中国城市地铁 / 原创三维资产</div><h1>下一程，<br />从青绿出发。</h1><p class="intro">银白车身、石墨前窗、青绿腰线。参考中国城市地铁的真实比例，适度简化细节。</p>
+    <div class="eyebrow">中国城市地铁 / 原创三维资产</div><h1>下一程，<br />从青绿出发。</h1><p class="intro">银白车身、青绿线路色。为游戏角色调整车体净空，重建曲面座椅、窗框、吊环、照明与通风细节。</p>
     <section class="control-section"><h2><span>01</span> 查看车体</h2><div class="segmented" id="cars"><button data-car="head" class="active">车头车</button><button data-car="trailer">中间车</button><button data-car="consist">三车示意</button></div><p class="note">三车仅用于查看连接效果，非实车编组。</p></section>
     <section class="control-section"><h2><span>02</span> 车门与内饰</h2><button class="door-button" id="doors" aria-pressed="false">打开双侧车门 <span>↔</span></button><p class="note">真实门洞 · 纵向座椅 · 扶手与吊环</p></section>
     <section class="control-section"><h2><span>03</span> 线路色</h2><div class="swatches"><button data-color="#247f76" class="active" aria-label="青绿色" style="--swatch:#247f76">青绿</button><button data-color="#b1443b" aria-label="中国红" style="--swatch:#b1443b">中国红</button><button data-color="#315c88" aria-label="深蓝色" style="--swatch:#315c88">深蓝</button></div></section>
-    <dl class="specs"><div><dt>车体长度</dt><dd>22.8 <small>m</small></dd></div><div><dt>车体宽度</dt><dd>3.0 <small>m</small></dd></div><div><dt>每侧车门</dt><dd>5 <small>组双开门</small></dd></div><div><dt>模型格式</dt><dd>GLB <small>/ PBR</small></dd></div></dl>
+    <dl class="specs"><div><dt>车体长度</dt><dd>22.8 <small>m</small></dd></div><div><dt>车体宽度</dt><dd>3.6 <small>m</small></dd></div><div><dt>车厢净高</dt><dd>2.69 <small>m</small></dd></div><div><dt>每侧车门</dt><dd>5 <small>组双开门</small></dd></div></dl>
     <a class="download" id="download" href="/assets/metro-train/metro-head-car.glb" download>下载车头车 GLB <span>↓</span></a>
-    <p class="footnote">设计讨论版 · 尚未接入游戏站台<br />原创造型参考中国地铁，非指定实车型号复刻。</p>
+    <p class="footnote">已接入本地游戏预览 · 车厢细化版<br />游戏化空间比例，非指定实车型号或工程标准复刻。</p>
   </aside>
 </main><script type="module" src="/main.ts"></script></body></html>

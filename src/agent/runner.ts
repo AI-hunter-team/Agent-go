@@ -422,7 +422,7 @@ export class GameRunner {
     const self = turn.observation.self;
     const record: DebugAttempt = {
       index: this.debug.attempts.length + 1, decisionIndex: this.decisions.length + 1,
-      operation, stage: self.passedGate ? "stairs" : !self.hasTicket ? "ticket" : !self.screened ? "security" : "gate",
+      operation, stage: self.onPlatform ? "boarding" : self.passedGate ? "stairs" : !self.hasTicket ? "ticket" : !self.screened ? "security" : "gate",
       startedAt: new Date().toISOString(), durationMs: 0, status: "pending", turn: structuredClone(turn),
       action: null, classification: null, error: null, usage: null, server: null,
     };
@@ -474,6 +474,7 @@ export class GameRunner {
     const round = (n: number) => Math.round(n * 10) / 10;
     const tb = e.timeBreakdown;
     return {
+      goal: "board_train",
       alerts: structuredClone(e.alerts.history),
       items: structuredClone(e.world.items.transfers),
       worldEvents: structuredClone(e.events.events),

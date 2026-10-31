@@ -2,7 +2,10 @@
   "geometry": "Original procedural geometry authored for Agent Go; Chinese metro inspired, not an exact vehicle replica",
   "sourceFiles": [
     "src/assets/metro-train/index.ts",
-    "scripts/metro-train/build.ts"
+    "src/assets/metro-train/interior.ts",
+    "src/shared/metro.ts",
+    "scripts/metro-train/build.ts",
+    "scripts/metro-train/cabinTextures.ts"
   ],
   "exporter": "scripts/station-kit/glb.ts",
   "thirdPartyArt": [],

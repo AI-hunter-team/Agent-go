@@ -10,11 +10,11 @@ function render(engine: Engine) {
 
 test("the normal journey explicitly includes a gate step before entering the platform", () => {
   const html = render(new Engine(1));
-  const labels = ["买票", "安检", "过闸机", "下行到站台", "进入站台"];
+  const labels = ["买票", "安检", "过闸机", "下行到站台", "登上地铁"];
   for (const label of labels) expect(html).toContain(label);
-  expect(html.indexOf("过闸机")).toBeLessThan(html.indexOf("进入站台"));
+  expect(html.indexOf("过闸机")).toBeLessThan(html.indexOf("登上地铁"));
   expect(html.indexOf("过闸机")).toBeLessThan(html.indexOf("下行到站台"));
-  expect(html.indexOf("下行到站台")).toBeLessThan(html.indexOf("进入站台"));
+  expect(html.indexOf("下行到站台")).toBeLessThan(html.indexOf("登上地铁"));
   expect(html).toContain("当前阶段：买票");
 });
 
@@ -28,7 +28,7 @@ test("passing security advances to the gate stage, not straight to the platform"
   expect(render(engine)).toContain("G2 排队中");
   engine.player.activity = { kind: "service", facility: "G2" };
   expect(render(engine)).toContain("G2 验票通行中");
-  expect(render(engine)).toContain('aria-label="进入站台：待开始"');
+  expect(render(engine)).toContain('aria-label="登上地铁：待开始"');
 });
 
 test("passing a gate completes only the gate step and advances to stairs", () => {
@@ -38,7 +38,7 @@ test("passing a gate completes only the gate step and advances to stairs", () =>
   let html = render(engine);
   expect(html).toContain('aria-label="过闸机：已完成"');
   expect(html).toContain('aria-label="下行到站台：进行中"');
-  expect(html).toContain('aria-label="进入站台：待开始"');
+  expect(html).toContain('aria-label="登上地铁：待开始"');
   expect(html).toContain("当前阶段：下行到站台");
   engine.player.activity = { kind: "stairs", remaining: 3, start: { x: 48, y: 15 } };
   html = render(engine);
@@ -46,16 +46,21 @@ test("passing a gate completes only the gate step and advances to stairs", () =>
   expect(html).toContain("剩余 3 秒");
 });
 
-test("only platform arrival completes the stairs and platform steps", () => {
+test("platform arrival completes descent but keeps boarding active until onTrain", () => {
   const engine = new Engine(1);
   engine.world.items.spawn("ticket", { type: "held", personId: engine.player.id, slot: "pocket" }, engine.player.id);
   engine.player.screened = true;
   engine.player.onPlatform = true;
-  engine.status = "success";
+  engine.status = "running";
   const html = render(engine);
   expect(html).toContain('aria-label="过闸机：已完成"');
   expect(html).toContain('aria-label="下行到站台：已完成"');
-  expect(html).toContain("当前阶段：进入站台");
+  expect(html).toContain("当前阶段：登上地铁");
+  expect(html).toContain('aria-label="登上地铁：进行中"');
+  expect(html).toContain("继续走向车门登车");
+  engine.player.onTrain = true;
+  engine.status = "success";
+  expect(render(engine)).toContain('aria-label="登上地铁：已完成"');
 });
 
 test("the gate stage shows a missing ticket without pretending that a creative route bought one", () => {

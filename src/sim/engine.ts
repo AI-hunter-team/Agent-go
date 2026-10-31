@@ -53,7 +53,7 @@ export class Engine {
 
   status: GameStatus = "running";
   failReason: string | null = null;
-  /** Time of arrival at the lower platform in world seconds. */
+  /** Time of completed train boarding in world seconds. */
   score: number | null = null;
   readonly trail: TrailPoint[] = [];
   readonly timeBreakdown: TimeBreakdown = { walking: 0, queueing: 0, service: 0, waiting: 0, creative: 0, idle: 0, stairs: 0, escalator: 0, distraction: 0 };
@@ -82,7 +82,7 @@ export class Engine {
     this.player = this.world.addPerson("player", ENTRANCE, { isPlayer: true });
     if (!scenarioOverride) this.world.transit.startCrowd();
     this.recordTrail();
-    this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内进入站台。");
+    this.world.notifyPlayer("start", "开局：你站在车站入口，需要在限时内登上地铁。");
     this.perceive();
     this.collect();
   }
@@ -154,13 +154,13 @@ export class Engine {
     const red = this.resolveInteractions();
     if (red?.subjectId === "player") { this.failForGuard(red.guardId, red.causeEventId); return; }
     this.executor.finishFrame();
-    if (this.player.onPlatform) {
+    if (this.player.onTrain) {
       this.score = w.t;
       this.end("success", null);
       return;
     }
     if (w.t >= this.settings.timeLimitSeconds - 1e-9) {
-      this.end("failed", `超时：${this.settings.timeLimitSeconds} 秒内未下行到达站台`);
+      this.end("failed", `超时：${this.settings.timeLimitSeconds} 秒内未登上地铁`);
       return;
     }
 
@@ -196,13 +196,13 @@ export class Engine {
     this.failReason = reason;
     this.world.finishAttention(this.player, "本局结束");
     this.recordTrail();
-    this.world.log(status === "success" ? "success" : "failed", reason ?? `已下行进入站台，用时 ${this.world.t} 秒`, true);
+    this.world.log(status === "success" ? "success" : "failed", reason ?? `已登上地铁，用时 ${this.world.t} 秒`, true);
   }
 
   /** Attribute this step's time to what the player was doing when it began. */
   private account(kind: Person["activity"]["kind"]) {
     const tb = this.timeBreakdown;
-    if (kind === "walking" || kind === "to_queue" || kind === "to_escalator") tb.walking += DT;
+    if (kind === "walking" || kind === "boarding" || kind === "to_queue" || kind === "to_escalator") tb.walking += DT;
     else if (kind === "queued" || kind === "escalator_queue") tb.queueing += DT;
     else if (kind === "service") tb.service += DT;
     else if (kind === "waiting") tb.waiting += DT;
@@ -267,6 +267,7 @@ export class Engine {
     const w = this.world;
     const p = this.player;
     if (this.status !== "running") return { ok: false, text: "本局已结束" };
+    if (p.activity.kind === "boarding" && action.type !== "wait") return { ok: false, text: "正在登车，请等进入车厢" };
     if(this.executor.busy && action.type!=="wait") return {ok:false,text:"上一个行动尚未完成"};
     // Waiting never changes the world, so it is always allowed; anything else must not
     // interrupt a service or a creative act in progress.

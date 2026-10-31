@@ -10,6 +10,9 @@ import { createAvatarRootMotionGuard } from "../src/ui/scene/avatarRootMotion";
 import { VictoryCamera } from "../src/ui/scene/victoryCamera";
 import { cameraFraction } from "../src/ui/scene/cameraCollision";
 import { STAIRS_BOTTOM, ESCALATOR_BOTTOM } from "../src/sim/layout";
+import { PLAYER_TRAIN_DOORS, TRAIN_CENTRE_X, TRAIN_AISLE_X } from "../src/sim/layout";
+import { constrainCabinCamera } from "../src/ui/scene/trainCabin";
+import { METRO_PROFILE } from "../src/shared/metro";
 
 let asset: GLTF;
 /** 在 Node 内读取真实骨架和动画，仅省略需要浏览器解码的材质贴图。 */
@@ -41,6 +44,28 @@ function frame(overrides: Partial<AnimationFrame> = {}): AnimationFrame {
 }
 
 describe("胜利和问候的独立展示", () => {
+  it("各车门登车后桌面和窄屏的庆祝镜头始终留在车厢过道内", () => {
+    for (const door of PLAYER_TRAIN_DOORS) for (const aspect of [16 / 9, 390 / 844, 320 / 568]) {
+      const pose = { x: TRAIN_AISLE_X, y: -2, z: door.pos.y + 1.25, yaw: 0 };
+      const camera = new VictoryCamera();
+      camera.capture(new Vector3(86, 3, pose.z), new Vector3(1, 0, 0));
+      for (const seconds of [0, .1, 1.5, 4, 12, 30, 60]) {
+        camera.update(pose, seconds, aspect, false, 0, true);
+        expect(Math.abs(camera.position.x - TRAIN_CENTRE_X)).toBeLessThanOrEqual(.65 + 1e-8);
+        expect(camera.position.y).toBeGreaterThanOrEqual(-1.55);
+        expect(camera.position.y).toBeLessThanOrEqual(-2+METRO_PROFILE.ceiling-METRO_PROFILE.floor-.2);
+        expect(camera.position.z).toBeGreaterThanOrEqual(6.8);
+        expect(camera.position.z).toBeLessThanOrEqual(25.7);
+        expect(Math.abs(camera.position.z - pose.z)).toBeGreaterThanOrEqual(2.4 - 1e-8);
+      }
+      const manual = new Vector3(130, 20, pose.z);
+      constrainCabinCamera(manual, pose);
+      expect(Math.abs(manual.x - TRAIN_CENTRE_X)).toBeLessThanOrEqual(.65 + 1e-8);
+      expect(manual.y).toBeLessThanOrEqual(-2+METRO_PROFILE.ceiling-METRO_PROFILE.floor-.2);
+      camera.update(pose, 4, aspect, true, 0, true); const fixed = camera.position.clone();
+      camera.update(pose, 40, aspect, true, 0, true); expect(camera.position.equals(fixed)).toBe(true);
+    }
+  });
   it("每段完整播完重新随机，重挂载不打断当前段，新局清理", () => {
     let calls = 0;
     const state = new ScenePerformance(() => {}, () => { calls++; return 0.55; });
@@ -160,6 +185,9 @@ describe("胜利和问候的独立展示", () => {
     state.interactCamera(); state.dismissCamera();
     for (let i = 0; i < 50; i++) state.advance(0.1);
     expect(state.cinematic).toBe(false); expect(state.cameraResumeIn).toBeNull();
+    const time = state.victoryTime;
+    state.restoreCamera();
+    expect(state.cinematic).toBe(true); expect(state.victoryTime).toBe(time);
     state.sync(2, false); expect(state.cameraResumeIn).toBeNull();
   });
 });

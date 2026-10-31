@@ -1,8 +1,9 @@
 import { captureScene } from "./presentation";
 import type { FacilityStatus, PassengerKind, Vec } from "../shared/types";
 import type { Engine } from "../sim/engine";
-import { ATTRACTIONS, RAILING_SEGMENTS, ESCALATOR_BOTTOM, ESCALATOR_TOP, FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_BARRIERS, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, type FacilityDef } from "../sim/layout";
+import { ATTRACTIONS, RAILING_SEGMENTS, ESCALATOR_BOTTOM, ESCALATOR_TOP, FACILITIES, GATE_BARRIERS, GATE_X, HEIGHT, NAV_NODES, PILLARS, PLATFORM_X, SECURITY_BARRIERS, SECURITY_X, STAIRS_BOTTOM, STAIRS_TOP, STAIRS_X, WIDTH, PLAYER_TRAIN_DOORS, type FacilityDef } from "../sim/layout";
 import { RULES } from "../sim/scenario";
+import { METRO_PROFILE } from "../shared/metro";
 
 // Palette follows the chosen visual direction (design/ui-concepts-v3, 方案 02):
 // cream and ochre architecture, grey-green and brick-red accents.
@@ -34,7 +35,8 @@ const NPC_COLOR: Record<PassengerKind, string> = {
 };
 
 export const SCALE = 16;
-export const MAP_PX = { w: WIDTH * SCALE, h: HEIGHT * SCALE };
+const MAP_END = WIDTH + METRO_PROFILE.exteriorHalfWidth * 2 + METRO_PROFILE.platformGap + .2;
+export const MAP_PX = { w: MAP_END * SCALE, h: HEIGHT * SCALE };
 
 /** Floor changes after the gate are separate visible stages of the journey. */
 export const MAP_REGIONS = [
@@ -45,6 +47,7 @@ export const MAP_REGIONS = [
   { label: "上层平台", start: GATE_X, end: STAIRS_X, color: COLORS.landing },
   { label: "楼梯 / 扶梯 ↓", start: STAIRS_X, end: PLATFORM_X, color: COLORS.stairs },
   { label: "下层站台", start: PLATFORM_X, end: WIDTH, color: COLORS.platform },
+  { label: "地铁", start: WIDTH, end: MAP_END, color: "#b4ceca" },
 ];
 
 const px = (v: number) => v * SCALE;
@@ -75,6 +78,11 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   ctx.fillText("入口 →", px(0.2), px(16.6));
 
   drawStairs(ctx);
+  ctx.strokeStyle = "#247f76";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px(WIDTH + METRO_PROFILE.platformGap), px(6.2), px(METRO_PROFILE.width), px(20));
+  ctx.fillStyle = "#f4d65a";
+  for (const door of PLAYER_TRAIN_DOORS) ctx.fillRect(px(WIDTH - 0.1), px(door.pos.y - 0.65), px(0.5), px(1.3));
 
   // Nav nodes (faint markers so players can read agent targets)
   ctx.fillStyle = "rgba(43,42,39,0.25)";
@@ -281,7 +289,7 @@ function drawStairs(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = "center";
   ctx.font = "11px ui-sans-serif, system-ui";
   ctx.fillText("闸机后连接区", px((GATE_X + STAIRS_X) / 2), px(3));
-  ctx.fillText("下层站台 · 两路同一终点", px((PLATFORM_X + WIDTH) / 2), px(3));
+  ctx.fillText("下层站台 · 继续走向车门登车", px((PLATFORM_X + WIDTH) / 2), px(3));
   ctx.restore();
 }
 

@@ -37,6 +37,7 @@ describe("offline heuristic agent", () => {
     expect(engine.status).toBe("success");
   });
 
+  // Two complete simulations share this test; allow the same wall-clock budget as report comparisons.
   test("new fixed crowd can time out orderly play while retaining a legal route on other seeds", async () => {
     const difficult = await play(6);
     expect(difficult.engine.status).toBe("failed");
@@ -48,7 +49,7 @@ describe("offline heuristic agent", () => {
     expect(possible.engine.status).toBe("success");
     expect(possible.engine.t).toBeLessThan(150);
     expect(possible.engine.creative.violations).toHaveLength(0);
-  });
+  }, 30000);
 
   test("after a gate the next destination is the stairs, even without a ticket", async () => {
     const engine = new Engine(1);

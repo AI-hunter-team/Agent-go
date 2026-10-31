@@ -2,11 +2,24 @@ import { describe, expect, test } from "vitest";
 import { GameRunner } from "../src/agent/runner";
 import { HeuristicAgent } from "../src/agent/heuristicAgent";
 import { Engine } from "../src/sim/engine";
-import { buildReviewInput, validateReview, validateDraft } from "../src/shared/review";
+import { buildReviewInput, validateReviewInput, validateReview, validateDraft } from "../src/shared/review";
+import { buildReviewSystem } from "../server/review";
 
 import { analysis, failedReport } from "./reviewFixture";
 
 describe("post-game evidence", () => {
+  test("new and legacy reports preserve their own finish line in the review request", () => {
+    const report = failedReport(); delete report.goal;
+    const legacy = buildReviewInput(report);
+    expect(legacy.goal).toBeUndefined();
+    expect(buildReviewSystem(legacy.goal)).toContain("旧版终点，无需登车");
+    report.goal = "board_train";
+    const current = buildReviewInput(report);
+    expect(current.goal).toBe("board_train");
+    expect(buildReviewSystem(current.goal)).toContain("实际登上地铁、进入车厢");
+    expect(() => validateReviewInput(current)).not.toThrow();
+    expect(() => validateReviewInput({ ...current, goal: "invented" })).toThrow();
+  });
   test("keeps invisible events and global history without leaking raw prompts or reasoning", () => {
     const report = failedReport();
     const input = buildReviewInput(report);

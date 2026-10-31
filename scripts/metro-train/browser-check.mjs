@@ -30,5 +30,5 @@ await browserCheck(chrome, output, address, async ({ send, evaluate, waitFor, cl
   assert.equal(consoleErrors.length, 0); assert(!responses.some((r) => r.status >= 400));
   await send("Emulation.setDeviceMetricsOverride", { width: 1500, height: 1060, deviceScaleFactor: 1, mobile: false });
   await screenshot("09-final.png");
-  return { initial, opened: { progress: opened.doorProgress, doors: opened.doors }, loadedGlbResponses: responses.filter((r) => r.url.endsWith('.glb')), final: await inspect(), mobileNoOverflow: true };
+  return { initial, opened: { progress: opened.doorProgress, doors: opened.doors }, loadedGlbResponses: responses.filter((r) => new URL(r.url).pathname.endsWith('.glb')), final: await inspect(), mobileNoOverflow: true };
 });

@@ -1,0 +1,63 @@
+.end { position: absolute; z-index: 35; inset: 0; pointer-events: none; }
+.end[hidden] { display: none; }
+.navigation { position: absolute; top: 24px; left: 32px; display: flex; align-items: center; gap: 20px; pointer-events: auto; }
+.brand { font-size: 23px; font-weight: 800; letter-spacing: -.04em; text-shadow: 0 1px 10px white; }
+.brand span { margin-left: 5px; font-size: 12px; color: #edbf25; }
+.navigation button { background: #fffffff0; }
+.result { position: absolute; top: max(76px, 10dvh); left: 50%; transform: translateX(-50%); width: min(650px, calc(100% - 32px)); text-align: center; color: #142033; text-shadow: 0 2px 14px #fff, 0 0 24px #fff; }
+.result h1 { margin: 0 0 8px; font-size: clamp(32px, 5vw, 64px); font-weight: 900; line-height: 1.15; letter-spacing: -.05em; }
+.result p { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.6; overflow-wrap: anywhere; }
+.result strong { font-variant-numeric: tabular-nums; }
+.end[data-outcome=failed] { background: linear-gradient(180deg, #f5f2f1b8 0, #f5f2f170 22%, transparent 43%, transparent 70%, #f8f5eff0 100%); }
+.end[data-outcome=failed] .result { top: max(86px, 11dvh); }
+.failureLabel { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; margin-bottom: 12px; border: 1px solid #be817c3d; border-radius: 99px; background: #fff7f3ed; color: #924a43; font-size: 12px; font-weight: 700; line-height: 20px; text-shadow: none; }
+.failureLabel svg { width: 16px; height: 16px; }
+.end[data-outcome=failed] .result h1 { font-size: clamp(30px, 4.2vw, 50px); letter-spacing: -.04em; }
+.end[data-outcome=failed] .result p { max-width: 540px; margin-inline: auto; color: #4a5360; font-size: 14px; font-weight: 500; }
+.elapsed { display: inline-block; margin-top: 12px; padding: 5px 12px; border: 1px solid #ffffffc9; border-radius: 10px; background: #ffffffe6; color: #586272; font-size: 12px; font-weight: 500; line-height: 20px; text-shadow: none; }
+.elapsed strong { margin-inline: 3px; color: #273346; font-weight: 700; }
+.end[data-outcome=success] .result { animation: result-settle 2.8s ease-out both; }
+.actions { position: absolute; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: grid; justify-items: center; gap: 8px; width: min(440px, calc(100% - 32px)); pointer-events: auto; }
+.actions::before { content: ""; position: absolute; z-index: -1; inset: -28px -32px -30px; background: radial-gradient(ellipse, #fffdf4d9, #fffdf400 72%); pointer-events: none; }
+.buttons { display: flex; width: 100%; gap: 12px; }
+.buttons button { flex: 1; min-width: 0; min-height: 52px; border-radius: 18px; background: #fffffff5; box-shadow: 0 6px 22px #14203321; font-size: 16px; font-weight: 800; }
+.buttons :global(.primary) { background: #f7cf38; }
+.actions .edit { min-height: 36px; border: 0; padding: 4px 14px; background: #ffffffc9; border-radius: 12px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti i { position: absolute; top: -16px; width: 8px; height: 13px; background: #edbf25; animation: confetti-fall 2.8s ease-out both; }
+.confetti i:nth-child(3n) { background: #fff1b1; width: 5px; }
+@keyframes result-settle { 0% { opacity: 0; transform: translateX(-50%) scale(1.1); } 15%, 60% { opacity: 1; transform: translateX(-50%) scale(1); } 100% { opacity: 1; transform: translate(-50%, -16px) scale(.8); } }
+@keyframes confetti-fall { 0% { opacity: 0; transform: translateY(0) rotate(0); } 12% { opacity: 1; } 100% { opacity: 0; transform: translateY(42dvh) rotate(160deg); } }
+@media (max-width: 600px) {
+  .navigation { top: max(12px, env(safe-area-inset-top)); left: 16px; gap: 12px; }
+  .brand { font-size: 20px; }
+  .navigation button { min-height: 40px; font-size: 12px; padding: 8px 12px; }
+  .result { top: 90px; }
+  .result h1 { font-size: 42px; }
+  .result p { font-size: 13px; }
+  .end[data-outcome=failed] .result { top: 84px; }
+  .end[data-outcome=failed] .result h1 { font-size: 32px; }
+  .end[data-outcome=failed] .result p { font-size: 13px; }
+  .actions { bottom: max(12px, env(safe-area-inset-bottom)); }
+  .buttons button { font-size: 15px; min-height: 48px; border-radius: 16px; }
+}
+@media (min-height: 501px) and (max-height: 650px) {
+  .end[data-outcome=failed] .result { top: 64px; }
+  .failureLabel { margin-bottom: 6px; padding: 2px 10px; }
+  .end[data-outcome=failed] .result h1 { font-size: 28px; }
+  .elapsed { margin-top: 6px; padding: 2px 8px; }
+}
+@media (max-height: 500px) { .result { top: 60px; } .result h1 { font-size: 32px; margin-bottom: 2px; } .result p { font-size: 12px; } .actions { bottom: 8px; gap: 2px; } .buttons button { min-height: 42px; } .actions .edit { min-height: 28px; } }
+@media (max-height: 500px) {
+  .end[data-outcome=failed] .result { top: 18px; width: min(480px, calc(100% - 360px)); }
+  .failureLabel { margin-bottom: 6px; padding: 2px 10px; font-size: 11px; line-height: 18px; }
+  .failureLabel svg { width: 14px; height: 14px; }
+  .end[data-outcome=failed] .result h1 { font-size: 28px; }
+  .end[data-outcome=failed] .result p { font-size: 12px; }
+  .elapsed { margin-top: 6px; padding: 2px 8px; font-size: 11px; }
+}
+@media (max-height: 500px) and (max-width: 600px) {
+  .end[data-outcome=failed] .result { top: 64px; width: calc(100% - 32px); }
+  .failureLabel { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .end[data-outcome=success] .result { animation: none; } .confetti { display: none; } }

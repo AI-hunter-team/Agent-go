@@ -29,11 +29,13 @@ describe("trajectory recording", () => {
     expect(engine.trail[0].x).toBe(2);
   });
 
-  test("completed runs retain the final platform position and world time", async () => {
+  test("completed runs retain the final cabin position and world time", async () => {
     const runner = new GameRunner(new Engine(1, { timeLimitSeconds: 180, extraQueuePeople: 0 }), new HeuristicAgent(), offlineClassifier);
     await runner.runToEnd();
     const report = runner.report();
     expect(report.status).toBe("success");
+    expect(runner.engine.player.onTrain).toBe(true);
+    expect(runner.engine.player.pos.x).toBeGreaterThan(90);
     expect(report.trail.at(-1)).toEqual({ t: report.elapsed, ...runner.engine.player.pos });
     expect(getReplayFrame(report, report.elapsed).position).toEqual(runner.engine.player.pos);
   });

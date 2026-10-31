@@ -56,6 +56,8 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const facility = a.kind === "queued" || a.kind === "service" ? engine.world.facility(a.facility)?.def : undefined;
     const face = facility ? Object.freeze({ x: facility.pos.x, z: facility.pos.y }) : undefined;
     let yaw = face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : old?.yaw ?? (next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : Math.PI / 2);
+    // Face down the aisle for the celebration; world position and score stay authoritative.
+    if (person.isPlayer && person.onTrain) yaw = person.pos.y < 15 ? 0 : Math.PI;
     // NPCs turn at a human pace; a blocked step must not snap them between opposite headings.
     if (!person.isPlayer && old) {
       const turn = Math.atan2(Math.sin(yaw - old.yaw), Math.cos(yaw - old.yaw));

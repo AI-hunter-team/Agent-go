@@ -7,7 +7,7 @@ export function DebugPanel({ report }: { report: GameReport }) {
   const seconds = (ms: number) => `${(ms / 1000).toFixed(3)} 秒`;
   const percent = (ms: number) => s.aiWaitMs ? `${(ms / s.aiWaitMs * 100).toFixed(1)}%` : "0%";
   const operations = { decision: "首次决策", retry: "失败重试", classification: "创造性归类", negotiation: "NPC 沟通", interpret: "行动解释", npc_respond: "人物对话", review: "复盘", review_draft: "指导草稿" };
-  const stages = { ticket: "买票", security: "安检", gate: "过闸", stairs: "下楼到站台" };
+  const stages = { ticket: "买票", security: "安检", gate: "过闸", stairs: "下楼到站台", boarding: "登上地铁" };
   const exportDebug = () => {
     const blob = new Blob([JSON.stringify(debug, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
