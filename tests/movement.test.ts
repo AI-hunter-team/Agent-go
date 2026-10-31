@@ -158,3 +158,34 @@ test("a blocked nearby waypoint waits without sideways jitter and resumes when c
   }
   expect(steer(pos, target, 0.08, 0.32, [])).toEqual(target);
 });
+
+test("an occupied arrival slot cannot make a passenger repeatedly retrace its last steps", () => {
+  const w = new World(1);
+  const blocker = w.addPerson("luggage", { x: 24.11, y: 24 });
+  const p = w.addPerson("elderly", { x: 23.26843767209405, y: 24.07366147703566 });
+  const target = { x: 23.4, y: 24 };
+  p.activity = { kind: "to_queue", facility: "S3", path: [target] };
+  let moved = 0;
+  for (let tick = 0; tick < 80; tick++) {
+    const before = { ...p.pos };
+    w.movePerson(p, target, 0.08);
+    if (Math.hypot(p.pos.x - before.x, p.pos.y - before.y) > 1e-8) moved++;
+    expect(sweptDistance(before, p.pos, blocker.pos)).toBeGreaterThanOrEqual(0.82 - 1e-6);
+  }
+  expect(moved).toBe(0);
+  // Do not stop prematurely when a collision-safe forward step is still possible.
+  p.pos.x -= 0.15;
+  const beforeApproach = { ...p.pos };
+  w.movePerson(p, target, 0.08);
+  expect(Math.hypot(p.pos.x - target.x, p.pos.y - target.y)).toBeLessThan(Math.hypot(beforeApproach.x - target.x, beforeApproach.y - target.y));
+  expect(sweptDistance(beforeApproach, p.pos, blocker.pos)).toBeGreaterThanOrEqual(0.82 - 1e-6);
+  p.pos = { x: 23.26843767209405, y: 24.07366147703566 };
+  // The same obstruction at an intermediate route corner must still allow local avoidance.
+  p.activity.path.push({ x: 20, y: 24 });
+  const waiting = { ...p.pos };
+  w.movePerson(p, target, 0.08);
+  expect(p.pos).not.toEqual(waiting);
+  w.persons.delete(blocker.id);
+  for (let tick = 0; tick < 40; tick++) w.movePerson(p, target, 0.08);
+  expect(p.pos).toEqual(target);
+});

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
+import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, type Mesh } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { WIDTH, HEIGHT } from "../../sim/layout";
 import { platformElevation } from "../presentation";
@@ -11,7 +11,7 @@ import { sampleActor } from "../presentation";
 import { Station } from "./Station";
 import { Character } from "./Character";
 import { SimpleCrowd } from "./SimpleCrowd";
-import { cameraFraction } from "./cameraCollision";
+import { FollowCamera } from "./followCamera";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; }
@@ -75,7 +75,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
   const orbit = useRef({ yaw: 0, pitch: 0.16, distance: 4.2 });
   const drag = useRef<{ x: number; y: number; pointer: number } | null>(null);
   const pose = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
-  const vectors = useMemo(() => ({ target: new Vector3(), desired: new Vector3(), eye: new Vector3() }), []);
+  const follow = useMemo(() => new FollowCamera(), []);
   const initial = useRef(true);
   useEffect(() => {
     const active = cameras[settings.mode];
@@ -87,7 +87,7 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     }
     active.updateProjectionMatrix(); set({ camera: active }); initial.current = true;
   }, [cameras, set, settings.mode, size.width, size.height]);
-  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; initial.current = true; }, [settings.reset, session.generation]);
+  useEffect(() => { orbit.current = { yaw: 0, pitch: 0.16, distance: 4.2 }; follow.reset(); initial.current = true; invalidate(); }, [settings.reset, session.generation, follow, invalidate]);
   useEffect(() => {
     const canvas = gl.domElement;
     /** 记录跟随相机的拖动起点。 */
@@ -118,23 +118,15 @@ function CameraRig({ session, settings, reducedMotion }: { session: GameSession;
     return () => { canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("wheel", wheel); drag.current = null; };
   }, [gl, settings.mode, invalidate]);
   useFrame((state, delta) => {
-    const { target, desired, eye } = vectors;
     if (settings.mode === "overview") {
       state.camera.position.set(WIDTH / 2 - 28, 62, HEIGHT + 28); state.camera.lookAt(WIDTH / 2, -0.5, HEIGHT / 2); return;
     }
     sampleActor(session.presentation, "player", session.alpha, pose.current);
-    target.set(pose.current.x, 1.25 + pose.current.y, pose.current.z);
-    const yaw = pose.current.yaw + orbit.current.yaw;
-    const distance = orbit.current.distance;
-    desired.set(target.x - Math.sin(yaw) * distance, target.y + 0.65 + Math.sin(orbit.current.pitch) * distance, target.z - Math.cos(yaw) * distance);
-    const fraction = cameraFraction(target, desired);
-    eye.copy(target).lerp(desired, fraction);
-    if (initial.current || reducedMotion || fraction < 0.99) { state.camera.position.copy(eye); initial.current = false; }
-    else state.camera.position.lerp(eye, 1 - Math.exp(-delta * 12));
-    const safeFraction = cameraFraction(target, state.camera.position);
-    if (safeFraction < 1) state.camera.position.lerpVectors(target, state.camera.position, safeFraction);
-    state.camera.lookAt(target);
-    if (session.frozen && state.camera.position.distanceToSquared(eye) > 0.00001) invalidate();
+    follow.update(pose.current, orbit.current, delta, initial.current, reducedMotion);
+    initial.current = false;
+    state.camera.position.set(follow.position.x, follow.position.y, follow.position.z);
+    state.camera.lookAt(follow.target.x, follow.target.y, follow.target.z);
+    if (session.frozen && !follow.settled) invalidate();
   });
   return null;
 }

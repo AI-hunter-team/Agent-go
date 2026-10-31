@@ -89,3 +89,33 @@ test("queued and serving actors turn toward their facility after arriving from t
     expect(buffer.current.actors.get(p.id)!.motion).toBe(kind === "service" ? "interact" : "walk");
   }
 });
+
+test("NPC collision reversals and arrival transitions have bounded visual turns", () => {
+  const engine = new Engine(1);
+  engine.world.persons.clear();
+  const p = engine.world.addPerson("normal", { x: 10, y: 15 });
+  p.activity = { kind: "walking", path: [{ x: 15, y: 15 }], label: "test" };
+  let scene = captureScene(engine);
+  for (let tick = 0; tick < 20; tick++) {
+    const old = scene.actors.get(p.id)!;
+    p.pos.y += tick % 2 ? 0.08 : -0.08;
+    engine.world.t += 0.1;
+    scene = captureScene(engine, scene);
+    const actor = scene.actors.get(p.id)!;
+    expect(Math.abs(actor.yaw - old.yaw)).toBeLessThanOrEqual(0.4 + 1e-8);
+    expect(actor.x).toBe(p.pos.x);
+    expect(actor.z).toBe(p.pos.y);
+  }
+  const stopped = scene.actors.get(p.id)!.yaw;
+  engine.world.t += 0.1;
+  scene = captureScene(engine, scene);
+  expect(scene.actors.get(p.id)!.yaw).toBe(stopped);
+  p.activity = { kind: "queued", facility: "TVM-2" };
+  for (let tick = 0; tick < 20; tick++) { engine.world.t += 0.1; scene = captureScene(engine, scene); }
+  const buffer = new PresentationBuffer(engine);
+  buffer.previous = buffer.current = scene;
+  const pose = { x: 0, y: 0, z: 0, yaw: 0 };
+  sampleActor(buffer, p.id, 1, pose);
+  const facility = engine.world.facility("TVM-2")!.def;
+  expect(pose.yaw).toBeCloseTo(Math.atan2(facility.pos.x - p.pos.x, facility.pos.y - p.pos.y));
+});

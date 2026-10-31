@@ -105,6 +105,12 @@ export class World {
 
   /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
   movePerson(p: Person, target: Vec, stride: number, detour = true): boolean {
+    const bodies = this.collisionBodies(p.id);
+    // Approach an occupied final queue slot directly, then wait instead of circling it.
+    // Safe forward progress still matters: stopping early can obstruct the surrounding traffic.
+    const occupiedArrival = p.activity.kind === "to_queue" && p.activity.path.length === 1
+      && dist(p.pos, target) <= personRadius(p.kind) + stride
+      && !clearOfPeople(target, target, personRadius(p.kind), bodies);
     const memberships = [...this.facilities.values()].map(f => [...f.queue, ...(f.serving ? [f.serving.personId] : [])]);
     memberships.push(this.transit.queue);
     const queues = memberships.flatMap((ids) => {
@@ -115,8 +121,8 @@ export class World {
       const minY = Math.min(...people.map((person) => person.pos.y)), maxY = Math.max(...people.map((person) => person.pos.y));
       return [{ x: minX - margin, y: minY - margin, w: maxX - minX + margin * 2, h: maxY - minY + margin * 2 }];
     });
-    const waypoint = detour ? detourAroundQueues(p.pos, target, queues, personRadius(p.kind)) : target;
-    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), this.collisionBodies(p.id), detour);
+    const waypoint = detour && !occupiedArrival ? detourAroundQueues(p.pos, target, queues, personRadius(p.kind)) : target;
+    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour && !occupiedArrival);
     return dist(p.pos, target) < 1e-6;
   }
 
