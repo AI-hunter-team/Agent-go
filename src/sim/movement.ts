@@ -4,7 +4,9 @@ import { ATTRACTIONS, FACILITIES, GATE_BARRIERS, HEIGHT, MOVE_BLOCKERS, PILLARS,
 import { facilitySolids } from "./facilityGeometry";
 
 export interface MovingBody { id: string; pos: Vec; from?: Vec; radius: number }
-export const personRadius = (kind: PassengerKind | "guard") => kind === "luggage" ? 0.48 : 0.32;
+/** The visible naiwa security model is wider than a passenger; keep its body footprint explicit. */
+export const GUARD_COLLISION_RADIUS = 0.84;
+export const personRadius = (kind: PassengerKind | "guard") => kind === "guard" ? GUARD_COLLISION_RADIUS : kind === "luggage" ? 0.48 : 0.32;
 const furniture: Rect[] = FACILITIES.flatMap((f) => facilitySolids(f.kind, f.pos, f.queueDirection));
 const solids = [...PILLARS, ...furniture, ...ATTRACTIONS.flatMap(a => a.body ? [a.body] : [])];
 /** Shared by persistent route planning and the per-tick collision sweep. */
