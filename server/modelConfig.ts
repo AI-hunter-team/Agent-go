@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { debugFetch } from "./debug";
 import type { LlmService } from "./app";
-import { configFromEnv } from "./claude";
-import { OpenAIClient, OpenAILlmService } from "./openai";
+import { configFromEnv, normalizeBaseUrl, type ModelSettings } from "./modelSettings";
+import { isReasoningEffort } from "../src/shared/modelConfig";
+import { ResponsesClient, ResponsesLlmService } from "./responses";
 import { Engine } from "../src/sim/engine";
 import { SessionStore } from "./sessions";
 
 export class ModelConfigError extends Error {
+  /** 将配置错误映射到可读的 API 状态码。 */
   constructor(message: string, readonly status = 400) { super(message); }
 }
 
@@ -15,6 +17,7 @@ interface Configuration {
   apiKey: string;
   models: string[];
   llm: LlmService | null;
+  settings: Readonly<ModelSettings> | null;
   lastUsed: number;
 }
 
@@ -23,20 +26,17 @@ const TTL = 30 * 60_000;
 /** Per-browser credentials, held only in memory and never exposed by health/log APIs. */
 export class ModelConfigStore {
   private configs = new Map<string, Configuration>();
+  /** 允许测试注入传输，生产环境使用 fetch。 */
   constructor(private fetcher: typeof fetch = fetch) {}
 
+  /** 验证凭据和模型发现，保持用户填写的 API 基础路径。 */
   async verify(baseUrl: unknown, apiKey: unknown) {
     if (typeof baseUrl !== "string" || typeof apiKey !== "string" || !apiKey.trim() || apiKey.length > 4096 || /[\r\n]/.test(apiKey)) {
       throw new ModelConfigError("请填写有效的 API 域名和 API Key");
     }
-    let url: URL;
-    try { url = new URL(baseUrl.trim()); }
+    let normalizedUrl: string;
+    try { normalizedUrl = normalizeBaseUrl(baseUrl); }
     catch { throw new ModelConfigError("API 域名需要包含 https:// 或 http://"); }
-    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-      throw new ModelConfigError("API 地址必须是无账号、查询参数和片段的 HTTP(S) 地址");
-    }
-    if (url.pathname === "/") url.pathname = "/v1";
-    const normalizedUrl = url.href.replace(/\/+$/, "");
     let models: string[];
     try {
       const response = await this.fetcher(`${normalizedUrl}/models`, {
@@ -61,10 +61,11 @@ export class ModelConfigStore {
     this.sweep();
     if (this.configs.size >= 100) throw new ModelConfigError("临时配置数量已达上限，请稍后重试", 429);
     const token = randomUUID();
-    this.configs.set(token, { baseUrl: normalizedUrl, apiKey: apiKey.trim(), models, llm: null, lastUsed: Date.now() });
+    this.configs.set(token, { baseUrl: normalizedUrl, apiKey: apiKey.trim(), models, llm: null, settings: null, lastUsed: Date.now() });
     return { token, baseUrl: normalizedUrl, models };
   }
 
+  /** 读取仍有效的临时配置，不对外暴露凭据。 */
   get(token: string) {
     this.sweep();
     const config = this.configs.get(token);
@@ -73,13 +74,15 @@ export class ModelConfigStore {
     return config;
   }
 
-  async enable(token: string, model: unknown) {
+  /** 用所选档位探测真实工具协议，成功后替换新对局的配置。 */
+  async enable(token: string, model: unknown, reasoningEffort: unknown = "none") {
     const config = this.get(token);
     if (typeof model !== "string" || !model.trim() || model.length > 200 || /[\r\n]/.test(model)) {
       throw new ModelConfigError("请选择或填写有效的模型 ID");
     }
-    const cfg = configFromEnv({ ...process.env, AGENT_MODEL: model.trim(), AGENT_FALLBACK: "off" });
-    const llm = new OpenAILlmService(new OpenAIClient(config.baseUrl, config.apiKey, debugFetch(this.fetcher), { stream: cfg.openaiStream }), cfg);
+    if (!isReasoningEffort(reasoningEffort)) throw new ModelConfigError("思考强度必须是 none、low、high 或 max");
+    const cfg = configFromEnv({ ...process.env, AGENT_MODEL: model.trim(), OPENAI_REASONING_EFFORT: reasoningEffort });
+    const llm = new ResponsesLlmService(new ResponsesClient(config.baseUrl, config.apiKey, debugFetch(this.fetcher), { stream: cfg.openaiStream }), cfg);
     // Exercise the same tool-calling request as gameplay, without starting or changing a real game.
     const probe = await llm.decide(new SessionStore().create("", null), {
       triggers: [{ kind: "start", text: "连通性验证，请选择一个合法行动。" }],
@@ -88,11 +91,14 @@ export class ModelConfigStore {
     if (probe.error || !probe.action) throw new ModelConfigError(`模型验证失败：${probe.error?.replaceAll("OPENAI_API_KEY", "API Key") || "未返回有效工具调用"}`, 422);
     if (this.get(token) !== config) throw new ModelConfigError("配置已失效，请重新验证", 401);
     config.llm = llm;
+    config.settings = llm.settings;
     return { llm: true as const, model: llm.model };
   }
 
+  /** 主动撤销已丢弃的配置。 */
   delete(token: string) { this.configs.delete(token); }
 
+  /** 删除闲置超过 TTL 的凭据。 */
   private sweep() {
     const cutoff = Date.now() - TTL;
     for (const [token, config] of this.configs) if (config.lastUsed < cutoff) this.configs.delete(token);

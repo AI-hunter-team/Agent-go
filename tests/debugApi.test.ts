@@ -5,11 +5,12 @@ import type { AddressInfo } from "node:net";
 import { expect, test } from "vitest";
 import { createApp } from "../server/app";
 import { DebugLogger, debugFetch } from "../server/debug";
-import { OpenAIClient, OpenAILlmService } from "../server/openai";
+import { ResponsesClient, ResponsesLlmService } from "../server/responses";
 import { SessionStore } from "../server/sessions";
 import { GameRunner } from "../src/agent/runner";
 import { Engine } from "../src/sim/engine";
 import type { CreativeClassification, DecisionResult, GameReport } from "../src/shared/types";
+import { jsonResponse, response, toolCall } from "./responsesSupport";
 
 test("HTTP flow correlates preparation, decision, classification and persisted final report", async () => {
   const dir = await mkdtemp(join(tmpdir(), "agent-debug-api-"));
@@ -17,17 +18,18 @@ test("HTTP flow correlates preparation, decision, classification and persisted f
   const logger = new DebugLogger(true, dir, [secret]);
   const fetcher = debugFetch((async (_url, init) => {
     const request = JSON.parse(init!.body as string);
-    const value = request.tools ? { role: "assistant", content: null, tool_calls: [{ id: "t1", type: "function", function: { name: "attempt_creative", arguments: JSON.stringify({ intent: "飞过去", reason: "测试" }) } }] }
-      : { role: "assistant", content: JSON.stringify(request.response_format.json_schema.name === "guidance"
+    const value = request.tools ? response({ output: [toolCall(JSON.stringify({ intent: "飞过去", reason: "测试" }), undefined, "attempt_creative")] })
+      : jsonResponse(request.text.format.name === "guidance"
         ? { summary: "测试", risk: "未说明", priorities: [], rules: [], creativeIdeas: [], notExecutable: [], initialPlan: [] }
-        : { mechanic: "unsupported", reason: "不支持飞行" }) };
-    return Response.json({ model: "luna-test", choices: [{ finish_reason: request.tools ? "tool_calls" : "stop", message: value }], usage: { prompt_tokens: 100, completion_tokens: 20 } }, { headers: { "x-request-id": "upstream-id" } });
+        : { mechanic: "unsupported", reason: "不支持飞行" });
+    return Response.json({ ...value, model: "model-test" }, { headers: { "x-request-id": "upstream-id" } });
   }) as typeof fetch);
-  const llm = new OpenAILlmService(new OpenAIClient("https://example.test/v1", secret, fetcher), { model: "luna-test", maxTokens: 4096, maxThinkingTokens: 1024, fallback: false });
+  const llm = new ResponsesLlmService(new ResponsesClient("https://example.test/v1", secret, fetcher), { model: "model-test", maxTokens: 4096, reasoningEffort: "none" as const, openaiStream: true });
   const sessions = new SessionStore();
-  const server = createApp({ llm, sessions, debugLogger: logger, modelParameters: { maxThinkingTokens: 1024, maxTokens: 4096 } }).listen(0, "127.0.0.1");
+  const server = createApp({ llm, sessions, debugLogger: logger, modelParameters: { reasoningEffort: "none", maxTokens: 4096 } }).listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  /** 调用独立的本地测试 API。 */
   async function api(path: string, body?: unknown, method = "POST") {
     const res = await fetch(base + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
     const text = await res.text();

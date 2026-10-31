@@ -7,6 +7,7 @@ import { useRef } from "react";
 import { MapCanvas } from "./MapCanvas";
 import type { RenderOptions } from "./render";
 
+/** 控制历史轨迹的播放、倍速及决策跳转，不推进实时世界。 */
 export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; optionsRef: MutableRefObject<RenderOptions> }) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -30,6 +31,7 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
     if (!playing || !canPlay) return;
     let raf = 0;
     let last: number | null = null;
+    // 按真实帧间隔推进回放时钟，长帧限制为 0.25 秒。
     const tick = (now: number) => {
       if (last !== null) {
         const delta = Math.min(0.25, Math.max(0, (now - last) / 1000));
@@ -46,6 +48,7 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
     if (time >= duration) setPlaying(false);
   }, [time, duration]);
 
+  // 跳转时暂停播放，并将目标约束在本局时长内。
   const seek = (target: number) => {
     setPlaying(false);
     setTime(Math.max(0, Math.min(duration, target)));
@@ -54,7 +57,7 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
   return (
     <section className="card replay" aria-label="角色轨迹回放">
       <div className="row between">
-        <h2>轨迹回放</h2>
+        <h3>播放进度</h3>
         <output className="replay-clock" aria-label="回放时间">{frame.t.toFixed(1)}s <span>/ {duration.toFixed(1)}s</span></output>
       </div>
       <p className="muted replay-note">
@@ -94,6 +97,7 @@ export function TrajectoryReplay({ report, optionsRef }: { report: GameReport; o
   );
 }
 
+/** 组合历史地图与回放控制器，共享只读回放帧。 */
 export function TrajectoryReplayView({ report, engine }: { report: GameReport; engine: Engine }) {
   const engineRef = useRef<Engine | null>(engine);
   const optionsRef = useRef<RenderOptions>({ showVision: false, showTrail: true, thinking: false });

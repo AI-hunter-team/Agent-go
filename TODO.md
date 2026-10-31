@@ -1,5 +1,13 @@
 # 待办
 
+## PR-SUBMIT-001
+
+- [x] 整理 Responses、UI 与性能范围，隔离本机历史记录和产物。
+- [x] 集成最新 main，保留独立 NPC 与随机种子等主线行为。
+- [x] 完成类型、398 项测试、构建及设置页烟测。
+- [ ] 普通 git push 并创建面向 main 的 PR；最终状态由 PR 记录。
+- 真实模型、Docker、合并与部署不在本轮授权范围。
+
 ## PR14-REVIEW-001
 
 - [x] 核对最新 PR 与全部 Codex review 意见。

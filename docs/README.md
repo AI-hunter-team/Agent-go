@@ -9,6 +9,7 @@
 | 内容 | 当前权威入口 | 使用边界 |
 |---|---|---|
 | 产品范围、玩法与首版验收目标 | [Demo 方案 1.1](Demo方案1.1.md) | 原产品基线；后续 3D 展示见 [3D-MIG-001](tasks/3D-MIG-001.md)，已合入的楼梯、NPC 协商与回放见 [PR-REMAINING-001](tasks/PR-REMAINING-001.md)及[技术方案 §16](MVP技术方案.md#16-当前集成差异pr-remaining-001)；历史长期构思不自动成为交付承诺 |
+| 交互 2.0 规划（已确认，待实施） | [interaction-v2](interaction-v2/README.md) | 用户“角色设计”提案的规则规范、技术设计、接口契约与任务拆分；D1–D8 已确认，尚无实现，实现并验证后替代方案 1.1 的对应部分 |
 | 架构、设计约束及实现差异 | [MVP 技术方案](MVP技术方案.md) | §1–13 主要保留开发前设计，§4/§10 的目录与接口已据源码校准；§14 记录原 MVP 实现核对，§15 记录 3D 展示，§16 记录后续集成差异；实现说明不能自行更改产品规则 |
 | 实际目录、共享类型和接口行为 | [技术方案的目录与接口章节](MVP技术方案.md)及其中链接的源码 | 代码是实现事实，规范与代码不一致需记录差异和后续任务 |
 | 开发、文档生命周期、协作和检查要求 | [DEVELOPMENT](DEVELOPMENT.md) | 团队约定；不代表托管平台已经强制执行 |
@@ -20,6 +21,8 @@
 | PR 交付信息 | [GitHub PR 模板](../.github/pull_request_template.md) | 负责人、范围、接口、验证、风险、回退和交接均可从 PR 找到 |
 
 ## 架构与接口入口
+
+当前模型接入与思考预算由[技术方案 §17](MVP技术方案.md#17-responses-与思考设置responses-001)维护：统一 Responses、默认 DeepSeek Flash / 关闭思考，以及页面档位与会话绑定。该任务的代码/验证/合入状态见 [RESPONSES-001](tasks/RESPONSES-001.md)，旧模型章节和历史成绩不证明新接口真实验收。
 
 项目为 npm 管理的 TypeScript Web 应用：React/Vite + Three.js/R3F/Drei 三维展示、Radix 定制 UI、浏览器模拟器和 Express 模型代理；Canvas 2D 保留作调试，Vitest 在 Node 环境运行测试。当前三维展示与内部快照入口见 [技术方案 §15](MVP技术方案.md)，后续楼梯、协商、回放和报告差异见 [§16](MVP技术方案.md#16-当前集成差异pr-remaining-001)，目录职责和脚本见 [开发流程](DEVELOPMENT.md)。
 
