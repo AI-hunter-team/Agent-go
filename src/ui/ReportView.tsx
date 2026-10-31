@@ -10,6 +10,7 @@ import { LEGACY_GAME_SETTINGS } from "../shared/gameSettings";
 import { Api } from "../agent/remoteAgent";
 import { FailureReview } from "./FailureReview";
 import { ReviewSession } from "./reviewSession";
+import { reportOutcome } from "./reportPresentation";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "walking", label: "行走", color: "var(--blue)" },
@@ -24,8 +25,8 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
 ];
 
 /** 汇总真实终局成绩、耗时与调用记录，并提供重试和报告导出。 */
-export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false, onAdopt, onConfigureModel }: { report: GameReport; onRetry: () => void; onEdit: () => void; modelAvailable?: boolean; onAdopt?: (guidance: string) => void; onConfigureModel?: () => void }) {
-  const [review] = useState(() => report.status === "failed" ? new ReviewSession(report, Api) : null);
+export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false, onAdopt, onConfigureModel, mode = "full" }: { report: GameReport; onRetry?: () => void; onEdit?: () => void; modelAvailable?: boolean; onAdopt?: (guidance: string) => void; onConfigureModel?: () => void; mode?: "full" | "data" }) {
+  const [review] = useState(() => mode === "full" && report.status === "failed" ? new ReviewSession(report, Api) : null);
   const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
   // 原样导出当前报告，不改变存档字段或计分数据。
@@ -40,6 +41,7 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
 
   return (
     <section className="card report">
+      {mode === "full" && <>
       <div className={report.status === "success" ? "verdict win" : "verdict lose"}>
         {report.status === "success" ? (
           <>
@@ -48,7 +50,7 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
           </>
         ) : (
           <>
-            <span>本局失败 · 无成绩</span>
+            <span>{reportOutcome(report).tone === "stopped" ? "本局已结束 · 无成绩" : "本局失败 · 无成绩"}</span>
             <strong className="reason-text">{report.failReason}</strong>
           </>
         )}
@@ -100,6 +102,7 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
       </p>
 
       {!!report.npcTotals?.calls && <p className="small">NPC 沟通 {report.npcTotals.calls} 次 · 输入 {report.npcTotals.inputTokens} / 输出 {report.npcTotals.outputTokens} token · 现实等待 {report.npcTotals.realSeconds} 秒（另计）</p>}
+      </>}
       {report.operationUsage && <details><summary>分操作调用与用量</summary>{Object.entries(report.operationUsage).map(([op, row]) => <p key={op}>{op}：{row.calls} 次 · 输入 {row.inputTokens} / 输出 {row.outputTokens} token · {row.realSeconds.toFixed(1)} 秒 · {row.unknownUsage} 次未返回用量</p>)}</details>}
       {!!report.worldEvents?.length && <details><summary>交互事件与因果链（{report.worldEvents.length}）</summary>{report.worldEvents.map(e => <p key={e.id}>{e.t.toFixed(1)}s · {e.id} {EVENT_LABEL[e.kind]} · {e.actorId ?? "环境"} → {e.targetId ?? "周围"}{e.causeId ? ` · 起因 ${e.causeId}` : ""}</p>)}</details>}
       {!!report.alerts?.length && <details><summary>警戒变化</summary>{report.alerts.map((a,i) => <p key={i}>{a.t.toFixed(1)}s {a.observerId} 对 {a.subjectId}：{LEVEL_LABEL[a.from]} → {LEVEL_LABEL[a.to]} · {a.cause}</p>)}</details>}
@@ -126,7 +129,7 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
 
       {!!report.dialogues?.length && <details className="run-trace"><summary>全部 NPC 沟通（{report.dialogues.length} 次）</summary>{report.dialogues.map((record, i) => <NpcDialogue key={i} record={record} />)}</details>}
 
-      <div className="row">
+      {mode === "full" && <div className="row">
         {review && onAdopt && <FailureReview session={review} report={report} modelAvailable={modelAvailable} onAdopt={onAdopt} onConfigureModel={onConfigureModel} />}
         <button className="primary" onClick={onEdit}>
           修改指导再来一局
@@ -135,13 +138,13 @@ export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false,
         <button className="ghost" onClick={exportJson}>
           导出报告 JSON
         </button>
-      </div>
+      </div>}
     </section>
   );
 }
 
 /** 按时间展示事件，允许用户切换角色感知过滤。 */
-export function EventTimeline({ report }: { report: GameReport }) {
+export function EventTimeline({ report, onSeek }: { report: GameReport; onSeek?: (time: number) => void }) {
   const [onlyPerceived, setOnlyPerceived] = useState(true);
   const events = report.events.filter((e) => !onlyPerceived || e.playerVisible);
   return (
@@ -155,7 +158,7 @@ export function EventTimeline({ report }: { report: GameReport }) {
       <ol>
         {events.map((e, i) => (
           <li key={i} className={e.playerVisible ? "" : "unseen"}>
-            <span className="time">{e.t.toFixed(1)}s</span><span>{e.text}
+            {onSeek ? <button className="event-seek" aria-label={`回看 ${e.t.toFixed(1)} 秒`} onClick={() => onSeek(e.t)}>{e.t.toFixed(1)}s ↗</button> : <span className="time">{e.t.toFixed(1)}s</span>}<span>{e.text}
             {!e.playerVisible && <em> （角色未感知）</em>}</span>
           </li>
         ))}

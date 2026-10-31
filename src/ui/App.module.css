@@ -1,4 +1,4 @@
-.app { position: relative; height: 100dvh; min-height: 560px; overflow: hidden; background: #f2f4f6; color: #142033; }
+.app { position: relative; height: 100dvh; min-height: 0; overflow: hidden; background: #f2f4f6; color: #142033; }
 .scene { position: absolute; inset: 0; }
 .sceneLayer { position: absolute; inset: 0; animation: scene-layer-in .72s cubic-bezier(.2,.8,.25,1) both; }
 .scene canvas { display: block; touch-action: none; }
@@ -86,6 +86,7 @@
 .controls button { min-height: 46px; border-radius: 14px; }
 .controls button[aria-pressed=true] { background: #ffd000; }
 .runInfo { position: absolute; bottom: 24px; left: 24px; }
+.previousReport { position: absolute; bottom: 84px; left: 24px; z-index: 35; font-size: 12px; background: #fffffff2; }
 .review { position: absolute; z-index: 40; inset: 24px 5% 112px; padding: 30px; overflow-y: auto; }
 .review[hidden] { display: none; }
 .reviewHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
@@ -128,7 +129,7 @@
   .carousel { left: 50%; bottom: 32px; }
 }
 @media (max-width: 600px) {
-  .app { min-height: 620px; }
+  .app { min-height: 0; }
   .topLeft { left: 16px; top: 16px; gap: 12px; }
   .brand { font-size: 19px; }
   .topLeft button { font-size: 12px; }
@@ -166,6 +167,8 @@
   .controls { bottom: 12px; right: 12px; left: 12px; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 6px; }
   .controls button { padding: 8px 10px; min-height: 40px; font-size: 12px; }
   .runInfo { bottom: 78px; left: 12px; }
+  .previousReport { bottom: 126px; left: 12px; font-size: 11px; }
+  .recordToggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .review { inset: 12px 12px 100px; padding: 20px; }
   .endActions { bottom: max(12px, env(safe-area-inset-bottom)); gap: 16px; }
   .victoryControls { top: 16px; bottom: auto; left: 12px; }

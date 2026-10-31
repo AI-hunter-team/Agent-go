@@ -12,6 +12,12 @@ const agents = new WeakMap<Session, HeuristicAgent>();
 const attentionDone = new WeakSet<Session>();
 const llm: LlmService = {
   model: "浏览器验收伪模型（无费用）",
+  async prepareJourney(input) {
+    await delay(400);
+    if (input.guidance.includes("FAIL-NORMALIZE")) throw new Error("模拟规划失败");
+    return { understanding: input.autonomous ? "自主选择通行策略" : input.guidance,
+      actions: ["观察可见队列", "比较等待与行走耗时后行动"], adjustment: "遇到故障重新选择路线" };
+  },
   /** 生成固定的赛前指导，支持故障验收开关。 */
   async review(input) {
     await delay(200);

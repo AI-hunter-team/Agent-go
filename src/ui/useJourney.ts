@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Api, RemoteAgent, offlineClassifier } from "../agent/remoteAgent";
 import { HeuristicAgent } from "../agent/heuristicAgent";
 import type { Agent } from "../agent/agent";
@@ -9,6 +9,10 @@ import { resolveGameSettings } from "../shared/gameSettings";
 import { useGameSession } from "./useGameSession";
 import { initialFlow, journeyReducer, type JourneyStage } from "./journeyFlow";
 import type { CameraSettings } from "./scene/GameScene";
+import { randomSeed } from "./seed";
+import { ReviewSession } from "./reviewSession";
+import type { GameRunner } from "../agent/runner";
+import type { Engine } from "../sim/engine";
 
 export const CHARACTERS = [
   {
@@ -50,6 +54,8 @@ export function useJourney(interval: number) {
   const [characterId, setCharacterId] = useState("dafeiyu");
   const [drawer, setDrawer] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previousRun, setPreviousRun] = useState<{ generation: number; runner: GameRunner; engine: Engine; review: ReviewSession | null } | null>(null);
+  const quickStart = useRef<boolean | null>(null);
   const [camera, setCamera] = useState<CameraSettings>({
     mode: "follow",
     reset: 0,
@@ -75,6 +81,10 @@ export function useJourney(interval: number) {
   const watching = flow.stage === "watch" && !ended;
   const working = flow.stage === "planning" || flow.stage === "launch";
   const report = ended && runner ? runner.report() : null;
+  const review = useMemo(() => ended && runner?.engine.status === "failed" ? new ReviewSession(runner.report(), Api) : null, [ended, runner]);
+  const preserveRun = () => {
+    if (session.runner?.phase === "ended") setPreviousRun({ generation: session.generation, runner: session.runner, engine: session.engine, review });
+  };
   const character = CHARACTERS.find((c) => c.id === characterId)!;
   useEffect(() => {
     let live = true;
@@ -97,6 +107,7 @@ export function useJourney(interval: number) {
     };
   }, []);
   const cancel = () => {
+    quickStart.current = null;
     request.current++;
     abort.current?.abort();
     abort.current = null;
@@ -132,17 +143,20 @@ export function useJourney(interval: number) {
     }));
   };
   const changeSeed = (value: number) => {
+    preserveRun();
     invalidate();
     setSeed(value);
     session.preview(value, settings, { backpack });
   };
   const changeDeadline = (value: number) => {
+    preserveRun();
     const next = resolveGameSettings({ ...settings, timeLimitSeconds: value });
     invalidate();
     setSettings(next);
     session.preview(seed, next, { backpack });
   };
   const changeBackpack = (value: boolean) => {
+    preserveRun();
     invalidate();
     setBackpack(value);
     session.preview(seed, settings, { backpack: value });
@@ -157,10 +171,11 @@ export function useJourney(interval: number) {
         ? "plan"
         : "guidance",
     );
-  const prepare = async (autonomous: boolean) => {
+  const prepare = async (autonomous: boolean, options?: { seed: number; twoDimensional: boolean }) => {
     if (stage.current === "planning" || stage.current === "launch") return;
     if (kind === "offline") {
       navigate("plan");
+      if (options) quickStart.current = options.twoDimensional;
       return;
     }
     if (!health.llm) {
@@ -174,11 +189,12 @@ export function useJourney(interval: number) {
       return;
     }
     cancel();
+    if (options) quickStart.current = options.twoDimensional;
     setError(null);
     const epoch = request.current;
     const input: JourneyInput = {
       sceneId: "metro",
-      seed,
+      seed: options?.seed ?? seed,
       settings: { ...settings },
       loadout: { backpack },
       guidance: autonomous ? "" : guidance,
@@ -199,6 +215,7 @@ export function useJourney(interval: number) {
       dispatch({ type: "prepare", revision, prepared: result });
     } catch (e) {
       if (epoch === request.current && active.current) {
+        quickStart.current = null;
         dispatch({ type: "navigate", stage: "guidance" });
         setError(`形成方案失败：${(e as Error).message}`);
       }
@@ -293,19 +310,33 @@ export function useJourney(interval: number) {
   useEffect(() => {
     if (flow.stage === "launch") tryStart();
   }, [flow.stage, tryStart]);
+  useEffect(() => {
+    if (flow.stage !== "plan" || quickStart.current === null) return;
+    const twoDimensional = quickStart.current;
+    quickStart.current = null;
+    void start(twoDimensional);
+  });
   const edit = (text?: string) => {
+    preserveRun();
     if (text !== undefined) setGuidance(text);
     invalidate();
     session.preview(seed, settings, { backpack });
     navigate(kind === "offline" ? "plan" : "guidance");
   };
-  const retry = () => {
+  const retry = (options: { sameScenario?: boolean; twoDimensional?: boolean } = {}) => {
+    if (working || watching) return;
     const autonomous = report?.journey?.autonomous ?? false;
-    session.preview(seed, settings, { backpack });
-    void prepare(autonomous);
+    // 模型失效时先保持终局，避免丢失报告或悄悄切到离线模式。
+    if (kind === "llm" && !health.llm) { setError("请先连接模型，上一局结果已保留。"); setDrawer(true); return; }
+    preserveRun();
+    const nextSeed = options.sameScenario ? seed : randomSeed(seed);
+    setSeed(nextSeed);
+    session.preview(nextSeed, settings, { backpack });
+    void prepare(autonomous, { seed: nextSeed, twoDimensional: options.twoDimensional ?? false });
   };
   const returnLobby = () => {
     if (watching) session.stop();
+    preserveRun();
     invalidate();
     session.preview(seed, settings, { backpack });
     navigate("lobby");
@@ -344,6 +375,8 @@ export function useJourney(interval: number) {
     watching,
     working,
     report,
+    review,
+    previousRun,
     invalidate,
     navigate,
     changeSeed,

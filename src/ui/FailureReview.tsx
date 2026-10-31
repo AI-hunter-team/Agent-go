@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import type { GameReport } from "../shared/types";
 import type { ReviewEvidence, ReviewMetadata } from "../shared/review";
 import { countChars, guidanceError } from "../shared/guidance";
@@ -24,23 +24,23 @@ function Cost({ value, label }: { value: ReviewMetadata; label: string }) {
 
 export function FailureReview({ session, report, modelAvailable, onAdopt, onConfigureModel }: { session: ReviewSession; report: GameReport; modelAvailable: boolean; onAdopt: (guidance: string) => void; onConfigureModel?: () => void }) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
-  useEffect(() => { if (modelAvailable && report.agentKind === "llm") void session.ensureReview(); }, [session, modelAvailable, report.agentKind]);
   const analysis = state.review?.analysis;
   const attempts = session.exportData().reviewAttempts ?? [];
-  return <section className="failure-review" aria-label="失败复盘">
-    <h3>失败复盘</h3>
+  const title = report.failReason === "玩家结束了本局" ? "策略复盘" : "失败复盘";
+  return <section className="failure-review" aria-label={title}>
+    <h3>{title}</h3>
     {onConfigureModel && <button className="ghost" onClick={onConfigureModel}>连接或更换复盘模型</button>}
-    {!modelAvailable && state.status === "idle" && <p className="muted">连接模型后可自动分析整局并提出策略。当前报告与回放仍可查看。</p>}
-    {modelAvailable && report.agentKind === "offline" && state.status === "idle" && <><p className="muted">本局使用离线规则。可以使用已连接的模型分析本局，生成复盘会消耗模型额度。</p><button onClick={session.ensureReview}>使用模型生成复盘</button></>}
+    {!modelAvailable && state.status === "idle" && <p className="muted">连接模型后可分析整局并提出策略。当前报告与回放仍可查看。</p>}
+    {modelAvailable && state.status === "idle" && <><p className="muted">按需分析本局并提出策略建议，生成复盘会消耗模型额度。</p><button onClick={session.ensureReview}>使用模型生成复盘</button></>}
     {state.status === "loading" && <p role="status">正在回顾整局记录与全局情况…</p>}
     {state.error && <><p className="error" role="alert">{state.error}</p><button onClick={session.ensureReview}>重试复盘</button></>}
     {!!attempts.length && <p className="meta">复盘与草稿累计 {attempts.length} 次调用 · 输入 {attempts.reduce((n, a) => n + (a.usage?.inputTokens ?? 0), 0)} / 输出 {attempts.reduce((n, a) => n + (a.usage?.outputTokens ?? 0), 0)} token（含失败尝试，用量未返回的调用不估算）</p>}
     {analysis && <>
       <p className="review-summary">{analysis.summary}</p><p className="small">{analysis.primaryCause}</p>
-      <Modal title="失败复盘与下一轮策略" description="结合整局记录和赛后全局事实分析；策略由你决定是否采纳。" wide trigger={<button className="full-width">查看完整复盘与策略建议</button>}>
+      <Modal title={`${title}与下一轮策略`} description="结合整局记录和赛后全局事实分析；策略由你决定是否采纳。" wide trigger={<button className="full-width">查看完整复盘与策略建议</button>}>
         <div className="review-content">
           <p className="review-summary">{analysis.summary}</p>
-          <h3>失败原因</h3><p>{analysis.primaryCause}</p>
+          <h3>关键原因</h3><p>{analysis.primaryCause}</p>
           {!!analysis.secondaryFactors.length && <ul>{analysis.secondaryFactors.map((s, i) => <li key={i}>{s}</li>)}</ul>}
           <h3>关键转折</h3>
           {analysis.turningPoints.map((p, i) => <article className="review-turn" key={i}>
