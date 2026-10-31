@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { Box3, Group, Mesh, Vector3 } from "three";
 import { ASSETS, createAsset, makeMaterials, setFacilityState, setGateProgress } from "../src/assets/station-kit/index";
 import { fitRailingSpan } from "../src/assets/station-kit/railing";
-import { FACILITIES, SECURITY_BARRIERS } from "../src/sim/layout";
+import { FACILITIES, SECURITY_BARRIERS, WIDTH, STAIRS_TOP, STAIRS_BOTTOM } from "../src/sim/layout";
 import { GATE_CLEAR_WIDTH, facilitySolids } from "../src/sim/facilityGeometry";
 import { clearOfScenery, clearServiceExit, personRadius } from "../src/sim/movement";
 import { segmentIntersectsRect } from "../src/sim/geometry";
@@ -54,7 +54,7 @@ describe("station integration contracts", () => {
     expect(GATE_CLEAR_WIDTH).toBeGreaterThan(personRadius("luggage") * 2 + 0.04);
     for (const def of FACILITIES) for (const kind of ["normal", "luggage"] as const) {
       if (def.exit) expect(clearServiceExit(def.head, def.exit, personRadius(kind)), `${def.id}/${kind}`).toBe(true);
-      else expect(facilitySolids(def.kind, def.pos).every((r) => !segmentIntersectsRect(def.head, def.head, { x: r.x - personRadius(kind), y: r.y - personRadius(kind), w: r.w + personRadius(kind) * 2, h: r.h + personRadius(kind) * 2 }))).toBe(true);
+      else expect(facilitySolids(def.kind, def.pos, def.queueDirection).every((r) => !segmentIntersectsRect(def.head, def.head, { x: r.x - personRadius(kind), y: r.y - personRadius(kind), w: r.w + personRadius(kind) * 2, h: r.h + personRadius(kind) * 2 }))).toBe(true);
     }
     const r = SECURITY_BARRIERS[1], z = r.y + r.h / 2;
     expect(clearOfScenery({ x: 24, y: z }, { x: 28, y: z }, 0.32)).toBe(false);
@@ -72,9 +72,9 @@ describe("station integration contracts", () => {
     const group = batchStation({ models, materials: new Map() }, floors);
     expect(group.children.length).toBeLessThan(floors.length / 3);
     const bounds = new Box3().setFromObject(group);
-    expect(bounds.min.x).toBeCloseTo(0, 5); expect(bounds.max.x).toBeCloseTo(70, 5);
+    expect(bounds.min.x).toBeCloseTo(0, 5); expect(bounds.max.x).toBeCloseTo(WIDTH, 5);
     expect(bounds.min.y).toBeCloseTo(-2.12, 3);
-    expect(floors.every((p) => p.position[0] < 48 || p.position[0] > 57)).toBe(true);
+    expect(floors.every((p) => p.position[0] < STAIRS_TOP.x || p.position[0] > STAIRS_BOTTOM.x)).toBe(true);
     disposeBatches(group);
   });
 });

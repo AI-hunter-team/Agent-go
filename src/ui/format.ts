@@ -11,6 +11,10 @@ export function describeAction(a: AgentAction | null): string {
       return "离开队伍";
     case "descend_stairs":
       return "下楼梯到站台";
+    case "take_escalator":
+      return "候梯并乘扶梯到站台";
+    case "inspect_attraction":
+      return `${a.mode === "glance" ? "减速查看" : "停留欣赏"} ${a.attraction}`;
     case "request_cut_in":
       return `向 ${a.npcId} 请求让位`;
     case "wait":

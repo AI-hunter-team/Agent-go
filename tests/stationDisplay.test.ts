@@ -4,8 +4,11 @@ import { createAsset, makeMaterials } from "../src/assets/station-kit/index";
 import { BASE_WALL_HEIGHT, FASCIA_HEIGHT, FRAME_HEIGHT, STATION_CEILING } from "../src/assets/station-kit/dimensions";
 import { paintSign, SIGN_FACE, signCanvasSize } from "../src/assets/station-kit/signs";
 import { createFloorReflection, disposeFloorReflection } from "../src/assets/station-kit/reflection";
-import { stationPlacements } from "../src/ui/scene/stationLayout";
+import { devicePosition, deviceYaw, stationPlacements } from "../src/ui/scene/stationLayout";
 import { cameraFraction } from "../src/ui/scene/cameraCollision";
+
+import { FACILITIES, STAIRS_TOP, STAIRS_BOTTOM, WIDTH } from "../src/sim/layout";
+import { TVM_MODEL_OFFSET_X } from "../src/sim/facilityGeometry";
 
 const materials = makeMaterials();
 
@@ -49,7 +52,7 @@ describe("station display regressions", () => {
     const placements = stationPlacements(), floors = placements.filter((p) => p.id.startsWith("floor-"));
     expect(new Set(floors.map((p) => p.id))).toEqual(new Set(["floor-sage"]));
     expect(new Set(floors.map((p) => p.position[1]))).toEqual(new Set([0, -2]));
-    expect(floors.every((p) => p.position[0] < 48 || p.position[0] > 57)).toBe(true);
+    expect(floors.every((p) => p.position[0] < STAIRS_TOP.x || p.position[0] > STAIRS_BOTTOM.x)).toBe(true);
     expect(placements.filter((p) => p.id === "ceiling-panel").every((p) => p.position[1] === 6 && p.upper)).toBe(true);
     expect(BASE_WALL_HEIGHT + FASCIA_HEIGHT).toBe(STATION_CEILING);
     expect(new Box3().setFromObject(createAsset("pillar", materials)).max.y).toBeCloseTo(FRAME_HEIGHT, 5);
@@ -86,4 +89,25 @@ describe("station display regressions", () => {
       disposeFloorReflection(mirror); expect(disposed).toHaveBeenCalledTimes(1);
     }
   });
+});
+
+
+test("south-facing ticket machines align their screens and queue ticks with the new service heads", () => {
+  const placements = stationPlacements();
+  for (const def of FACILITIES.filter((f) => f.kind === "tvm")) {
+    const root = createAsset("ticket-machine", materials);
+    root.position.set(...devicePosition(def.kind, def.pos.x, def.pos.y, def.queueDirection));
+    root.rotation.y = deviceYaw(def.kind, def.queueDirection); root.updateMatrixWorld(true);
+    const screen = root.getObjectByName("screen")!.getWorldPosition(new Vector3());
+    expect(root.position.toArray()).toEqual([def.pos.x, 0, def.pos.y - TVM_MODEL_OFFSET_X]);
+    expect(screen.z).toBeGreaterThan(root.position.z);
+    const marking = placements.find((p) => p.id === "marking-queue" && p.position[0] === def.head.x && p.position[2] === def.head.y)!;
+    const ticks = createAsset(marking.id, materials);
+    ticks.position.set(...marking.position); ticks.rotation.y = marking.yaw; ticks.updateMatrixWorld(true);
+    const positions = ticks.children.map((node) => node.getWorldPosition(new Vector3()));
+    expect(positions.every((pos) => Math.abs(pos.x - def.pos.x) < 1e-6)).toBe(true);
+    expect(positions.map((pos) => pos.z)).toEqual(Array.from({ length: 6 }, (_, i) => expect.closeTo(def.head.y + i * 0.8, 6)));
+  }
+  const floors = placements.filter((p) => p.id === "floor-sage");
+  expect(Math.max(...floors.map((p) => p.position[0] + p.scale[0] * 1.5))).toBe(WIDTH);
 });

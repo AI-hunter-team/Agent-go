@@ -50,7 +50,7 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const facility = a.kind === "queued" || a.kind === "service" ? engine.world.facility(a.facility)?.def : undefined;
     const face = facility ? Object.freeze({ x: facility.pos.x, z: facility.pos.y }) : undefined;
     const yaw = face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : old?.yaw ?? Math.PI / 2;
-    const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving ? "walk" : "idle";
+    const motion: Motion = a.kind === "escalator" ? "idle" : a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" || (a.kind === "distracted" && !a.resume) ? "interact" : moving ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
       elevation: platformElevation(person.pos.x),

@@ -57,9 +57,10 @@ export function placedModel(kit: StationKit, placement: Placement): Object3D {
   if (!source) throw new Error("Missing station model: " + placement.id);
   const metro = !!source.userData.railingStyle;
   const run = (placement.railLength ?? 0) - 0.16;
+  const steps = placement.railSteps ?? STAIR_DETAILS.count;
   const root = placement.railLength ? metro ? fitMetroRailingSpan(source, placement.railLength, {
     rise: placement.slope ?? 0, startPost: placement.railStartPost,
-    postBase: placement.id === "glass-stairs" ? (x) => (placement.slope ?? 0) * Math.ceil((x / run + 0.5) * STAIR_DETAILS.count - 0.000001) / STAIR_DETAILS.count : undefined,
+    postBase: placement.id === "glass-stairs" && steps > 0 ? (x) => (placement.slope ?? 0) * Math.ceil((x / run + 0.5) * steps - 0.000001) / steps : undefined,
   }) : fitRailingSpan(source, placement.railLength) : source.clone(true);
   if (!metro && placement.slope && placement.railLength) {
     const span = placement.railLength, drop = placement.slope;
