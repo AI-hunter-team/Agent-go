@@ -6,6 +6,7 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [CAMERA-STABILITY-001](CAMERA-STABILITY-001.md) | 跟随镜头稳定、被占最终队尾等候及 NPC 转向限速；483 测试/类型/构建与生产离线 seed 27 / 115.5 秒通过，本地未提交 |
 | [STATION-PR-002](STATION-PR-002.md) | 显示修复与栏杆整合 PR，同步角色/失败复盘 main 的4处冲突及本轮集成验证 |
 | [METRO-RAILING-001](METRO-RAILING-001.md) | 中国地铁A圆管/B玻璃、7 GLB、独立小样及串行场景接入；445测试、生产整局99.1秒与资源/回退复验 |
 | [STATION-DISPLAY-001](STATION-DISPLAY-001.md) | 安检顶部重叠、导视比例、磨石/反射与6米顶板；追加20级防滑楼梯及平台收口，427测试和生产整局 |

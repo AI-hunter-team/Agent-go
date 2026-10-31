@@ -49,7 +49,13 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
     const next = a.kind === "walking" || a.kind === "to_queue" ? a.path[0] : undefined;
     const facility = a.kind === "queued" || a.kind === "service" ? engine.world.facility(a.facility)?.def : undefined;
     const face = facility ? Object.freeze({ x: facility.pos.x, z: facility.pos.y }) : undefined;
-    const yaw = face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : old?.yaw ?? Math.PI / 2;
+    let yaw = face ? Math.atan2(face.x - person.pos.x, face.z - person.pos.y) : moving ? Math.atan2(dx, dz) : old?.yaw ?? (next ? Math.atan2(next.x - person.pos.x, next.y - person.pos.y) : Math.PI / 2);
+    // NPCs turn at a human pace; a blocked step must not snap them between opposite headings.
+    if (!person.isPlayer && old) {
+      const turn = Math.atan2(Math.sin(yaw - old.yaw), Math.cos(yaw - old.yaw));
+      const limit = Math.max(0, engine.t - previous!.t) * 4;
+      yaw = old.yaw + Math.max(-limit, Math.min(limit, turn));
+    }
     const motion: Motion = a.kind === "creative" && a.mechanic === "jump_gate" ? "jump" : a.kind === "service" ? "interact" : moving ? "walk" : "idle";
     actors.set(person.id, Object.freeze({
       id: person.id, kind: person.kind, x: person.pos.x, z: person.pos.y, yaw, motion,
@@ -109,7 +115,7 @@ export function sampleActor(buffer: PresentationBuffer, id: string, alpha: numbe
   out.x = previous.x + (current.x - previous.x) * a;
   out.z = previous.z + (current.z - previous.z) * a;
   out.yaw = previous.yaw + Math.atan2(Math.sin(current.yaw - previous.yaw), Math.cos(current.yaw - previous.yaw)) * a;
-  if (current.face) {
+  if (current.face && id === "player") {
     const facing = Math.atan2(current.face.x - out.x, current.face.z - out.z);
     out.yaw = previous.yaw + Math.atan2(Math.sin(facing - previous.yaw), Math.cos(facing - previous.yaw)) * a;
   }

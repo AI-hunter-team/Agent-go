@@ -96,6 +96,11 @@ export class World {
 
   /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
   movePerson(p: Person, target: Vec, stride: number, detour = true): boolean {
+    const bodies = this.collisionBodies(p.id);
+    // Wait beside an occupied final queue slot, while retaining detours at intermediate route corners.
+    if (p.activity.kind === "to_queue" && p.activity.path.length === 1
+      && dist(p.pos, target) <= personRadius(p.kind) + stride
+      && !clearOfPeople(target, target, personRadius(p.kind), bodies)) return false;
     const queues = [...this.facilities.values()].flatMap((f) => {
       const people = [...f.queue, ...(f.serving ? [f.serving.personId] : [])].map((id) => this.persons.get(id)).filter((person): person is Person => !!person);
       if (people.length < 2) return [];
@@ -104,7 +109,7 @@ export class World {
       return [{ x: minX - margin, y: f.def.head.y - margin, w: maxX - minX + margin * 2, h: margin * 2 }];
     });
     const waypoint = detour ? detourAroundQueues(p.pos, target, queues, personRadius(p.kind)) : target;
-    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), this.collisionBodies(p.id), detour);
+    p.pos = steer(p.pos, waypoint, stride, personRadius(p.kind), bodies, detour);
     return dist(p.pos, target) < 1e-6;
   }
 
