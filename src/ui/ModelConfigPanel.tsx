@@ -6,10 +6,11 @@ interface Props {
   health: { llm: boolean; model: string | null };
   onEnabled: (health: Props["health"]) => void;
   onClose: () => void;
+  closeLabel?: string;
 }
 
 /** 配置模型与思考档位；重新启用只影响之后创建的对局。 */
-export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
+export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返回开局设置" }: Props) {
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -83,7 +84,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose }: Props) {
     <section className="card model-config" aria-labelledby="model-config-title" aria-busy={busy !== null}>
       <div className="row between config-heading">
         <h2 id="model-config-title">模型 API 配置</h2>
-        <button className="ghost" disabled={busy !== null} onClick={onClose}>返回开局设置</button>
+        <button className="ghost" disabled={busy !== null} onClick={onClose}>{closeLabel}</button>
       </div>
       <p className="muted">连接 DeepSeek 或兼容 Responses 的 API。NPC 使用开发者配置的独立模型。</p>
       <ol className="config-steps" aria-label="配置步骤">

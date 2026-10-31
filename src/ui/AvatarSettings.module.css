@@ -1,0 +1,4 @@
+.settings { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 18px; }
+.settings h3 { margin: 0 0 12px; }
+.name { font-size: 14px; overflow-wrap: anywhere; margin: 0 0 14px; }
+.settings :global(.field) { margin-bottom: 0; }

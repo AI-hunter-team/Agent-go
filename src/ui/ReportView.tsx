@@ -5,6 +5,9 @@ import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
 import { DebugPanel } from "./DebugPanel";
 import { LEGACY_GAME_SETTINGS } from "../shared/gameSettings";
+import { Api } from "../agent/remoteAgent";
+import { FailureReview } from "./FailureReview";
+import { ReviewSession } from "./reviewSession";
 
 const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
   { key: "walking", label: "行走", color: "var(--blue)" },
@@ -17,12 +20,13 @@ const SEGMENTS: { key: keyof TimeBreakdown; label: string; color: string }[] = [
 ];
 
 /** 汇总真实终局成绩、耗时与调用记录，并提供重试和报告导出。 */
-export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport; onRetry: () => void; onEdit: () => void }) {
+export function ReportSummary({ report, onRetry, onEdit, modelAvailable = false, onAdopt, onConfigureModel }: { report: GameReport; onRetry: () => void; onEdit: () => void; modelAvailable?: boolean; onAdopt?: (guidance: string) => void; onConfigureModel?: () => void }) {
+  const [review] = useState(() => report.status === "failed" ? new ReviewSession(report, Api) : null);
   const settings = report.settings ?? LEGACY_GAME_SETTINGS;
   const total = Math.max(0.1, Object.values(report.timeBreakdown).reduce((a, b) => a + b, 0));
   // 原样导出当前报告，不改变存档字段或计分数据。
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ ...report, ...review?.exportData() }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `agent-go-report-seed${report.seed}-${Date.now()}.json`;
@@ -111,6 +115,7 @@ export function ReportSummary({ report, onRetry, onEdit }: { report: GameReport;
       {!!report.dialogues?.length && <details className="run-trace"><summary>全部 NPC 沟通（{report.dialogues.length} 次）</summary>{report.dialogues.map((record, i) => <NpcDialogue key={i} record={record} />)}</details>}
 
       <div className="row">
+        {review && onAdopt && <FailureReview session={review} report={report} modelAvailable={modelAvailable} onAdopt={onAdopt} onConfigureModel={onConfigureModel} />}
         <button className="primary" onClick={onEdit}>
           修改指导再来一局
         </button>
