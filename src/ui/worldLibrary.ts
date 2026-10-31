@@ -12,6 +12,7 @@ export interface SavedWorld extends CreatedWorld {
   schemaVersion: 1; id: string; createdAt: number; updatedAt: number;
   preferences: WorldPreferences;
 }
+/** 校验本机世界记录，保留合法豆包外观，不让新增预设造成已保存世界被过滤。 */
 export function isSavedWorld(value: unknown): value is SavedWorld {
   if (!value || typeof value !== "object") return false;
   const v=value as SavedWorld, p=v.preferences;
@@ -20,7 +21,7 @@ export function isSavedWorld(value: unknown): value is SavedWorld {
     && !!seed?.ok && seed.seed===v.seed && ["random","custom"].includes(v.source.mode)
     && typeof v.world?.generatorVersion==="string" && typeof v.world.layoutHash==="string"
     && Number.isFinite(v.createdAt) && Number.isFinite(v.updatedAt) && !!p && !!p.settings && !gameSettingsError(p.settings)
-    && p.settings.extraQueuePeople===3 && typeof p.backpack==="boolean" && ["dafeiyu","naiwa","custom"].includes(p.characterId)
+    && p.settings.extraQueuePeople===3 && typeof p.backpack==="boolean" && ["dafeiyu","naiwa","doubao","custom"].includes(p.characterId)
     && ["llm","offline"].includes(p.kind) && typeof p.guidance==="string" && Array.from(p.guidance).length<=1200;
 }
 /** Separate database: existing imported-avatar blobs never migrate or get overwritten here. */

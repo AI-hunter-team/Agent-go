@@ -47,6 +47,7 @@ export interface SceneProps {
   simpleCrowd: boolean;
   reducedMotion: boolean;
   assetUrl: string;
+  greetingRequest?: string;
   assetRotation: number;
   guardAssetUrl: string;
   guardAssetRotation: number;
@@ -446,12 +447,14 @@ function Contents(props: SceneProps) {
       const project=(v:Vector3)=>{v.project(camera);return {x:rect.left+(v.x+1)*rect.width/2,y:rect.top+(1-v.y)*rect.height/2};};
       return { generation: session.generation, t: session.engine.t, status: session.engine.status, displayTime: performance.time,
         visible: performance.visible, dance: performance.dance, danceTime: performance.danceTime, previousDance: performance.previousDance, victoryTime: performance.victoryTime, greetingTime: performance.greetingTime,
+        defeatTime: performance.defeatTime, defeatDuration: performance.defeatDuration,
+        greetingRequest: props.greetingRequest, greetingDuration: performance.greetingDuration, greetingImmediate: performance.greetingImmediate,
         lighting:{stationBlend:stationLightBlend(controlRoomState(session)),environment:scene.environmentIntensity,exposure:gl.toneMappingExposure,roomKey:(scene.getObjectByName("control-room-key") as DirectionalLight|undefined)?.intensity},cinematic: performance.cinematic, cameraResumeIn: performance.cameraResumeIn, reducedMotion: props.reducedMotion, camera: camera.position.toArray(), fov: (camera as PerspectiveCamera).fov,
         lounge:{brand:brandBox?{min:project(brandBox.min.clone()),max:project(brandBox.max.clone())}:null,roomMeshes:scene.getObjectByName("departure-control-room")?.children.length},resources:{geometries:gl.info.memory.geometries,textures:gl.info.memory.textures,drawCalls:gl.info.render.calls,heapBytes:(performanceThisMemory()),geometryBytes:sceneGeometryBytes(scene)},actorUuid:root?.uuid,cameraUuid:camera.uuid,quaternion:camera.quaternion.toArray(),position: root?.position.toArray(), scenePosition:root?.getWorldPosition(new Vector3()).toArray(), cameraWorld:camera.getWorldPosition(new Vector3()).toArray(), entry:{stage:props.stage,elapsed:controlRoomState(session).elapsed,door:controlRoomState(session).door,hash:session.engine.world.definition.layoutHash}, bones, screen: { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 } };
     };
     const target = window as typeof window & { victoryInspect?: typeof inspect }; target.victoryInspect = inspect;
     return () => { if (target.victoryInspect === inspect) delete target.victoryInspect; };
-  }, [get, gl, session, props.reducedMotion, props.stage]);
+  }, [get, gl, session, props.reducedMotion, props.stage, props.greetingRequest]);
   useEffect(() => {
     const context = gl.getContext();
     const extension = context.getExtension("WEBGL_debug_renderer_info");
@@ -488,7 +491,7 @@ function Contents(props: SceneProps) {
     <CharacterKeyboard session={session} reducedMotion={props.reducedMotion} />
     <color attach="background" args={["#e9e1cf"]} />
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} stage={props.stage} launchReady={props.launchReady} fastEntry={props.fastEntry}/>
-    <ControlRoom session={session} standard={props.quality==="standard"}/>
+    <ControlRoom session={session} standard={props.quality==="standard"} active={props.stage!=="watch"}/>
     <group name="station-world-root" matrix={dock.matrix} matrixAutoUpdate={false}>
     <StationLighting session={session} standard={props.quality === "standard"} />
     {stationMounted&&<Station session={session} generation={session.generation} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />}
@@ -497,7 +500,7 @@ function Contents(props: SceneProps) {
     {stationMounted&&session.engine.world.definition.generatorVersion === "legacy-v0"&&<MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />}
     {stationMounted&&<SceneItems session={session}/>}
     {stationMounted && props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
-    {actors.filter((actor) => actor.kind === "player" || stationMounted && (!props.simpleCrowd || actor.kind === "guard")).map((actor) => <Character key={actor.id==="player"?"player":`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} onModelLoadStart={actor.kind === "player" ? props.onModelLoadStart : undefined} onModelLoaded={actor.kind === "player" ? props.onModelLoaded : undefined} onSelect={actor.id==="player"&&props.stage!=="watch"&&props.stage!=="launch"?()=>props.onRoomAction("character"):undefined} reducedMotion={props.reducedMotion} />)}
+    {actors.filter((actor) => actor.kind === "player" || stationMounted && (!props.simpleCrowd || actor.kind === "guard")).map((actor) => <Character key={actor.id==="player"?"player":`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} greetingRequest={actor.kind === "player" ? props.greetingRequest : undefined} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} onModelLoadStart={actor.kind === "player" ? props.onModelLoadStart : undefined} onModelLoaded={actor.kind === "player" ? props.onModelLoaded : undefined} onSelect={actor.id==="player"&&props.stage!=="watch"&&props.stage!=="launch"?()=>props.onRoomAction("character"):undefined} reducedMotion={props.reducedMotion} />)}
     {stationMounted&&<DebugGround key={`ground-${session.generation}`} session={session} vision={props.showVision} trail={props.showTrail} />}
     </group>
   </>;

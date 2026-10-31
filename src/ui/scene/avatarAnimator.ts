@@ -2,12 +2,13 @@ import { AnimationClip, AnimationMixer, LoopOnce, PropertyBinding, type Animatio
 import type { Motion } from "../presentation";
 import { findAvatarClip } from "../avatarModel";
 
-/** 收集模型自身的舞蹈和问候，兼容导出器的数字后缀。 */
+/** 收集模型自身的舞蹈、问候和失败动作，兼容导出器的数字后缀。 */
 export function findPerformanceClips(clips: AnimationClip[]) {
   const danceClips = clips.filter((clip) => /dance|victory|celebrat|胜利|舞蹈|庆祝/i.test(clip.name) && clip.duration > 0);
   return {
     dances: danceClips.map((clip) => clip.name).sort(), danceClips,
     greeting: clips.find((clip) => /greet|hello|wave|问候|招手|挥手/i.test(clip.name) && clip.duration > 0),
+    defeat: clips.find((clip) => /defeat|failure|lose|失败|沮丧/i.test(clip.name) && clip.duration > 0),
   };
 }
 
@@ -25,6 +26,8 @@ export interface AnimationFrame {
   motion: Motion; delta: number; speed: number; frozen: boolean; reducedMotion: boolean;
   dance: string; victoryTime: number; greetingTime: number | null;
   danceTime: number; previousDance: string; previousDanceTime: number;
+  defeatTime: number | null;
+  greetingImmediate?: boolean;
 }
 
 /** 显式采样并混合骨架动作：正常步态、完整/上半身问候和无硬切的舞蹈循环。 */
@@ -86,18 +89,20 @@ export class AvatarAnimator {
     this.sample(`${previous}:loop`, previousTime, weight * (1 - blend));
   }
 
-  /** 基础动作负责腿部移动；问候按移动状态平滑切换全身或上半身遮罩。 */
+  /** 选角问候从首帧直接接管；普通点选保留淡入，失败及减少动态按各自分支采样。 */
   update(frame: AnimationFrame) {
     for (const action of this.actions.values()) action.enabled = false;
     const next = this.normal[frame.motion] || this.normal.idle || this.normal.walk;
     if (next !== this.base) { this.previous = this.base; this.base = next; this.transition = 0; }
     this.transition = Math.min(1, this.transition + frame.delta / 0.16);
     if (!frame.frozen && !frame.reducedMotion) this.baseTime += frame.delta * frame.speed;
+    const defeat = frame.defeatTime !== null ? this.performances.defeat : undefined;
+    const defeatWeight = defeat ? frame.reducedMotion ? 1 : Math.min(1, frame.defeatTime! / 0.25) : 0;
     const dance = this.clips.get(frame.dance);
-    const danceWeight = dance ? frame.reducedMotion ? 1 : Math.min(1, frame.victoryTime / 0.25) : 0;
+    const danceWeight = (dance ? frame.reducedMotion ? 1 : Math.min(1, frame.victoryTime / 0.25) : 0) * (1 - defeatWeight);
     const greeting = this.performances.greeting;
     const greetTime = frame.reducedMotion ? null : frame.greetingTime;
-    const greetWeight = greeting && greetTime !== null ? Math.max(0, Math.min(1, greetTime / 0.16, (greeting.duration - greetTime) / 0.18)) * (1 - danceWeight) : 0;
+    const greetWeight = greeting && greetTime !== null ? Math.max(0, Math.min(1, frame.greetingImmediate ? 1 : greetTime / 0.16, (greeting.duration - greetTime) / 0.18)) * (1 - danceWeight - defeatWeight) : 0;
     const walking = frame.motion === "walk" || frame.motion === "jump";
     this.walkingBlend += ((walking ? 1 : 0) - this.walkingBlend) * Math.min(1, frame.delta / 0.12);
     const hasUpper = greeting && this.clips.get(`${greeting.name}:upper`)!.tracks.length > 0;
@@ -105,7 +110,7 @@ export class AvatarAnimator {
     // 任意骨架没有可识别上半身时，移动中保持原步态，避免滑行。
     const safeGreet = walking && !hasUpper ? 0 : greetWeight;
     for (const [name, weight] of [[this.base, this.previous ? this.transition : 1], [this.previous, 1 - this.transition]] as const) {
-      this.sample(name, this.baseTime, weight * (1 - danceWeight - safeGreet), true);
+      this.sample(name, this.baseTime, weight * (1 - danceWeight - defeatWeight - safeGreet), true);
       this.sample(`${name}:lower`, this.baseTime, weight * safeGreet * mask, true);
     }
     if (greeting && greetTime !== null) {
@@ -116,6 +121,7 @@ export class AvatarAnimator {
       if (frame.reducedMotion) this.sample(dance.name, Math.min(1, dance.duration * 0.35), 1);
       else this.danceTransition(dance.name, frame.danceTime, frame.previousDance, frame.previousDanceTime, danceWeight);
     }
+    if (defeat) this.sample(defeat.name, frame.reducedMotion ? defeat.duration : frame.defeatTime!, defeatWeight);
     this.mixer.update(0);
   }
 

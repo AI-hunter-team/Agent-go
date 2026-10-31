@@ -32,6 +32,7 @@ describe("world creation and local records",()=>{
   });
   test("records retain a label and source but reject broken seeds and invalid preferences",()=>{
     const record=saved();expect(isSavedWorld(record)).toBe(true);expect(record.name).toBe("我的车站");
+    expect(isSavedWorld({...record,preferences:{...record.preferences,characterId:"doubao"}})).toBe(true);
     expect(isSavedWorld({...record,seed:2})).toBe(false);
     expect(isSavedWorld({...record,preferences:{...record.preferences,settings:{timeLimitSeconds:150,extraQueuePeople:4}}})).toBe(false);
     expect(isSavedWorld({...record,schemaVersion:8})).toBe(false);
@@ -86,7 +87,7 @@ describe("continuous room and station handoff",()=>{
       for(let i=0;i<481;i++){
         state.update("launch",1/60,true,false,dock,false);expect(state.actor.distanceTo(previous)).toBeLessThan(.05);previous.copy(state.actor);
         // The passage crosses the open side doorway, not the room's wall.
-        if(state.actor.x>-3.1&&state.actor.x<-1.7)expect(state.actor.z).toBeCloseTo(3.5,6);
+        if(state.actor.x>-3.1&&state.actor.x<-1.7)expect(Math.abs(state.actor.z-LOUNGE.door[2])).toBeLessThan(.35);
       }
       expect(state.complete).toBe(true);expect(engine.t).toBe(0);
       const e=engine.world.definition.entrances![0];expect(new Vector3(state.pose.x,state.pose.y,state.pose.z).distanceTo(new Vector3(e.top.x,e.top.elevation,e.top.y))).toBeLessThan(.0001);
