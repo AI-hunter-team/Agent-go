@@ -7,6 +7,7 @@ import type { NormalizedGuidance } from "../shared/types";
 import { describeActivity } from "../sim/observation";
 import { DECISION_LIMITS } from "../sim/scenario";
 import { DEFAULT_GAME_SETTINGS } from "../shared/gameSettings";
+import { guidanceError } from "../shared/guidance";
 import { GuidanceCard, SetupPanel, type AgentChoice } from "./ControlPanel";
 import { DecisionTrace } from "./DecisionTrace";
 import { NpcDialogue } from "./NpcDialogue";
@@ -141,9 +142,15 @@ export function App() {
   };
   /** 返回开局设置，生成新种子并重置预览；同种子重试保留独立入口。 */
   const edit = () => {
-    requests.current++; preparationRef.current = null; setIntent("setup"); setError(null);
+    requests.current++; preparationRef.current = null; setShowModelConfig(false); setIntent("setup"); setError(null);
     const nextSeed = randomSeed(seed);
     setSeed(nextSeed); session.preview(nextSeed);
+  };
+  /** 校验玩家确认采用的复盘指导，再返回编辑；外观和性能偏好保持独立。 */
+  const adoptGuidance = (text: string) => {
+    const problem = guidanceError(text);
+    if (problem) { setError(problem); return; }
+    setGuidance(text); setNormalized(null); edit();
   };
   /** 清除站厅素材提示并重新挂载三维场景，保留对局与两组角色外观。 */
   const retryScene = () => { setSceneFailure(null); setStationAssetError(""); setSceneAttempt((value) => value + 1); };
@@ -189,6 +196,7 @@ export function App() {
         <div className={styles.sidebarBody}>
           {error && <div className="error" role="alert">{error}</div>}
           {stationAssetError && <div className="error" role="status">{stationAssetError}<button onClick={retryScene}>重试三维素材</button></div>}
+          {ended && showModelConfig && <ModelConfigPanel health={health} closeLabel="返回复盘" onClose={() => setShowModelConfig(false)} onEnabled={value => { setHealth(value); setShowModelConfig(false); }} />}
           {intent === "setup" && showModelConfig && <ModelConfigPanel health={health} onClose={() => setShowModelConfig(false)} onEnabled={(value) => {
             setHealth(value);
             setAgentKind(value.llm ? "llm" : "offline");
@@ -205,7 +213,7 @@ export function App() {
               {runner.budgetExhausted && <p className="badge brick">决策次数已用完，世界继续运行。</p>}
               <button className="ghost full-width" onClick={() => session.stop()}>结束本局</button>
             </>}
-            {ended && <><ReportSummary report={runner.report()} onRetry={start} onEdit={edit} /><Modal title="轨迹回放" description="回看角色位置、路线与当时决策；NPC 和设施显示终局状态。" wide trigger={<button className="full-width">查看轨迹回放</button>}><TrajectoryReplayView key={session.generation} report={runner.report()} engine={session.engine} /></Modal></>}
+            {ended && <><ReportSummary key={session.generation} report={runner.report()} onRetry={start} onEdit={edit} onAdopt={adoptGuidance} modelAvailable={health.llm} onConfigureModel={() => setShowModelConfig(true)} /><Modal title="轨迹回放" description="回看角色位置、路线与当时决策；NPC 和设施显示终局状态。" wide trigger={<button className="full-width">查看轨迹回放</button>}><TrajectoryReplayView key={session.generation} report={runner.report()} engine={session.engine} /></Modal></>}
             {playing && runner.attempts.at(-1)?.status === "pending" && <details><summary>当前调用（请求中）</summary><DecisionTrace attempts={[runner.attempts.at(-1)!]} /></details>}
             {playing && runner.dialogues.at(-1)?.status === "pending" && <NpcDialogue record={runner.dialogues.at(-1)!} />}
             <Modal title="行程记录" description="查看角色的决策依据、执行结果和已经发生的事件。" wide trigger={<button className={styles.logButton}>查看完整行程记录 <Icon name="external" /></button>}>
