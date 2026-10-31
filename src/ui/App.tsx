@@ -884,10 +884,7 @@ export function App() {
             onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
             onEdit={() => { j.edit(); if (kind === "offline") j.setDrawer(true); }} onLobby={j.returnLobby} />
           <JourneyReview key={session.generation} report={report} engine={session.engine} review={j.review} open={expandedReview} onClose={closeReview}
-            onRetry={() => j.retry({ twoDimensional: renderer === "2d" })}
-            onSameScenario={() => j.retry({ sameScenario: true, twoDimensional: renderer === "2d" })}
-            onEdit={text => { j.edit(text); if (kind === "offline" && text === undefined) j.setDrawer(true); }}
-            onConfigureModel={() => j.setDrawer(true)} onLobby={j.returnLobby} />
+            onEdit={text => { j.edit(text); if (kind === "offline" && text === undefined) j.setDrawer(true); }} />
           </>
         )}
         {debug && (
