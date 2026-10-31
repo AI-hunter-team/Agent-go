@@ -1,7 +1,6 @@
 import { AlertBadge, SceneItems } from "./Interactions";
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html } from "@react-three/drei/web/Html";
 import { useProgress } from "@react-three/drei/core/Progress";
 import { Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -20,6 +19,7 @@ import { cameraFraction } from "./cameraCollision";
 import { STATION_CEILING } from "../../assets/station-kit/dimensions";
 import { getScenePerformance } from "./scenePerformance";
 import { VictoryCamera } from "./victoryCamera";
+import type { HeadMessageMode } from "../headMessages";
 
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
 export interface SceneProps {
@@ -42,6 +42,7 @@ export interface SceneProps {
   showTrail: boolean;
   onCameraReady?: () => void;
   thought?: "thinking" | "ready" | null;
+  messageMode?: HeadMessageMode;
 }
 
 /** 按目标频率唤醒按需渲染；空闲或隐藏时休眠，阶段与采样变化可立即唤醒。 */
@@ -231,15 +232,6 @@ function CameraRig({ session, settings, reducedMotion, assetRotation, onReady }:
   return null;
 }
 
-function ThoughtBubble({ session, state }: { session: GameSession; state: "thinking" | "ready" }) {
-  const node = useRef<import("three").Group>(null);
-  useFrame(() => {
-    const actor = session.presentation.current.actors.get("player");
-    if (node.current && actor) node.current.position.set(actor.x, (actor.elevation ?? 0) + 2.05, actor.z);
-  });
-  return <group ref={node}><Html center style={{ pointerEvents: "none" }}><div className="thought-bubble" aria-hidden="true">{state === "ready" ? "💡" : <><i /><i /><i /></>}</div></Html></group>;
-}
-
 /** 让键盘用户在画布聚焦后按 Enter/空格触发与点击相同的问候。 */
 function CharacterKeyboard({ session, reducedMotion }: Pick<SceneProps, "session" | "reducedMotion">) {
   const canvas = useThree((state) => state.gl.domElement);
@@ -324,6 +316,9 @@ function StationLighting({ standard }: { standard: boolean }) {
 
 /** 组合正式站厅、性能设置与两组角色外观，分别反馈站厅和角色资源错误。 */
 function Contents(props: SceneProps) {
+  const invalidate = useThree(state => state.invalidate);
+  // 暂停时也要刷新头顶信息，不能等待模拟器下一次推进。
+  useEffect(() => { invalidate(); }, [props.messageMode, props.thought, invalidate]);
   const { session, metrics } = props;
   const { gl, get } = useThree();
   const wasSampling = useRef(false);
@@ -380,12 +375,11 @@ function Contents(props: SceneProps) {
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} />
     <Station session={session} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />
     <MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />
-    {actors.filter(a=>a.id!=="player").map(a=><AlertBadge key={a.id} id={a.id} session={session}/>)}
+    {actors.map(a=><AlertBadge key={a.id} id={a.id} session={session} messageMode={props.messageMode} thought={a.id==="player"?props.thought:null}/>)}
     <SceneItems session={session}/>
     {props.simpleCrowd && <SimpleCrowd key={`crowd-${session.generation}`} session={session} capacity={Math.max(64, Math.ceil(actors.length / 64) * 64)} />}
     {actors.filter((actor) => !props.simpleCrowd || actor.kind === "player" || actor.kind === "guard").map((actor) => <Character key={`${session.generation}-${actor.id}`} id={actor.id} kind={actor.kind} session={session} assetUrl={actor.kind === "guard" ? props.guardAssetUrl : props.assetUrl} assetRotation={actor.kind === "guard" ? props.guardAssetRotation : props.assetRotation} onAssetError={actor.kind === "guard" ? props.onGuardAssetError : props.onAssetError} reducedMotion={props.reducedMotion} />)}
     <DebugGround key={`ground-${session.generation}`} session={session} vision={props.showVision} trail={props.showTrail} />
-    {props.thought && <ThoughtBubble session={session} state={props.thought} />}
   </>;
 }
 

@@ -252,3 +252,17 @@ html:has([data-reduced-motion=true]) *, html:has([data-reduced-motion=true]) *::
   .replay-jump button { flex: 1; }
   .replay-controls > .segmented { flex: 1 0 144px; }
 }
+.scene-message { position: absolute; bottom: 30px; left: 0; transform: translateX(-50%); align-items: flex-start; gap: 8px; width: max-content; max-width: min(280px, 65vw); padding: 12px; border: 1px solid #d8ddd5; border-radius: 16px; background: #fffef8f5; color: #26342e; box-shadow: 0 4px 18px #17243a24; font-size: 13px; line-height: 1.5; pointer-events: auto; }
+.scene-message svg { width: 22px; height: 22px; flex-shrink: 0; }
+.scene-message span { max-height: 160px; overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
+.scene-message span:empty { display: none; }
+.scene-message[data-mode=icons] { padding: 9px; border-radius: 50%; pointer-events: none; }
+.scene-message[data-kind=speech] .scene-message-thought, .scene-message[data-kind=thought] .scene-message-speech { display: none; }
+.scene-message-player { bottom: 0; }
+.scene-message[data-speaker=agent] { background: #eaf2ff; color: #1e3d63; border-color: #50729f; border-left-width: 3px; border-radius: 16px 16px 16px 4px; }
+.scene-message[data-speaker=npc] { background: #fff8e6; color: #554019; border-color: #ae8337; border-right-width: 3px; border-radius: 16px 16px 4px 16px; }
+.scene-message-copy { display: grid; gap: 4px; min-width: 0; }
+.scene-message-speaker { font-size: 11px; line-height: 1.4; font-weight: 800; letter-spacing: .03em; }
+.scene-message[data-mode=icons] .scene-message-copy { display: none; }
+.scene-message[data-mode=icons][data-speaker=agent] { border-radius: 12px; }
+.scene-message[data-mode=icons][data-speaker=npc] { border-radius: 50%; }
