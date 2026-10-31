@@ -33,7 +33,9 @@ describe("generated station contracts",()=>{
    if(seed%25===0) await new Promise<void>(resolve=>setImmediate(resolve));
   }
   expect(families.size).toBe(3);expect(hashes.size).toBeGreaterThan(100);
- },180000);
+ // V2 validates the base layout and the placed solids; slower CI hosts need
+ // more wall time without reducing the seed count or any assertions.
+ },360000);
  it("varies entry and connector anchors, with a transverse side service band",()=>{
   const definitions=Array.from({length:30},(_,i)=>generateWorld(i+1));
   expect(new Set(definitions.map(d=>JSON.stringify(d.layout.ENTRANCE))).size).toBeGreaterThan(4);
