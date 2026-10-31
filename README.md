@@ -6,7 +6,7 @@
 
 项目仓库：[agent-go](https://github.com/AI-hunter-team/Agent-go)。
 
-**当前开发版本已增加3D 站厅与楼梯示意、几何角色、跟随/总览镜头及完整游戏界面，支持 Luna 兼容 API 与 Anthropic 接入。** 规则仍由原模拟器结算，二维地图保留为调试视图。3D 浏览器证据及未完成验收见 [3D-MIG-001](docs/validation/3D-MIG-001.md)，模型实测见 [验收记录](docs/验收记录.md)，原 3D 集成见 [PR7-MERGE-001](docs/validation/PR7-MERGE-001.md)，本次集成见 [PR-REMAINING-001](docs/validation/PR-REMAINING-001.md)。
+**当前开发版本提供 3D 站厅、跟随/总览镜头及完整游戏界面；模型统一使用 Responses API，默认 DeepSeek Flash、关闭思考。** 规则仍由原模拟器结算，二维地图保留为调试视图。本次迁移范围和验证见 [RESPONSES-001](docs/tasks/RESPONSES-001.md)；此前 3D 与模型验收分别见 [3D-MIG-001](docs/validation/3D-MIG-001.md)、[历史验收](docs/验收记录.md)和 [PR 集成](docs/validation/PR-REMAINING-001.md)，历史模型结果不能代替新接口实测。
 
 新开发者与开发 Agent 先读 [AGENTS.md](AGENTS.md)、[文档导航](docs/README.md)和[开发流程](docs/DEVELOPMENT.md)，阶段状态见[工作记录](docs/开发计划.md)。功能修改通过独立 `codex/` 分支向 `main` 提交 PR；历史任务的分支及推送限制不是后续任务的永久规则。
 
@@ -92,11 +92,11 @@ NPC 使用开发者在服务端单独配置的模型 API、密钥及模型，不
 
 ### 接入真实模型
 
-可直接在页面点击 **模型 API 配置**，填写 OpenAI 兼容接口的 **API 域名和 Key → 验证连接并获取模型 → 选择模型 → 验证模型并启用大模型**。只填写域名时自动补上 `/v1`；填写完整基础路径时会保留。模型列表接口不受支持时，可手动填写模型 ID。启用前会发起一次与游戏相同的真实工具调用，验证认证、模型权限与工具协议，可能消耗少量接口额度；失败时不会启用。
+可直接在页面点击 **模型 API 配置**，填写 DeepSeek 或兼容 Responses 的 **基础地址和 Key → 验证连接并获取模型 → 选择模型和思考强度 → 验证模型并启用大模型**。默认地址为 `https://api.deepseek.com`，优先选择 `deepseek-flash`；地址保留原路径，不再自动补 `/v1`，也无需填写 `/responses` 后缀。模型列表不可用时可手动填写模型 ID。启用会发起一次真实工具调用，可能消耗少量额度；失败不覆盖已启用配置。
 
-页面配置按浏览器页面隔离，Key 仅存于临时内存，不写入浏览器存储、`.env` 或日志；刷新后需重新配置，闲置 30 分钟后失效。配置只影响当前页面新对局的 Agent（包括指导整理和创造性分类），不更改服务端默认配置、NPC 或其他用户的模型。可通过「清除页面配置」恢复 Agent 的服务端默认配置。
+页面配置按浏览器页面隔离，Key 仅存于临时内存，不写入浏览器存储、`.env` 或日志；刷新后需重新配置，闲置 30 分钟后失效。思考强度提供 **关闭、低、高、最高**，默认关闭，分别对应 `none/low/high/max`，不代表精确 token 长度。重新启用后只影响新对局，旧对局继续使用原模型和档位；清除页面配置恢复新对局的服务端默认配置，旧局凭据在局后释放。
 
-DeepSeek 官方接口可填写 `https://api.deepseek.com`（页面自动补 `/v1`），模型以获取到的列表为准。当前仍使用 Chat Completions，按精确主机 `api.deepseek.com` 自动适配：保留默认 `low` 思考，使用 `auto` 工具选择和 `max_tokens`，回传已返回的 `reasoning_content`；不启用需要 `/beta` 的严格工具模式。指导整理、行动归类和乘客沟通使用 `json_object`，字段/长度仍由程序验证。游戏只执行一个合法动作，无动作时沿用局内最多一次重试；页面启用探测仍要求本次返回有效动作。其他兼容网关的参数不变，第三方 DeepSeek 代理不自动套用官方参数。该适配的软件验证见 [DEEPSEEK-THINKING-001](docs/validation/DEEPSEEK-THINKING-001.md)，不代表付费模型整局已验收。
+页面设置只作用于 Agent 的决策、指导整理和分类；NPC 始终使用开发者的独立服务端配置。
 
 也可继续使用服务端默认配置：
 
@@ -108,29 +108,28 @@ Copy-Item .env.example .env
 
 编辑 `.env`，分别填入 Agent 和 NPC 对应的 API Key，然后重启开发服务器。不要把密钥放入任何 `VITE_*` 变量或提交到 Git。
 
-- 模板以 DeepSeek Agent 和 Kimi NPC 为例：Agent 使用 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`、`AGENT_MODEL=deepseek-flash`；NPC 使用独立的 `NPC_*` 配置与 `kimi-k2.6`。分别填写 `ANTHROPIC_API_KEY` 和 `NPC_OPENAI_API_KEY`，由 Node 服务端发出请求。模型可用性以各账号 `/models` 列表为准；Kimi K2.6 的 NPC 请求关闭思考，不发送其不支持的 `reasoning_effort`。
-- Luna 默认使用 `reasoning_effort=none` 降低生成等待，其他兼容模型默认 `low`；可用 `OPENAI_REASONING_EFFORT=low` 恢复更多推理。兼容接口默认通过 HTTP SSE 流式接收（`OPENAI_STREAM=0` 可关闭），强制单个工具调用；多工具、无效参数或截断输出均不执行。会话保存工具调用及下一轮真实动作结果和局部观察。
-- 流式接收不等于提前执行：服务端等完整动作与结束标记、完成流聚合后才校验并交给模拟器；末尾用量会保留，缺失用量记为未知；浏览器仍通过 HTTP JSON 获取完整决策。首段数据时间与完整动作等待分别记录，换成 WebSocket 不保证降低上游排队或生成耗时。当前 `gpt-6-luna` 的 `none` 已在配置的兼容接口做小请求与完整对局验证；复杂策略质量、上游偶发空响应及稳定时延仍需独立验收，详见 [LLM-LATENCY-001](docs/validation/LLM-LATENCY-001.md)。
-- 指导整理和意图分类使用严格 JSON Schema。接口未返回推理 token 明细时记录为未知，不估算；界面通过动作的 `reason` 显示简短决策理由。
-- 使用 Anthropic 时设置 `AGENT_PROVIDER=anthropic`、`ANTHROPIC_API_KEY`、`AGENT_MODEL=claude-opus-5-5`；也支持 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL` 与 `AGENT_FORCE_LLM=1`。
+- 模板默认 `AGENT_PROVIDER=responses`、`OPENAI_BASE_URL=https://api.deepseek.com`、`AGENT_MODEL=deepseek-flash`，服务端统一请求基础地址下的 `/responses`。旧 `AGENT_PROVIDER=openai` 是新协议别名，不再调用 Chat Completions。
+- `OPENAI_REASONING_EFFORT=none` 是所有模型的服务端默认值；支持 `none/low/high/max`。页面配置独立使用所选档位；模型不支持时明确报错，不静默降档。HTTP SSE 默认开启，`OPENAI_STREAM=0` 可关闭。
+- 服务端等待 `response.completed/incomplete/failed` 终态事件，使用完整 output 与 usage；不会把半个工具交给模拟器。DeepSeek 不保证关闭并行工具，应用仍严格要求恰好一个合法动作，多工具或截断均拒绝执行并回填未执行反馈。
+- 每轮发送本局完整 Responses 历史，按 `call_id` 配对动作与结果；不依赖 `previous_response_id`。指导整理、意图分类和 NPC 对话使用 `text.format` JSON Schema 与本地校验。缺失用量为未知，不估算。
+- Anthropic 原生通道、SDK 与拒答回退已移除。旧配置须显式改填 Responses 地址和凭据；不会自动挪用 `ANTHROPIC_*` 密钥。实际 `.env` 不会被自动改写。
 - `GET /api/health` 只检查凭据是否配置，**不代表额度、认证或模型可用性已验证**。
 - 每次模型请求会消耗接口额度，执行真实测试需当前任务对应授权。可显式运行 `npm run test:model` 做真实整局测试；普通 `npm test` 使用模拟响应，不调用付费模型。
-- `DECISION_THINKING_TOKENS=1024` **仅约束思考**，动作与说明另计；`DECISION_MAX_TOKENS=4096` 是独立的总输出保护值，并为非思考输出保留至少 1024 token 空间。
-- 当前兼容协议没有经确认的独立数值思考硬上限。应用通过提示、所配置的推理强度及返回的 `reasoning_tokens` 检查；思考超限的动作不执行。缺少思考明细时标为无法验证，不能声称供应商生成时已硬截断到 1024。[官方推理参数说明](https://developers.openai.com/api/docs/guides/reasoning)。
-- 每个决策最多重试一次，思考用量逐次检查，复盘累计两次用量。模型传输层不自动重试，20 秒超时；浏览器请求 30 秒超时。
-- 兼容 API 接入固定关闭应用侧模型回退；Anthropic 可通过 `AGENT_FALLBACK=default` 开启服务端拒答回退。日志记录供应商响应的模型名。
-- 指导整理属于赛前操作，输出上限 4096；创造性归类独立调用，上限 1024。角色决策（含重试）与 NPC 沟通的 token 分列统计，**不是全局账单**。
+- `DECISION_MAX_TOKENS=4096` 统一限制每个模型请求的总输出（思考、文本和工具参数），可配置为正整数。完整且符合总预算的动作不会因思考超过 1024 而拒绝。截断或供应商报告总输出超限时仍不执行。
+- `DECISION_THINKING_TOKENS` 已停用，启动时若发现该变量会提示迁移；`AGENT_FALLBACK` 不再生效。这是用户确认的预算规则更新，见 [技术方案 §17](docs/MVP技术方案.md#17-responses-与思考设置responses-001)。DeepSeek 档位与总输出参数见[官方说明](https://api-docs.deepseek.com/api/create-response/)。
+- 每个决策最多一次业务重试，两次用量均累计；传输层不自动重试，20 秒超时，浏览器请求 30 秒超时。高档位仍可能受到超时或总输出上限影响。
+- 角色决策（含重试）与 NPC 沟通的 token 分列统计，不含赛前整理等辅助操作，**不是全局账单**。
 
 NPC 由开发者在服务端 `.env` 单独配置，随后重启服务；页面不提供 NPC 配置入口：
 
 ```dotenv
-NPC_PROVIDER=openai
+NPC_PROVIDER=responses
 NPC_MODEL=your-npc-model-id
 NPC_OPENAI_BASE_URL=https://api.example.com/v1
 NPC_OPENAI_API_KEY=your-npc-api-key
 ```
 
-使用 Anthropic 时，改为 `NPC_PROVIDER=anthropic`，设置 `NPC_MODEL` 和 `NPC_ANTHROPIC_API_KEY` 或 `NPC_ANTHROPIC_AUTH_TOKEN`，可选 `NPC_ANTHROPIC_BASE_URL`。NPC 不继承任何 Agent 模型、接口或凭据；必须提供 `NPC_MODEL` 和对应凭据。NPC 输出上限为 1024 token，不启用模型回退；未配置时协商返回 503，调用失败返回 502，均不授予插队许可。已有部署升级后也需补充 NPC 配置，Docker 说明见 [部署教程](docs/DOCKER.md)。
+NPC 同样要求支持 Responses 的地址和模型，关闭思考并使用 `DECISION_MAX_TOKENS` 统一总输出预算；不继承 Agent 的模型、地址、Key 或页面档位。旧 `NPC_PROVIDER=openai` 是 Responses 别名，原生 Anthropic NPC 配置需要显式迁移。未配置时协商返回 503，调用失败返回 502，均不授予插队许可。已有部署升级后也需补充独立 NPC 配置，Docker 说明见 [部署教程](docs/DOCKER.md)。
 
 ### Debug 日志与 AI 耗时
 
@@ -168,7 +167,7 @@ npm run test:model -- --seeds=1,2 --compare
 
 ## 已实现
 
-- React 18 + TypeScript + Vite，Three.js / R3F / Drei 三维场景，Radix 交互与定制游戏 UI；Express 模型代理，兼容 OpenAI API 与 Anthropic。
+- React 18 + TypeScript + Vite，Three.js / R3F / Drei 三维场景，Radix 交互与定制游戏 UI；Express Responses 模型代理，优先兼容 DeepSeek。
 - 与渲染器独立的对局运行层、只读展示快照、位置插值、程序动画、相机避障、同局二维调试与模型失败占位。
 - 固定步长模拟、带种子的 NPC/耗时、队列与服务、设施故障与广播。
 - 角色局部观察、墙体/柱子遮挡、保安视野及违规发现判负。

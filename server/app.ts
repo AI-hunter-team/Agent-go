@@ -1,6 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { extname, resolve } from "node:path";
-import { configFromEnv } from "./claude";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
 import type {
@@ -71,20 +70,23 @@ function npcFailure(reason: string, model: string | null): NpcReply {
   return { accepted: false, reply: "暂时无法答复，请保持原来的排队位置。", reason, source: "error", model, usage: null };
 }
 
+/** 装配独立 Agent/NPC 路由，并把 Agent 配置固定到每局会话。 */
 export function createApp({ llm, npcLlm = null, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, npcModelParameters = {}, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   const runId = (value: unknown) => typeof value === "string" && /^[\w-]{1,80}$/.test(value) ? value : null;
   type Runtime = { llm: LlmService | null; parameters: Record<string, unknown>; token: string };
   const bindings = new WeakMap<Session, Runtime>();
+  /** 新请求使用当前页面配置；诊断与实例使用相同的设置。 */
   const runtime = (req: Request): Runtime => {
     const token = req.get("x-model-config") || "";
     if (!token) return { llm, parameters: modelParameters, token };
     const config = modelConfigs.get(token);
     if (!config.llm) throw new ModelConfigError("请先选择模型并验证启用", 409);
-    const cfg = configFromEnv({ ...process.env, AGENT_MODEL: config.llm.model, AGENT_FALLBACK: "off" });
-    return { llm: config.llm, parameters: { ...cfg, provider: "openai", model: config.llm.model, effort: cfg.reasoningEffort, timeoutMs: 20_000, transportRetries: 0 }, token };
+    const cfg = config.settings!;
+    return { llm: config.llm, parameters: { ...cfg, provider: "responses", model: config.llm.model, effort: cfg.reasoningEffort, timeoutMs: 20_000, transportRetries: 0 }, token };
   };
+  /** 已开始的对局使用原实例，且校验其所属配置 token。 */
   const forSession = (req: Request, session: Session): Runtime => {
     const bound = bindings.get(session);
     if (!bound) return runtime(req);
@@ -106,8 +108,8 @@ export function createApp({ llm, npcLlm = null, sessions, debugLogger = new Debu
     const token = req.get("x-model-config");
     if (!token) throw new ModelConfigError("请先验证 API 配置");
     const { value } = await traceOperation({ operation: "decide", runId: null, sessionId: null },
-      { purpose: "model_verification", model: req.body?.model }, debugLogger,
-      () => modelConfigs.enable(token, req.body?.model));
+      { purpose: "model_verification", model: req.body?.model, reasoningEffort: req.body?.reasoningEffort ?? "none" }, debugLogger,
+      () => modelConfigs.enable(token, req.body?.model, req.body?.reasoningEffort));
     res.json(value);
   }));
   app.delete("/api/model/config", (req, res) => {

@@ -24,3 +24,13 @@ test("completed measurements retain their environment and peak actor count", () 
   metrics.environment.gpu = "another GPU"; metrics.environment.actors = 100;
   expect(metrics.summary()).toMatchObject({ gpu: "test GPU", actorsStart: 23, actors: 40, maxActors: 40, active: false });
 });
+
+test("changing render settings invalidates a performance comparison", () => {
+  const metrics = new FrameMetrics();
+  metrics.environment = { targetFps: 60, simpleCrowd: 0 };
+  metrics.start(); metrics.push(1 / 60);
+  metrics.environment.targetFps = 30;
+  metrics.environment.simpleCrowd = 1;
+  metrics.push(1 / 30);
+  expect(metrics.summary()).toMatchObject({ targetFps: 60, simpleCrowd: 0, environmentChanged: expect.any(String) });
+});

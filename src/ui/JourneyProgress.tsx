@@ -6,6 +6,7 @@ export interface JourneyProgressProps {
   status: GameStatus;
 }
 
+/** 根据真实角色状态绘制五站流程，完整状态保留在无障碍名称中。 */
 export function JourneyProgress({ player, status }: JourneyProgressProps) {
   const labels = ["买票", "安检", "过闸机", "下楼梯", "进入站台"];
   const a = player.activity;
@@ -25,13 +26,13 @@ export function JourneyProgress({ player, status }: JourneyProgressProps) {
           const state = complete[index] ? "complete" : index === current && status === "running" ? "active" : index < current ? "skipped" : "waiting";
           const text = complete[index] ? "已完成" : state === "active" ? "进行中" : state === "skipped" ? index === 0 ? "未购票" : "未完成" : "待开始";
           return <li key={label} className={`journey-step ${state}`} aria-label={`${label}：${text}`} aria-current={index === current ? "step" : undefined}>
-            <span className="journey-number">{index + 1}</span><strong>{label}</strong><span className="journey-state">{text}</span>
+            <span className="journey-number" aria-hidden="true">{index + 1}</span><strong aria-hidden="true">{label}</strong>
           </li>;
         })}
       </ol>
       <p className="journey-current"><strong>{status === "failed" ? `本局结束，停在：${labels[current]}` : `当前阶段：${labels[current]}`}</strong>
         {current === 2 && <span>{gateDetail} · 常规流程：排队 → 验票 → 通行</span>}
-        {current === 3 && <span>{a.kind === "stairs" ? `正在下楼梯（剩余 ${Math.ceil(a.remaining)} 秒）` : "已过闸机，前往 STAIRS_TOP 后下楼梯（约 6 秒）"}</span>}
+        {current === 3 && <span>{a.kind === "stairs" ? `正在下楼梯（剩余 ${Math.ceil(a.remaining)} 秒）` : "已过闸机，前往楼梯入口下楼（约 6 秒）"}</span>}
         {current === 4 && <span>已下楼梯进入站台，本局完成</span>}
       </p>
       {current === 2 && !player.hasTicket && <p className="journey-warning">未持有效车票，常规验票会拒绝通行；创造性行动由环境单独判定。</p>}

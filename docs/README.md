@@ -22,6 +22,8 @@
 
 ## 架构与接口入口
 
+当前模型接入与思考预算由[技术方案 §17](MVP技术方案.md#17-responses-与思考设置responses-001)维护：统一 Responses、默认 DeepSeek Flash / 关闭思考，以及页面档位与会话绑定。该任务的代码/验证/合入状态见 [RESPONSES-001](tasks/RESPONSES-001.md)，旧模型章节和历史成绩不证明新接口真实验收。
+
 项目为 npm 管理的 TypeScript Web 应用：React/Vite + Three.js/R3F/Drei 三维展示、Radix 定制 UI、浏览器模拟器和 Express 模型代理；Canvas 2D 保留作调试，Vitest 在 Node 环境运行测试。当前三维展示与内部快照入口见 [技术方案 §15](MVP技术方案.md)，后续楼梯、协商、回放和报告差异见 [§16](MVP技术方案.md#16-当前集成差异pr-remaining-001)，目录职责和脚本见 [开发流程](DEVELOPMENT.md)。
 
 HTTP JSON、动作工具及共享数据目前是应用内部接口，复用 [技术方案 §7、§10、§14、§16](MVP技术方案.md)，不另建一份协议表。实际接口以 [server/app.ts](../server/app.ts)、[远程客户端](../src/agent/remoteAgent.ts)、[共享类型](../src/shared/types.ts) 和 [工具定义](../server/tools.ts) 互相核对；导出格式从 `GameReport` 与 [报告导出实现](../src/ui/ReportView.tsx) 查起。目前没有仓库内的独立版本化对外协议或冻结记录，不能因此自行破坏已有调用方或导出数据消费者。
