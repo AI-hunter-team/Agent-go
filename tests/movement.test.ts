@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { World } from "../src/sim/world";
-import { clearOfScenery, detourAroundQueues, personRadius, steer, sweptDistance } from "../src/sim/movement";
+import { clearOfScenery, detourAroundQueues, GUARD_COLLISION_RADIUS, personRadius, steer, sweptDistance } from "../src/sim/movement";
 import { segmentIntersectsRect } from "../src/sim/geometry";
 import { DT } from "../src/sim/scenario";
 
@@ -97,8 +97,19 @@ test("patrolling guards stop before a stationary passenger", async () => {
   const guards = new GuardSystem([{ id: "guard", label: "guard", route: [{ x: 10, y: 14 }, { x: 10, y: 16 }], facing: Math.PI / 2, speed: 1, pauseSeconds: 0 }]);
   for (let i = 0; i < 40; i++) guards.step([{ id: "npc", pos: { x: 10, y: 15 }, radius: 0.32 }]);
   expect(guards.guards[0].pos.y).toBeLessThanOrEqual(14.36);
+  const before = guards.guards[0].pos.y;
   guards.step();
-  expect(guards.guards[0].pos.y).toBeGreaterThan(14.3);
+  expect(guards.guards[0].pos.y).toBeCloseTo(before + 0.1);
+});
+
+test("the naiwa guard collider covers the visible body and blocks a player crossing it", async () => {
+  const { GuardSystem } = await import("../src/sim/guards");
+  expect(GUARD_COLLISION_RADIUS).toBeGreaterThan(personRadius("normal"));
+  expect(personRadius("guard")).toBe(GUARD_COLLISION_RADIUS);
+  const guards = new GuardSystem([{ id: "guard", label: "奶蛙保安", route: [{ x: 10, y: 15 }], facing: 0, speed: 0, pauseSeconds: 0 }]);
+  const player = { from: { x: 9, y: 15 }, to: { x: 11, y: 15 } };
+  expect(sweptDistance(player.from, player.to, guards.guards[0].pos)).toBeLessThan(personRadius("normal") + personRadius("guard") + 0.02);
+  expect(steer(player.from, player.to, 0.2, personRadius("normal"), [{ id: "guard", pos: guards.guards[0].pos, radius: personRadius("guard") }])).not.toEqual({ x: 9.2, y: 15 });
 });
 
 test("live NPCs, spawns, service exits and guards stay separated throughout interpolated ticks", async () => {

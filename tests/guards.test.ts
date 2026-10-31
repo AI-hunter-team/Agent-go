@@ -44,8 +44,9 @@ describe("guards", () => {
     stepSeconds(gs, 5);
     expect(b.pos.y).toBeGreaterThan(startY);
     expect(b.facing).toBeCloseTo(Math.PI / 2);
-    stepSeconds(gs, 30); // reach the far end (22 m), pause, head back
-    expect(b.facing).toBeCloseTo(-Math.PI / 2);
+    stepSeconds(gs, 30); // reach the far end (22 m), pause, head back (the larger guard collider stops at the fixture clearance)
+    expect(b.pos.y).toBeLessThanOrEqual(25.6 + 1e-6);
+    expect(b.facing).toBeCloseTo(Math.PI / 2);
   });
 
   test("a complaint turns nearby guards toward it", () => {
