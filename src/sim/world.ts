@@ -175,8 +175,8 @@ export class World {
     return ids;
   }
 
-  private queuePoint(f: Facility, ids: string[], slot: number, incoming: PassengerKind): Vec {
-    let offset = 0;
+  private queuePoint(f: Facility, ids: string[], slot: number, incoming: PassengerKind, extraOffset = 0): Vec {
+    let offset = extraOffset;
     for (let i = 1; i <= slot; i++) {
       const before = this.persons.get(ids[i - 1])?.kind ?? incoming;
       const next = this.persons.get(ids[i])?.kind ?? incoming;
@@ -201,6 +201,32 @@ export class World {
     return { ...f.def.head, x: f.def.head.x + direction.x * offset, y: f.def.head.y + direction.y * offset };
   }
 
+  /** Stage behind the preceding arrival's actual position, including its approach clearance. */
+  private queueApproachPoint(f: Facility, approaching: Person[], rank: number): Vec {
+    const p = approaching[rank], nominal = this.queueStandPoint(f, f.queue.length + rank, p.kind);
+    if (rank === 0) return nominal;
+    const previous = approaching[rank - 1];
+    const clearance = Math.max(QUEUE_SPACING, personRadius(previous.kind) + personRadius(p.kind) + .03);
+    // Only expand a staging slot when its predecessor actually occupies its
+    // clearance. Distant walkers retain their route through the station.
+    if (dist(previous.pos, nominal) >= clearance) return nominal;
+    const ids = [...this.physicalQueue(f), ...approaching.map(other => other.id)];
+    const slot = ids.indexOf(p.id), target = this.queuePoint(f, ids, slot, p.kind);
+    const tail = this.queuePoint(f, ids, slot - rank, approaching[0].kind);
+    const distance = dist(previous.pos, tail) + clearance;
+    // A nominal slot can be in front of an off-centre predecessor. Extending
+    // along the same queue curve keeps that predecessor's arrival space free.
+    if (!Number.isFinite(distance) || dist(target, tail) >= distance) return target;
+    let low = 0, high = distance;
+    while (dist(this.queuePoint(f, ids, slot, p.kind, high), tail) < distance) high *= 2;
+    for (let i = 0; i < 12; i++) {
+      const middle = (low + high) / 2;
+      if (dist(this.queuePoint(f, ids, slot, p.kind, middle), tail) < distance) low = middle;
+      else high = middle;
+    }
+    return this.queuePoint(f, ids, slot, p.kind, high);
+  }
+
   /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
   movePerson(p: Person, target: Vec, stride: number, detour = true, avoidSingleQueue = false): boolean {
     if (this.isRestrained(p.id)) return false;
@@ -208,8 +234,8 @@ export class World {
     // Approach an occupied final queue slot directly, then wait instead of circling it.
     // Safe forward progress still matters: stopping early can obstruct the surrounding traffic.
     const occupiedArrival = p.activity.kind === "to_queue" && p.activity.path.length === 1
-      && dist(p.pos, target) <= personRadius(p.kind) + stride
-      && !this.spatial.clearOfPeople(target, target, personRadius(p.kind), bodies);
+      && bodies.some(body => dist(target, body.pos) < personRadius(p.kind) + body.radius + .02
+        && dist(p.pos, target) <= personRadius(p.kind) + body.radius + stride);
     const memberships = [...this.facilities.values()].map(f => [...f.queue, ...(f.serving ? [f.serving.personId] : [])]);
     memberships.push(...this.transit.queues());
     const queues = memberships.flatMap((ids) => {
@@ -539,7 +565,10 @@ export class World {
         const rank = approaching.findIndex((other) => other.id === p.id);
         // Only the nearest arrival approaches the tail. Others stage behind it,
         // rather than surrounding the same point and blocking it from every side.
-        const target = this.queueStandPoint(f, f.queue.length + rank, p.kind);
+        const target = this.queueApproachPoint(f, approaching, rank);
+        // Distant arrivals may stage beyond the available hall. Wait outside
+        // rather than steering at an impossible point through a wall/fixture.
+        if (!this.spatial.clearOfScenery(target, target, personRadius(p.kind))) break;
         if (!a.path.length) a.path.push(target);
         else a.path[a.path.length - 1] = target;
         if (this.followPath(p, a.path, stride) && rank === 0) {
@@ -619,8 +648,9 @@ export class World {
   private followPath(p: Person, path: Vec[], stride: number): boolean {
     // Crowd avoidance can carry a walker away from its original visible segment.
     // Rejoin the static route around floor openings instead of steering at a point
-    // behind the slab indefinitely. Queue/service/transit paths keep their rules.
-    if(this.definition.connectors&&p.activity.kind==="walking"&&path.length&&this.t>=(this.walkReplanAt.get(p)??0)){
+    // behind the slab indefinitely. Moving queue tails need the same recovery;
+    // service and transit paths keep their controlled crossing rules.
+    if(this.definition.connectors&&(p.activity.kind==="walking"||p.activity.kind==="to_queue")&&path.length&&this.t>=(this.walkReplanAt.get(p)??0)){
       this.walkReplanAt.set(p,this.t+.5);
       if(!this.spatial.clearOfScenery(p.pos,path[0],personRadius(p.kind))){
         const route=this.navigation.findPath(p.pos,path.at(-1)!,personRadius(p.kind));

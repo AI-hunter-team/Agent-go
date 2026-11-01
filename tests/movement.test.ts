@@ -3,6 +3,7 @@ import { World } from "../src/sim/world";
 import { clearOfScenery, detourAroundQueues, GUARD_COLLISION_RADIUS, personRadius, steer, sweptDistance } from "../src/sim/movement";
 import { segmentIntersectsRect } from "../src/sim/geometry";
 import { DT } from "../src/sim/scenario";
+import { generateWorld } from "../src/sim/worldDefinition";
 
 /** Advance a small crowd while checking separation throughout each interpolated step. */
 function walkThrough(world: World, ticks = 300) {
@@ -198,5 +199,44 @@ test("an occupied arrival slot cannot make a passenger repeatedly retrace its la
   expect(p.pos).not.toEqual(waiting);
   w.persons.delete(blocker.id);
   for (let tick = 0; tick < 40; tick++) w.movePerson(p, target, 0.08);
+  expect(p.pos).toEqual(target);
+});
+
+test.each(["legacy", "generated A", "generated B"])("%s arrivals leave the leader room to reach the ticket queue", layout => {
+  const w = new World(1, 150, undefined, layout === "legacy" ? undefined : generateWorld(3, { version: "metro-v3" }));
+  const f = w.facility(layout === "legacy" ? "TVM-2" : layout === "generated A" ? "TVM-1" : "TVM-4")!;
+  const head = f.def.head;
+  const player = w.addPerson("player", { ...head, y: head.y + 1.9 }, { isPlayer: true });
+  const left = w.addPerson("luggage", { ...head, x: head.x - .7, y: head.y + 1 });
+  const right = w.addPerson("luggage", { ...head, x: head.x + .7, y: head.y + 1 });
+  for (const p of [player, left, right]) {
+    p.serviceTime.tvm = 1;
+    expect(w.joinQueue(p, f.def.id)).toBeNull();
+  }
+  // Completed NPCs continue into the hall instead of occupying both TVM exits.
+  for (let tick = 0; tick < 200; tick++) {
+    for (const p of [left, right]) if (p.hasTicket && p.activity.kind === "idle")
+      w.walkTo(p, { ...p.pos, y: head.y + 7 }, "leave ticket machine");
+    walkThrough(w, 1);
+  }
+  expect([player, left, right].every(p => p.hasTicket)).toBe(true);
+  expect(f.queue).toEqual([]);
+  expect(f.serving).toBeNull();
+});
+
+test("a final slot occupied by a large passenger does not cause circling outside a small passenger's radius", () => {
+  const w = new World(1), target = { x: 20, y: 15 };
+  const blocker = w.addPerson("luggage", { x: 20.5, y: 15 });
+  const p = w.addPerson("player", { x: 19.3, y: 15 }, { isPlayer: true });
+  p.activity = { kind: "to_queue", facility: "S2", path: [target] };
+  for (let tick = 0; tick < 80; tick++) {
+    const before = { ...p.pos };
+    w.movePerson(p, target, .14);
+    expect(p.pos.y).toBe(15);
+    expect(p.pos.x).toBeGreaterThanOrEqual(before.x);
+    expect(sweptDistance(before, p.pos, blocker.pos)).toBeGreaterThanOrEqual(.82 - 1e-6);
+  }
+  w.persons.delete(blocker.id);
+  for (let tick = 0; tick < 20; tick++) w.movePerson(p, target, .14);
   expect(p.pos).toEqual(target);
 });
