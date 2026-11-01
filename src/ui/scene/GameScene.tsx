@@ -8,7 +8,8 @@ import type { JourneyStage } from "../journeyFlow";
 import { worldViewBounds } from "../../sim/entranceGeometry";
 import { AlertBadge, SceneItems } from "./Interactions";
 import { MessageBillboardLayout } from "./MessageBillboardLayout";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { bindContextRecovery } from "./contextRecovery";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useProgress } from "@react-three/drei/core/Progress";
 import { Box3, Object3D, OrthographicCamera, PerspectiveCamera, PMREMGenerator, Vector3, type Mesh } from "three";
@@ -391,7 +392,7 @@ function DebugGround({ session, vision, trail }: { session: GameSession; vision:
 }
 
 /** 为正式站厅建立环境反射与分区照明，并按当前画质控制阴影。 */
-function StationLighting({ standard,session }: { standard: boolean;session:GameSession }) {
+function StationLighting({ standard,session, contextRevision }: { standard: boolean;session:GameSession;contextRevision:number }) {
   const l=session.engine.world.layout;
   const side=session.engine.world.definition.archetype==="side";
   const points=session.engine.world.definition.generatorVersion!=="legacy-v0"?Array.from({length:Math.floor((side?l.HEIGHT:l.WIDTH)/12)},(_,i)=>side?[l.WIDTH/2,6+i*12]:[6+i*12,l.HEIGHT/2]):[8,24,39,56,76,WIDTH-3].map(x=>[x,15]);
@@ -412,7 +413,7 @@ function StationLighting({ standard,session }: { standard: boolean;session:GameS
     scene.environment = map.texture; scene.environmentIntensity = 0.45;
     room.dispose(); pmrem.dispose();
     return () => { scene.environment = old; map.dispose(); };
-  }, [gl, scene]);
+  }, [gl, scene, contextRevision]);
   return <>
     <hemisphereLight ref={hemisphere} name="station-hemisphere" args={["#fff2d9", "#a1a28f", CONTROL_ROOM_LIGHTING.hemisphere]} />
     <ambientLight ref={ambient} name="station-ambient" intensity={CONTROL_ROOM_LIGHTING.ambient} />
@@ -423,7 +424,7 @@ function StationLighting({ standard,session }: { standard: boolean;session:GameS
 }
 
 /** 组合正式站厅、性能设置与两组角色外观，分别反馈站厅和角色资源错误。 */
-function Contents(props: SceneProps) {
+function Contents(props: SceneProps & { onContextState: (lost: boolean) => void; contextRevision: number }) {
   const invalidate = useThree(state => state.invalidate);
   // 暂停时也要刷新头顶信息，不能等待模拟器下一次推进。
   useEffect(() => { invalidate(); }, [props.messageMode, props.thought, invalidate]);
@@ -460,11 +461,12 @@ function Contents(props: SceneProps) {
     const context = gl.getContext();
     const extension = context.getExtension("WEBGL_debug_renderer_info");
     metrics.environment = { gpu: extension ? context.getParameter(extension.UNMASKED_RENDERER_WEBGL) : context.getParameter(context.RENDERER), userAgent: navigator.userAgent, dpr: gl.getPixelRatio(), width: gl.domElement.width, height: gl.domElement.height, quality: props.quality };
-    /** 将图形上下文丢失转为可恢复提示。 */
-    const lost = (event: Event) => { event.preventDefault(); props.onFailure("图形上下文已丢失。可重试三维画面，或使用二维调试继续查看本局。"); };
-    gl.domElement.addEventListener("webglcontextlost", lost);
-    return () => gl.domElement.removeEventListener("webglcontextlost", lost);
-  }, [gl, metrics, props.quality, props.onFailure]);
+  }, [gl, metrics, props.quality]);
+  useEffect(() => bindContextRecovery(gl.domElement, {
+    lost: () => props.onContextState(true),
+    restored: () => { props.onContextState(false); invalidate(); },
+    failed: () => props.onFailure("三维画面未能自动恢复。可用节能画质重试，或使用二维画面继续查看本局。"),
+  }), [gl, invalidate, props.onContextState, props.onFailure]);
   useFrame((_, delta) => {
     metrics.environment.actors = session.presentation.current.actors.size;
     metrics.environment.width = gl.domElement.width; metrics.environment.height = gl.domElement.height;
@@ -494,7 +496,7 @@ function Contents(props: SceneProps) {
     <CameraRig session={session} settings={props.camera} reducedMotion={props.reducedMotion} assetRotation={props.assetRotation} onReady={props.onCameraReady} stage={props.stage} launchReady={props.launchReady} fastEntry={props.fastEntry}/>
     <ControlRoom session={session} standard={props.quality==="standard"} active={props.stage!=="watch"}/>
     <group name="station-world-root" matrix={dock.matrix} matrixAutoUpdate={false}>
-    <StationLighting session={session} standard={props.quality === "standard"} />
+    <StationLighting session={session} standard={props.quality === "standard"} contextRevision={props.contextRevision} />
     {stationMounted&&<Station session={session} generation={session.generation} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />}
     {stationMounted&&props.showInteractionBadges!==false&&session.engine.status==="running"&&actors.map(a=><AlertBadge key={`${session.generation}-${a.id}`} id={a.id} session={session} messageMode={props.messageMode} thought={a.id === "player" ? props.thought : null}/>)}
     {stationMounted&&<MessageBillboardLayout />}
@@ -515,9 +517,15 @@ function UnsupportedScene({ onFailure }: { onFailure: (message: string) => void 
 /** 使用按需绘制；画质变化时重建图形上下文，确保抗锯齿设置确实生效。 */
 export default function GameScene(props: SceneProps) {
   const [quality,setQuality]=useState(props.quality);
-  useEffect(()=>{if(props.stage!=="launch"&&!(props.stage==="watch"&&props.session.engine.player.activity.kind==="entering"))setQuality(props.quality);},[props.quality,props.stage,props.session.engine.player.activity.kind]);
+  const [recovering, setRecovering] = useState(false);
+  const [contextRevision, setContextRevision] = useState(0);
+  const onContextState = useCallback((lost: boolean) => {
+    setRecovering(lost);
+    if (!lost) setContextRevision(value => value + 1);
+  }, []);
+  useEffect(()=>{if(!recovering&&props.stage!=="launch"&&!(props.stage==="watch"&&props.session.engine.player.activity.kind==="entering"))setQuality(props.quality);},[props.quality,props.stage,props.session.engine.player.activity.kind,recovering]);
   if (typeof WebGLRenderingContext === "undefined") return <UnsupportedScene onFailure={props.onFailure} />;
-  return <Canvas key={quality} frameloop="demand" shadows={quality === "standard"} dpr={quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: quality === "standard", powerPreference: "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维画面。</span>}>
-    <Contents {...props} quality={quality} />
-  </Canvas>;
+  return <><Canvas key={quality} frameloop="demand" shadows={quality === "standard"} dpr={quality === "low" ? 1 : [1, 1.5]} gl={{ antialias: quality === "standard", powerPreference: quality === "low" ? "default" : "high-performance" }} camera={{ position: [-2, 2.5, 15], fov: 58 }} fallback={<span>三维地铁站。无法显示时可使用二维画面。</span>}>
+    <Contents {...props} quality={quality} onContextState={onContextState} contextRevision={contextRevision} />
+  </Canvas>{recovering && <div role="status" style={{position:"absolute",inset:0,display:"grid",placeItems:"center",background:"#edf1f4e8",pointerEvents:"none"}}>正在恢复三维画面…</div>}</>;
 }

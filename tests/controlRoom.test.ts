@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { WorldPlan } from "../src/ui/WorldPlan";
 import { describe, expect, test } from "vitest";
-import { Box3, Vector3 } from "three";
+import { Box3, Raycaster, Vector3 } from "three";
 import { generateWorld } from "../src/sim/worldDefinition";
 import { entrancePoint } from "../src/sim/entranceGeometry";
 import { GameSession } from "../src/ui/gameSession";
@@ -69,6 +69,20 @@ describe("world creation and local records",()=>{
 });
 
 describe("continuous room and station handoff",()=>{
+  test("portrait lobby framing and its transition keep the actor in front of all room walls",()=>{
+    const palette=createGeneratedPalette(),room=createControlRoomAsset("room",palette,false);
+    room.updateMatrixWorld(true);
+    const state=new ControlRoomState(),dock=entranceDock(generateWorld(1)),focus=new Vector3(...LOUNGE.actor).add(new Vector3(0,.9,0));
+    for(let i=0;i<300;i++){
+      state.update("lobby",1/60,false,false,dock,true);
+      for(const target of [focus,state.target]){
+        const ray=new Raycaster(state.eye,target.clone().sub(state.eye).normalize(),0,state.eye.distanceTo(target));
+        expect(ray.intersectObject(room,true),`portrait frame ${i}`).toHaveLength(0);
+      }
+    }
+    expect(state.eye.distanceTo(new Vector3(...LOUNGE.narrowEye))).toBeLessThan(.001);
+    disposeControlAsset(room);palette.dispose();
+  });
   test("each layout docks onto the same landing without mutating world data",()=>{
     const layouts=new Set<string>();
     for(const seed of [1,2,4]){

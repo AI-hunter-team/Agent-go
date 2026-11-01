@@ -80,6 +80,7 @@ export function App() {
     settings: display,
     setSettings: setDisplay,
     reducedMotion,
+    mobile,
   } = usePerformanceSettings();
   const sound=useDepartureAudio();
   const j = useJourney(display.lowFrequencyHud ? 500 : 120);
@@ -198,6 +199,7 @@ export function App() {
     [],
   );
   const retryScene = () => {
+    if (sceneError) setDisplay(value => ({ ...value, quality: "low", targetFps: value.targetFps === 15 ? 15 : 30, simpleCrowd: true }));
     setSceneError(null);
     setAssetError("");
     setSceneAttempt((v) => v + 1);
@@ -271,7 +273,7 @@ export function App() {
           aria-label="三维地铁站场景"
         >
           <div key={renderer} className={styles.sceneLayer}>
-          {renderer === "2d" ? (
+          {flow.stage === "world" ? <div className={roomStyles.fallback}><BrandMark/></div> : renderer === "2d" ? (
             watching || ended ? <MapCanvas engineRef={engineRef} optionsRef={optionsRef} /> : <div className={roomStyles.fallback}><BrandMark/></div>
           ) : sceneError ? (
             fallback
@@ -411,6 +413,7 @@ export function App() {
                       settings={display}
                       onChange={setDisplay}
                       reducedMotion={reducedMotion}
+                      mobile={mobile}
                     />
                   </details>
                   <details>
@@ -495,7 +498,7 @@ export function App() {
                   onClick={() => chooseCharacter(c.id)}
                 >
                   <span className={styles.portrait}>
-                    {c.url && renderer === "3d" && !sceneError ? (
+                    {c.url && renderer === "3d" && !sceneError && !mobile ? (
                       <ThumbnailBoundary fallback={c.mark}>
                         <Suspense fallback={c.mark}>
                           <AvatarThumbnail url={c.url} />
