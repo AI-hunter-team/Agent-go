@@ -39,6 +39,12 @@ export function WorldCreation({draft,onConfirm,onCancel,quality,reducedMotion}:W
   <Dialog.Overlay className={styles.workspaceShade}/>
   <Dialog.Content className={styles.workspace} aria-describedby="world-creation-description">
    <header className={styles.workspaceHeading}><BrandMark/><div><Dialog.Title>创建世界</Dialog.Title><Dialog.Description id="world-creation-description">先看看下一站，再决定如何出发。</Dialog.Description></div><Dialog.Close asChild><button aria-label="关闭创建世界">×</button></Dialog.Close></header>
+   <section className={styles.sceneSelection} aria-label="场景选择">
+    <div className={styles.sceneChoices}>
+     <button type="button" aria-pressed="true"><strong>地铁站</strong><small>可体验</small></button>
+     {(["校园","商场"] as const).map(scene=><button type="button" key={scene} aria-pressed="false"><strong>{scene}</strong></button>)}
+    </div>
+   </section>
    <div className={styles.workspaceBody}>
     <section className={styles.previewColumn} aria-label="地图预览">
      <div className={styles.previewToolbar}>{(["3d","concourse","platform"] as const).map(mode=><button key={mode} aria-pressed={view===mode} onClick={()=>setView(mode)}>{mode==="3d"?"3D预览":mode==="concourse"?"B1站厅":"B2站台"}</button>)}</div>
