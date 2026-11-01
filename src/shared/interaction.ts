@@ -16,7 +16,11 @@ export type ObserverRole = "npc" | "guard" | "security_staff";
 export type Severity = "odd" | "suspicious" | "affecting" | "danger" | "violation";
 export type EntityRef = { kind: "person" | "item" | "facility" | "node" | "spot"; id: string };
 
-export type ItemKind = "ticket" | "coins" | "umbrella" | "water_bottle" | "newspaper" | "snack" | "backpack";
+/** newspaper is a saved-world alias; new physical items are normalized to can on spawn. */
+export type ItemKind = "ticket" | "coins" | "umbrella" | "water_bottle" | "can" | "newspaper" | "snack" | "backpack";
+
+/** Simulation-owned throw trajectory; rendering may sample it, never choose its landing. */
+export interface ItemFlight { from: Vec; to: Vec; startedAt: number; landsAt: number; actorId: string; causeId?: string; targetId?: string }
 
 export interface ItemDef {
   kind: ItemKind;
@@ -34,6 +38,7 @@ export interface ItemDef {
 export type ItemLocation =
   | { type: "held"; personId: string; slot: "pocket" | "hand" | "bag" }
   | { type: "ground"; pos: Vec }
+  | { type: "flight"; trajectory: ItemFlight }
   | { type: "container"; containerId: string }
   | { type: "spot"; spotId: string };
 
@@ -88,6 +93,7 @@ export interface WorldEvent {
   aboutId?: string;
   /** Last known subject position carried by a report; never a live hidden position. */
   aboutPos?: Vec;
+  trajectory?: ItemFlight;
 }
 
 export interface OngoingAct {
@@ -126,14 +132,29 @@ export interface AlertSignals {
 
 export type TalkGoal = "chat" | "ask_ticket" | "trade" | "yield" | "persuade" | "threaten" | "bribe";
 
-export type PlanStep =
+/** Speech describes words; action describes an actual physical attempt. Neither guarantees success. */
+export interface PhysicalAction {
+  type: "physical_action";
+  action: "push" | "snatch" | "strike" | "restrain" | "release";
+  npcId: string;
+  aim?: "hurt" | "knockout";
+  itemId?: string;
+  itemKind?: ItemKind;
+  speech?: { message: string; goal: TalkGoal; offerItemId?: string };
+  speechTiming?: "before" | "after" | "during";
+  reason: string;
+}
+
+export type StepOperation =
   | { op: "approach"; target: EntityRef }
   | { op: "take"; itemId: string }
   | { op: "give"; itemId: string; toId: string }
-  | { op: "drop"; itemId: string; mode: "place" | "drop" | "throw"; at?: EntityRef }
+  | { op: "drop"; itemId: string; mode: "place" | "drop" | "throw"; at?: EntityRef; atPosition?: Vec }
   | { op: "talk"; npcId: string; message: string; goal: TalkGoal; offerItemId?: string }
   | { op: "snatch"; npcId: string; itemKind: ItemKind }
   | { op: "push"; npcId: string }
+  | { op: "restrain"; npcId: string }
+  | { op: "release"; npcId: string }
   | { op: "strike"; npcId: string; itemId?: string; aim: "knockout" | "hurt" }
   | { op: "strike"; facilityId: string; itemId?: string; aim: "hurt" }
   | { op: "vault"; obstacle: "gate" | "railing" | "escalator_side" }
@@ -142,11 +163,31 @@ export type PlanStep =
   | { op: "make_noise"; level: "low" | "mid" | "high" }
   | { op: "wait"; seconds: number };
 
+export type StepPrecondition =
+  | { kind: "guards_not_watching"; text: string }
+  | { kind: "holding_item"; text: string; itemKind: ItemKind }
+  | { kind: "unverified"; text: string };
+
+export type PlanStep = StepOperation & {
+  preconditions?: StepPrecondition[];
+  /** Simultaneous speech starts with the preceding physical step. */
+  timing?: "after_previous" | "with_previous";
+  when?: "always" | "previous_refused" | "previous_succeeded" | "incapacitated_or_refused";
+  pursue?: boolean;
+};
+
 export interface ModelMetadata { debug?: OperationDebug; model?: string | null; usage?: DecisionUsage | null }
 
 export interface ActionPlan extends ModelMetadata {
+  translation?: {
+    instruction: string; originalSteps: PlanStep[]; changes: string[];
+    originalStatus?: ActionPlan["status"]; originalReason?: string; originalSummary?: string; originalSource?: ActionPlan["source"];
+    sourceGuidance?: string;
+    sourceClauses?: import("./guidanceSources").GuidanceSource[];
+    requirements: { text: string; start: number; kind: string; conditional: boolean; state: "covered" | "missing" | "unverified"; steps: number[]; explanation: string }[];
+  };
   status: "plan" | "unsupported" | "needs_precondition";
-  /** Runtime validators enforce 1–4 steps for plan, zero otherwise. */
+  /** Runtime validators enforce 1–8 steps for plan, zero otherwise. */
   steps: PlanStep[];
   summary: string;
   reason: string;
@@ -154,6 +195,23 @@ export interface ActionPlan extends ModelMetadata {
 }
 
 export interface StepOutcome { ok: boolean; text: string; eventIds: string[] }
+
+/** Observational records only: do not drive the simulator or change existing report fields. */
+export interface ActionLifecycle {
+  planId: number;
+  stepIndex: number;
+  t: number;
+  step: PlanStep;
+  phase: "approach" | "perform" | "dialogue" | "completed" | "interrupted" | "rejected" | "skipped";
+  atPhase?: "approach" | "perform" | "dialogue";
+  actorPosition: Vec;
+  targetPosition?: Vec;
+  distance?: number;
+  reach?: number;
+  text: string;
+  ok?: boolean;
+  evaluation?: { unprepared: boolean; hitProbability: number; knockoutGivenHit: number | null; reason: string };
+}
 
 export interface NpcDialogueRequest {
   npc: {
@@ -185,12 +243,12 @@ export interface NpcResponse extends ModelMetadata {
 }
 
 /** C7 actions consumed by AgentAction and the engine. */
-export type InteractionAction = (
-  | { type: "traverse"; connectorId?: string; route: "stairs" | "escalator"; walking?: boolean }
+export type InteractionAction = PhysicalAction | (
+  | { type: "traverse"; connectorId?:string; route: "stairs" | "escalator"; walking?: boolean }
   | { type: "observe"; targetId: string }
   | { type: "take"; itemId: string }
   | { type: "give"; itemId: string; npcId: string }
-  | { type: "drop"; itemId: string; mode: "place" | "drop" }
+  | { type: "drop"; itemId: string; mode: "place" | "drop" | "throw"; atPosition?: Vec }
   | { type: "talk"; npcId: string; message: string; goal: TalkGoal; offerItemId?: string }
   | { type: "act"; instruction: string }
 ) & { reason: string };
@@ -206,6 +264,23 @@ export interface PersonObservation {
   doing: string;
   towardYou: string | null;
   holding: string[];
+  position?: Vec;
+  evidence?: ObservedSceneEvent[];
+}
+
+/** Only events actually witnessed by the player enter observation memory. */
+export interface ObservedSceneEvent {
+  id: string; t: number; kind: "purchase_completed" | "queue_exit" | "item_received" | "item_released" | "ticket_used";
+  personId: string; position: Vec; facilityId?: string; itemKind?: ItemKind; text: string;
+}
+export interface PersonQuery {
+  criterion: "recent_purchase" | "recent_item_gain" | "recent_queue_exit" | "holding_item";
+  description: string; itemKind?: ItemKind; facilityId?: string; personId?: string;
+}
+export interface PersonSearchState {
+  instruction: string; query: PersonQuery; phase: "searching" | "confirmed" | "lost" | "expired" | "acting" | "finished";
+  startedAt: number; deadline: number; targetId?: string; evidence: ObservedSceneEvent[];
+  lastSeenPosition?: Vec; lastSeenAt?: number; detail: string;
 }
 export interface ItemObservation { id: string; kind: ItemKind; where: string; distance: number }
 
@@ -222,6 +297,12 @@ export interface BossRecord { t: number; instruction: string; plan: ActionPlan; 
 
 export interface BossContext {
   publicMap?: import("./world").PublicStationMap;
+  recentEvents?: ObservedSceneEvent[];
+  targetSearch?: PersonSearchState;
+  /** Current visible guards only; absence is unknown, never proof of no witnesses. */
+  guards?: import("./types").GuardObservation[];
+  /** Bound by the server to the original session guidance. */
+  guidance?: string;
   self: {
     position: Vec;
     inventory: {
@@ -235,6 +316,8 @@ export interface BossContext {
     position: Vec;
     queue: string | null;
     holding?: ItemKind[];
+    activity?: string;
+    evidence?: ObservedSceneEvent[];
   }[];
   items: {
     id: string;

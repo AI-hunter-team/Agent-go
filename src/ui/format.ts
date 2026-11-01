@@ -3,6 +3,11 @@ import type { AgentAction, CreativeMechanic, DecisionUsage } from "../shared/typ
 export function describeAction(a: AgentAction | null): string {
   if (!a) return "（无动作）";
   switch (a.type) {
+    case "physical_action": {
+      const body=`${a.action === "restrain" ? "抓住并控制" : a.action === "release" ? "松开" : a.action === "push" ? "推搡" : a.action === "snatch" ? "抢夺" : a.aim === "knockout" ? "尝试击晕" : "击打"} ${a.npcId}`;
+      const speech=a.speech ? `对 ${a.npcId} 说：${a.speech.message}` : "";
+      return !speech ? body : a.speechTiming==="after" ? `${body}；然后${speech}` : a.speechTiming==="during" ? `${body}；同时${speech}` : `${speech}；然后${body}`;
+    }
     case "act": return `行动：${a.instruction}`;
     case "talk": return `对 ${a.npcId} 说：${a.message}`;
     case "traverse": return a.route === "stairs" ? "下楼梯到站台" : "乘扶梯到站台";

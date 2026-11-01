@@ -1,6 +1,6 @@
 import * as legacyLayout from "./layout";
 import type { StationLayout } from "../shared/world";
-import type { ActionResult, Item, ItemKind, ItemLocation, ItemObservation, ItemTransfer, Vec } from "../shared/types";
+import type { ActionResult, Item, ItemFlight, ItemKind, ItemLocation, ItemObservation, ItemTransfer, Vec } from "../shared/types";
 import { BAG_CAPACITY, ITEM_DEFS } from "./content/items";
 import { dist, lineOfSight } from "./geometry";
 
@@ -8,12 +8,14 @@ import { RULES } from "./scenario";
 
 /** Possession and legal ownership are separate; all movement is recorded here. */
 export class ItemSystem {
+  onTransfer: ((transfer: ItemTransfer) => void) | null = null;
   readonly items = new Map<string, Item>();
   readonly transfers: ItemTransfer[] = [];
   private nextId = 1;
   constructor(private person: (id: string) => { pos: Vec } | undefined, private now: () => number, private layout:StationLayout=legacyLayout) {}
 
   spawn(kind: ItemKind, location: ItemLocation, ownerId: string | null): Item {
+    if(kind==="newspaper")kind="can";
     const item: Item = { id: `i${this.nextId}`, kind, location: structuredClone(location), ownerId };
     const error = this.validate(item, location);
     if (error) throw new Error(error);
@@ -93,6 +95,10 @@ export class ItemSystem {
   }
   position(item: Item): Vec | null {
     const loc = item.location;
+    if (loc.type === "flight") {
+      const f = loc.trajectory, a = Math.max(0, Math.min(1, (this.now() - f.startedAt) / (f.landsAt - f.startedAt)));
+      return { ...f.from, x: f.from.x + (f.to.x-f.from.x)*a, y: f.from.y + (f.to.y-f.from.y)*a };
+    }
     if (loc.type === "ground") return loc.pos;
     if (loc.type === "held") return this.person(loc.personId)?.pos ?? null;
     if (loc.type === "spot") return this.layout.ITEM_SPOTS.find((s) => s.id === loc.spotId)?.pos ?? null;
@@ -106,7 +112,20 @@ export class ItemSystem {
         ? [{ id: i.id, kind: i.kind, where: this.where(i.location), distance: Math.round(dist(from, pos) * 10) / 10 }] : [];
     });
   }
+  /** Only the simulation clock settles a flight; landing is reported once. */
+  landFlights(): { item: Item; trajectory: ItemFlight }[] {
+    const landed: { item: Item; trajectory: ItemFlight }[] = [];
+    for (const item of this.items.values()) if (item.location.type === "flight" && this.now() + 1e-9 >= item.location.trajectory.landsAt) {
+      const trajectory = structuredClone(item.location.trajectory);
+      if (this.move(item.id, { type: "ground", pos: trajectory.to }, "land").ok) landed.push({item, trajectory});
+    }
+    return landed;
+  }
   private validate(item: Item, to: ItemLocation): string | null {
+    if (to.type === "flight") {
+      const f=to.trajectory;
+      return [f.from.x,f.from.y,f.to.x,f.to.y,f.startedAt,f.landsAt].every(Number.isFinite) && f.landsAt > f.startedAt ? null : "无效投掷轨迹";
+    }
     if (to.type === "ground") return Number.isFinite(to.pos.x) && Number.isFinite(to.pos.y) ? null : "无效位置";
     if (to.type === "spot") return this.layout.ITEM_SPOTS.some((s) => s.id === to.spotId) ? null : "未知取物点";
     const def = ITEM_DEFS[item.kind];
@@ -132,11 +151,14 @@ export class ItemSystem {
     return null;
   }
   private where(loc: ItemLocation): string {
+    if (loc.type === "flight") return `flight:${loc.trajectory.to.x},${loc.trajectory.to.y}`;
     if (loc.type === "held") return `${loc.personId}:${loc.slot}`;
     if (loc.type === "ground") return `ground:${loc.pos.x},${loc.pos.y}`;
     return loc.type === "spot" ? loc.spotId : `container:${loc.containerId}`;
   }
   private record(item: Item, from: string, to: string, how: string) {
-    this.transfers.push({ t: this.now(), itemId: item.id, kind: item.kind, from, to, how });
+    const transfer={ t: this.now(), itemId: item.id, kind: item.kind, from, to, how };
+    this.transfers.push(transfer);
+    this.onTransfer?.(transfer);
   }
 }

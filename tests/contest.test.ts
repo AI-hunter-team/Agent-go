@@ -25,11 +25,20 @@ describe("physical contests", () => {
       courage: 1,
       red: true,
       guard: true
-    })).toBe(.05);
+    })).toBe(.6);
     expect(contestProbability({
       ...input,
       guard: true
     })).toBeCloseTo(.275);
+  });
+  test.each(["hurt", "knockout"] as const)("%s keeps at least 60 percent hit probability for every role and defense combination", op => {
+    for (const guard of [false,true]) for (const targetFacing of [false,true]) for (const courage of [0,.5,1]) for (const red of [false,true]) {
+      const probability = contestProbability({...input,op,guard,targetFacing,courage,red});
+      expect(probability).toBeGreaterThanOrEqual(.6);
+      expect(probability).toBeLessThanOrEqual(.95);
+    }
+    expect(contestProbability({...input,op,surprised:true})).toBe(.95);
+    expect(contestProbability({...input,op,helpless:true})).toBe(1);
   });
   test("retained child stream is deterministic, advances, and does not consume parent", () => {
     const parent = new Rng(32),

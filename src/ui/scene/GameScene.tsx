@@ -35,6 +35,7 @@ function performanceThisMemory(){return (window.performance as Performance&{memo
 function sceneGeometryBytes(scene:Object3D){const geometries=new Set<import("three").BufferGeometry>();scene.traverse(n=>{if("geometry" in n)geometries.add((n as Mesh).geometry);});let bytes=0;for(const g of geometries){for(const a of Object.values(g.attributes))bytes+=a.array.byteLength;if(g.index)bytes+=g.index.array.byteLength;}return bytes;}
 export interface CameraSettings { mode: "follow" | "overview"; reset: number; command?: number; shot?: "lobby" | "character" | "guidance" | "plan" | "launch"; }
 export interface SceneProps {
+  showInteractionBadges?: boolean;
   session: GameSession;
   stage: JourneyStage;
   launchReady: boolean;
@@ -495,7 +496,7 @@ function Contents(props: SceneProps) {
     <group name="station-world-root" matrix={dock.matrix} matrixAutoUpdate={false}>
     <StationLighting session={session} standard={props.quality === "standard"} />
     {stationMounted&&<Station session={session} generation={session.generation} overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} reducedMotion={props.reducedMotion} onAssetError={props.onStationAssetError} />}
-    {stationMounted&&actors.map(a=><AlertBadge key={a.id} id={a.id} session={session} messageMode={props.messageMode} thought={a.id === "player" ? props.thought : null}/>)}
+    {stationMounted&&props.showInteractionBadges!==false&&session.engine.status==="running"&&actors.map(a=><AlertBadge key={`${session.generation}-${a.id}`} id={a.id} session={session} messageMode={props.messageMode} thought={a.id === "player" ? props.thought : null}/>)}
     {stationMounted&&<MessageBillboardLayout />}
     {stationMounted&&session.engine.world.definition.generatorVersion === "legacy-v0"&&<MetroPlatform overview={!performanceState.cinematic && props.camera.mode === "overview"} standard={props.quality === "standard"} onAssetError={props.onStationAssetError} />}
     {stationMounted&&<SceneItems session={session}/>}

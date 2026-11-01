@@ -10,10 +10,12 @@ import type { ReasoningEffort } from "../shared/modelConfig";
 import type { JourneyInput, JourneyPreparation } from "../shared/journey";
 import type { DraftResult, ReviewInput, ReviewResult, ReviewStrategy } from "../shared/review";
 import { ReviewFailure } from "../shared/review";
+import { loadLocalModel, saveLocalModel, clearLocalModel } from "./localModel";
 import { classifyByKeywords } from "../sim/intent";
 import type { Agent, Classifier, Interpreter, NpcResponder } from "./agent";
 
-let activeModelToken: string | null = null;
+let activeModelToken: string | null = loadLocalModel()?.token ?? null;
+const verifiedCredentials = new Map<string, { baseUrl: string; apiKey: string }>();
 const sessionTokens = new Map<string, string | null>();
 const tokenUsers = new Map<string, number>();
 const sessionReviews = new Map<string, string>();
@@ -138,8 +140,11 @@ export const Api = {
     await binding.resolve();
   },
   prepareJourney: (input: JourneyInput, signal?: AbortSignal) => api<JourneyPreparation>("/api/journey/prepare", { body: input, signal }),
-  /** 验证局内模型凭据并获取模型列表。 */
-  verifyModel: (baseUrl: string, apiKey: string) => api<{ token: string; baseUrl: string; models: string[] }>("/api/model/verify", { body: { baseUrl, apiKey }, configToken: null }),
+  verifyModel: async (baseUrl: string, apiKey: string) => {
+    const result = await api<{ token: string; baseUrl: string; models: string[] }>("/api/model/verify", { body: { baseUrl, apiKey }, configToken: null });
+    verifiedCredentials.set(result.token, { baseUrl: result.baseUrl, apiKey });
+    return result;
+  },
   /** 释放尚未使用的配置；活跃对局的凭据保留到局后。 */
   discardModel: (token: string) => discardUnused(token),
   /** 启用所选模型与思考档位，只改变后续请求的默认配置。 */
@@ -148,17 +153,29 @@ export const Api = {
     const previous = activeModelToken;
     activeModelToken = token;
     await discardUnused(previous);
+    const credentials = verifiedCredentials.get(token);
+    if (credentials) { saveLocalModel({ ...credentials, model, reasoningEffort, token }); verifiedCredentials.delete(token); }
     return health;
   },
   /** 清除新对局的页面默认配置，保留已运行对局。 */
   clearModel: async () => {
+    clearLocalModel();
     const previous = activeModelToken;
     activeModelToken = null;
     await discardUnused(previous);
     return Api.health();
   },
   /** 查询当前默认模型状态，不发起供应商请求。 */
-  health: () => api<{ llm: boolean; model: string | null }>("/api/health"),
+  health: async () => {
+    try { return await api<{ llm: boolean; model: string | null }>("/api/health"); }
+    catch (error) {
+      if (!activeModelToken) throw error;
+      if (!(error instanceof Error) || !/失效|过期|请先验证|重新验证|配置不存在/.test(error.message)) throw error;
+      activeModelToken = null;
+      const saved = loadLocalModel(); if (saved) saveLocalModel({ ...saved, token: undefined });
+      throw new Error("已保存的连接会话已失效；地址、密钥和模型仍在本地，请打开模型连接重新启用。刷新不会自动产生模型费用。");
+    }
+  },
   /** 以当前配置整理开局指导。 */
   normalize: (text: string, runId?: string) => api<{ guidance: NormalizedGuidance | null; debug?: OperationDebug }>("/api/guidance/normalize", { body: { text, runId } }),
   /** 创建会话前就引用凭据，避免并发换模型使正在创建的对局失效。 */

@@ -45,7 +45,7 @@ const context: IntentContext = {
   }]
 };
 describe("offline action plans", () => {
-  test.each([["拿雨伞", "take"], ["捡雨伞", "take"], ["给最近的乘客零食", "give"], ["丢下水瓶", "drop"], ["扔水瓶", "drop"], ["向穿红色外套的乘客说你好", "talk"], ["向在 S3 排队的乘客要票", "talk"], ["威胁最近的乘客交票", "talk"], ["抢最近的乘客的票", "snatch"], ["推最近的乘客", "push"], ["击晕最近的乘客", "strike"], ["打最近的乘客", "strike"], ["翻闸", "vault"], ["翻栏杆", "vault"], ["滑扶手", "slide_handrail"], ["插队到最近的乘客前", "force_cut_in"], ["制造声音", "make_noise"], ["等2秒", "wait"], ["靠近 S2", "approach"]])("%s resolves to %s", (instruction, op) => {
+  test.each([["拿雨伞", "take"], ["捡雨伞", "take"], ["给最近的乘客零食", "give"], ["丢下水瓶", "drop"], ["扔水瓶到(x=6,y=15)", "drop"], ["向穿红色外套的乘客说你好", "talk"], ["向在 S3 排队的乘客要票", "talk"], ["威胁最近的乘客交票", "talk"], ["抢最近的乘客的票", "snatch"], ["推最近的乘客", "push"], ["击晕最近的乘客", "strike"], ["打最近的乘客", "strike"], ["翻闸", "vault"], ["翻栏杆", "vault"], ["滑扶手", "slide_handrail"], ["插队到最近的乘客前", "force_cut_in"], ["制造声音", "make_noise"], ["等2秒", "wait"], ["靠近 S2", "approach"]])("%s resolves to %s", (instruction, op) => {
     const plan = parsePlan(instruction, context);
     expect(plan.status).toBe("plan");
     expect(plan.steps[0].op).toBe(op);
@@ -63,10 +63,11 @@ describe("offline action plans", () => {
       toId: "n1"
     });
   });
-  test("ambiguous, hidden, imaginary items and more than four steps are rejected", () => {
+  test("ambiguous, hidden, imaginary items and more than eight steps are rejected", () => {
     for (const text of ["推那位乘客", "拿车票", "给最近的乘客车票", "抢 n999 的票", "拿 i999"]) expect(parsePlan(text, context).status).toBe("needs_precondition");
     expect(parsePlan("飞到站台", context).status).toBe("unsupported");
-    expect(parsePlan("等1秒；等1秒；等1秒；等1秒；等1秒", context).steps).toEqual([]);
+    expect(parsePlan(Array(8).fill("等1秒").join("；"), context).steps).toHaveLength(8);
+    expect(parsePlan(Array(9).fill("等1秒").join("；"), context).steps).toEqual([]);
   });
   test("a later give can refer to the item taken in an earlier step; trade offers are held goods", () => {
     expect(parsePlan("拿雨伞然后给最近的乘客雨伞", context).steps).toEqual([{

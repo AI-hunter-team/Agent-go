@@ -50,9 +50,10 @@ export class PerceptionSystem {
         const audible = frameIds.has(event.id) && dist(observer.pos, event.pos) <= event.loudness * (lineOfSight(observer.pos, event.pos, this.layout.SIGHT_OCCLUDERS) ? 1 : 0.5);
         if (!report && !sight && !(event.loudness > 0 && audible)) continue;
         const channel = report ? "report" : sight ? "sight" : "hearing";
+        const witnessedRelease = frameIds.has(event.id) && event.kind === "item_thrown" && !!event.trajectory;
         percepts.push({ observerId: observer.id, eventId: event.id, t: event.t, channel,
           role: event.targetId === observer.id ? "victim" : channel === "sight" ? "witness" : "bystander",
-          attributedTo: report ? event.aboutId! : sight && active && actor && this.canSee(observer, actor.pos) ? event.actorId : null,
+          attributedTo: report ? event.aboutId! : sight && (active || witnessedRelease) && actor && this.canSee(observer, actor.pos) ? event.actorId : null,
           pos: { ...pos },
         });
       }

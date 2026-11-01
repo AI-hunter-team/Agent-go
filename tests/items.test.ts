@@ -15,7 +15,7 @@ describe("item possession", () => {
     expect(items.holdings(p.id).map((i) => i.kind)).toEqual(["backpack", "coins"]);
     const a = items.spawn("umbrella", { type: "held", personId: p.id, slot: "hand" }, p.id);
     items.spawn("snack", { type: "held", personId: p.id, slot: "hand" }, p.id);
-    expect(() => items.spawn("newspaper", { type: "held", personId: p.id, slot: "hand" }, null)).toThrow("双手");
+    expect(() => items.spawn("can", { type: "held", personId: p.id, slot: "hand" }, null)).toThrow("双手");
     expect(items.move(a.id, { type: "held", personId: p.id, slot: "pocket" }).ok).toBe(false);
     expect(items.move(a.id, { type: "held", personId: other.id, slot: "bag" }).ok).toBe(false);
     for (let i = 0; i < 4; i++) items.spawn("water_bottle", { type: "held", personId: p.id, slot: "bag" }, p.id);

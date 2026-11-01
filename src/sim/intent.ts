@@ -3,14 +3,19 @@ import type { CreativeClassification } from "../shared/types";
 import type { ActionPlan, ItemKind, PlanStep } from "../shared/types";
 import type { GuardSystem } from "./guards";
 import type { World } from "./world";
-import { playerCanSee } from "./observation";
+import { describeActivity, observeGuards, playerCanSee } from "./observation";
 import { dist } from "./geometry";
 import { NAV_NODES } from "./layout";
+import { currentActionText, explicitPhysicalIntent, splitActionClauses } from "../shared/physicalIntent";
+import { personQuery } from "./personSearch";
 export type IntentContext = import("../shared/interaction").BossContext;
-export function buildIntentContext(world: World, guards: GuardSystem): IntentContext {
+export function buildIntentContext(world: World, guards: GuardSystem, guidance = ""): IntentContext {
   const p = world.player!;
   return {
     ...(world.definition.generatorVersion!=="legacy-v0"?{publicMap:publicMap(world.definition)}:{}),
+    recentEvents:structuredClone(world.observedSceneEvents),
+    ...(world.personSearch?{targetSearch:structuredClone(world.personSearch)}:{}),
+    guards: observeGuards(world, guards), guidance,
     self: {
       position: {
         ...p.pos
@@ -27,6 +32,8 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
         ...n.pos
       },
       holding: world.items.holdings(n.id).filter(i => world.items.slot(i) === "hand").map(i => i.kind),
+      activity:describeActivity(world,n),
+      evidence:structuredClone(world.observedSceneEvents.filter(e=>e.personId===n.id).slice(-6)),
       queue: world.queuePosition(n)?.facility.def.id ?? null
     })), ...guards.guards.filter(g => playerCanSee(p.pos, g.pos, world.lightAt, world.layout)).map(g => ({
       id: g.def.id,
@@ -49,7 +56,7 @@ export function buildIntentContext(world: World, guards: GuardSystem): IntentCon
     }))
   };
 }
-const kindWords: [ItemKind, RegExp][] = [["ticket", /车票|票|ticket/i], ["coins", /零钱|硬币|coins/i], ["umbrella", /雨伞|伞|umbrella/i], ["water_bottle", /矿泉水|水瓶|瓶子|water/i], ["newspaper", /报纸|newspaper/i], ["snack", /零食|snack/i], ["backpack", /背包|backpack/i]];
+const kindWords: [ItemKind, RegExp][] = [["ticket", /车票|票|ticket/i], ["coins", /零钱|硬币|coins/i], ["umbrella", /雨伞|伞|umbrella/i], ["water_bottle", /矿泉水|水瓶|瓶子|water/i], ["can", /易拉罐|罐子|\bcan\b/i], ["snack", /零食|snack/i], ["backpack", /背包|backpack/i]];
 const hasId = (text: string, id: string) => new RegExp(`(^|[^A-Za-z0-9_-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^A-Za-z0-9_-])`).test(text);
 
 /** Keyword fallback resolves references only against the supplied visible context. */
@@ -62,18 +69,19 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
     reason,
     source: "keywords"
   });
-  if (typeof instruction !== "string" || !instruction.trim() || [...instruction].length > 200) return {
+  if (typeof instruction !== "string" || !instruction.trim() || [...instruction].length > 1000) return {
     status: "needs_precondition",
     steps: [],
     summary: "",
-    reason: "指令需要 1–200 字",
+    reason: "指令需要 1–1000 字",
     source: "keywords"
   };
-  const clauses = instruction.split(/然后|接着|再(?=拿|给|丢|扔|抢|推|打|翻|说|等)|[;；]|and then/i).map(s => s.trim()).filter(Boolean);
-  if (clauses.length > 4) return result("unsupported", [], "一次最多四步");
+  const clauses = splitActionClauses(currentActionText(instruction).replace(/and then/gi, "然后"));
+  if (clauses.length > 8) return result("unsupported", [], "一次最多八步");
   const steps: PlanStep[] = [],
     inventory = [...context.self.inventory];
   let previousKind: ItemKind | undefined;
+  let previousNpcId: string | undefined;
   for (const text of clauses) {
     const named = text.match(/\b[ni]\d+\b/g) ?? [];
     const known = new Set([...context.people, ...context.items, ...inventory, ...context.facilities].map(v => v.id));
@@ -82,6 +90,10 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
     const people = () => {
       const ids = context.people.filter(p => hasId(text, p.id));
       if (ids.length) return ids;
+      if(context.targetSearch?.phase==="confirmed" && context.targetSearch.instruction===instruction && personQuery(instruction)) {
+        const bound=context.people.find(p=>p.id===context.targetSearch!.targetId);
+        if(bound) return [bound];
+      }
       let candidates = context.people;
       const outfit = text.match(/穿(?:着)?(.+?)(?:的|那位|乘客|人)/)?.[1];
       if (outfit) candidates = candidates.filter(p => p.look.includes(outfit));
@@ -92,7 +104,8 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
       return candidates;
     };
     const person = people();
-    const npcId = person.length === 1 ? person[0].id : null;
+    const npcId = person.length === 1 ? person[0].id : previousNpcId && /^(?:执行|进行|再|实际)|他|她|对方/.test(text) && !/另|其他/.test(text) ? previousNpcId : null;
+    if (npcId) previousNpcId = npcId;
     const itemFrom = (list: {
       id: string;
       kind: ItemKind;
@@ -102,7 +115,15 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
       return matches.length === 1 ? matches[0] : null;
     };
     let step: PlanStep | undefined;
-    if (/翻.*闸|翻闸|逃票|jump.*gate|vault.*gate/i.test(text)) step = {
+    if (/投掷|扔|throw/i.test(text)) {
+      const item = itemFrom(inventory);
+      if (!item) return result("needs_precondition", [], "投掷需要实际持有且能明确识别的道具");
+      const coords = text.match(/x\s*[:=＝]\s*(-?\d+(?:\.\d+)?)\s*[,，]\s*y\s*[:=＝]\s*(-?\d+(?:\.\d+)?)/i)
+        ?? text.match(/[（(]\s*(-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)\s*[）)]/);
+      const node = nodes.find(n=>hasId(text,n.id));
+      if (!coords && !node && !(npcId && /向|朝|at/i.test(text))) return result("needs_precondition", [], "投掷需要目标坐标或公开地点，实际落点由能力与障碍结算；未改为翻越或空喊");
+      step = {op:"drop",itemId:item.id,mode:"throw",...(coords ? {atPosition:{x:Number(coords[1]),y:Number(coords[2])}} : {at:{kind:node?"node":"person",id:node?.id??npcId!}})};
+    } else if (/翻.*闸|翻闸|逃票|jump.*gate|vault.*gate/i.test(text)) step = {
       op: "vault",
       obstacle: "gate"
     };else if (/翻.*栏杆/.test(text)) step = {
@@ -124,21 +145,28 @@ export function parsePlan(instruction: string, context: IntentContext): ActionPl
         op: "force_cut_in",
         npcId
       };
-    } else if (/抢|snatch/i.test(text)) {
+    } else if (/抓住|控制住|按住|不让.*逃跑|不许.*逃跑/.test(text)) {
+      if(npcId) step={op:"restrain",npcId};
+    } else if (/松开|放开/.test(text)) {
+      if(npcId) step={op:"release",npcId};
+    } else if (explicitPhysicalIntent(text)?.action === "snatch") {
       if (npcId && kind) step = {
         op: "snatch",
         npcId,
         itemKind: kind
       };
-    } else if (/击晕|打晕|击打|打|strike|knock/i.test(text)) {
+    } else if (explicitPhysicalIntent(text)?.action === "strike") {
+      const weaponKind = /用[^，,；;]*伞/.test(text) ? "umbrella" : /用[^，,；;]*(?:水瓶|矿泉水|瓶子)/.test(text) ? "water_bottle" : null;
+      const weapon = inventory.find(i => hasId(text, i.id)) ?? (weaponKind ? inventory.find(i => i.kind === weaponKind) : undefined);
+      if (weaponKind && !weapon) return result("needs_precondition", [], "没有持有指定的击打物品");
       const facility = context.facilities.find(f => hasId(text, f.id));
-      if (facility) step = { op: "strike", facilityId: facility.id, aim: "hurt" };
+      if (facility) step = { op: "strike", facilityId: facility.id, aim: "hurt", ...(weapon ? { itemId: weapon.id } : {}) };
       else if (npcId) step = {
         op: "strike",
         npcId,
-        aim: /击晕|打晕|knock/i.test(text) ? "knockout" : "hurt"
+        aim: /击晕|打晕|knock/i.test(text) ? "knockout" : "hurt", ...(weapon ? { itemId: weapon.id } : {})
       };
-    } else if (/推|push/i.test(text)) {
+    } else if (explicitPhysicalIntent(text)?.action === "push") {
       if (npcId) step = {
         op: "push",
         npcId

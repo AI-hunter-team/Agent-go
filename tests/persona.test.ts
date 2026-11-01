@@ -4,6 +4,13 @@ import { Rng } from "../src/sim/rng";
 import { World } from "../src/sim/world";
 
 describe("seeded NPC personas", () => {
+  test("default generation produces substantial low and high trait populations", () => {
+    const people = Array.from({ length: 350 }, (_, i) => generatePersona(new Rng(i + 1), "normal"));
+    for (const key of ["courage", "vanity", "temper", "fairness", "meddling"] as const) {
+      expect(people.filter(p => p.traits[key] < .25).length, `${key} low`).toBeGreaterThan(25);
+      expect(people.filter(p => p.traits[key] > .75).length, `${key} high`).toBeGreaterThan(25);
+    }
+  });
   test("same seed reproduces a sequence of distinct people without consuming the parent", () => {
     const a = new Rng(9), b = new Rng(9);
     const child = a.fork("persona"), copy = b.fork("persona");

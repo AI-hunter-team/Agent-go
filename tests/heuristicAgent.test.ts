@@ -37,11 +37,10 @@ describe("offline heuristic agent", () => {
     expect(engine.status).toBe("success");
   });
 
-  // Two complete simulations share this test; allow the same wall-clock budget as report comparisons.
-  test("new fixed crowd can time out orderly play while retaining a legal route on other seeds", async () => {
-    const difficult = await play(6);
+  test("dense orderly play respects a tight deadline while retaining a legal route with optional disruptions", async () => {
+    const difficult = await play(6,{timeLimitSeconds:60,extraQueuePeople:3});
     expect(difficult.engine.status).toBe("failed");
-    expect(difficult.engine.t).toBe(150);
+    expect(difficult.engine.t).toBe(60);
     expect(difficult.engine.failReason).toContain("超时");
     expect(difficult.engine.creative.violations).toHaveLength(0);
     // The integrated map includes physical crowd avoidance; this checks the supported 3-minute deadline.

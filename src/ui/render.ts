@@ -126,7 +126,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   // Facilities
   for (const def of FACILITIES) {
     const f = world.facility(def.id)!;
-    drawFacility(ctx, def, replay ? "open" : f.status, !replay && Boolean(f.serving), Boolean(replay));
+    const old=replay?.world?.facilities.find(h=>h.id===def.id);
+    drawFacility(ctx, def, old?.status??f.status, replay?Boolean(old?.serving):Boolean(f.serving), Boolean(replay&&!old));
   }
 
   // Player vision
@@ -173,11 +174,12 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   if (!replay) {
     const scene=captureScene(engine);
     for(const i of scene.items) { ctx.fillStyle=COLORS.ochre;ctx.fillRect(px(i.x)-3,px(i.z)-3,6,6); }
-    for(const a of scene.alerts) {
+    for(const a of engine.status==="running"?scene.alerts:[]) {
       const actor=scene.actors.get(a.observerId); if(!actor) continue;
-      const color=a.level === "white" ? "#faf7ee":a.level === "yellow" ? COLORS.ochre:COLORS.brick;
-      ctx.fillStyle=color;ctx.strokeStyle=COLORS.ink;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,4,0,Math.PI*2);ctx.fill();ctx.stroke();
-      if(a.level!=="red") {ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,7,-Math.PI/2,-Math.PI/2+Math.PI*2*a.ring);ctx.stroke();}
+      const color=a.level === "white" ? "#f7fbff":a.level === "yellow" ? "#ffd42a":"#ff353d",next=a.level==="white"?"#ffd42a":"#ff353d";
+      ctx.save();ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=4;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,2.75,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+      ctx.strokeStyle=next;ctx.lineWidth=1.25;ctx.globalAlpha=.2;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,5.75,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+      ctx.beginPath();ctx.arc(px(actor.x),px(actor.z)-12,5.75,-Math.PI/2,-Math.PI/2+Math.PI*2*(a.level==="red"?1:Math.max(0,Math.min(1,a.ring))));ctx.stroke();ctx.restore();
     }
     ctx.fillStyle=COLORS.ink;ctx.font="10px system-ui";
     if (opts.messages) for (const {actorId,message} of opts.messages) {
@@ -194,6 +196,14 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
       }
     }
     else for(const s of scene.speech) {const a=scene.actors.get(s.speakerId);if(a) ctx.fillText(s.text.slice(0,30),px(a.x)+8,px(a.z)-16);}
+  }
+  if(replay?.motion) for(const item of replay.motion.items) {
+    const p=item.position;
+    if(item.trajectory && replay.t<item.trajectory.landsAt) {
+      ctx.save();ctx.strokeStyle="#c3912f";ctx.setLineDash([3,3]);line(ctx,item.trajectory.from,p);ctx.restore();
+    }
+    ctx.fillStyle=item.kind==="can"?"#edb72a":COLORS.ochre;
+    ctx.fillRect(px(p.x)-3,px(p.y)-3,6,6);
   }
 
   // People
@@ -215,7 +225,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, engine: Engine, opts:
   }
 
   // Guards
-  if (!replay) for (const g of guards.guards) {
+  const displayedGuards=replay?(replay.motion?.guards??replay.world?.guards??[]).map(g=>({pos:g.position,facing:g.facing})):guards.guards;
+  for (const g of displayedGuards) {
     ctx.save();
     ctx.translate(px(g.pos.x), px(g.pos.y));
     ctx.rotate(g.facing);
@@ -398,14 +409,16 @@ function drawGeneratedStation(ctx:CanvasRenderingContext2D,engine:Engine,opts:Re
   rectangles.push(...platformClearanceBlocks(d.connectors).filter(v=>v.bounds.floorId===floor.id).map(v=>v.bounds));
   if(d.architecture)rectangles.push(...d.architecture.volumes.filter(v=>v.kind==="room"&&v.floorId===floor.id).map(v=>v.bounds));
   ctx.fillStyle=COLORS.inkSoft;for(const r of rectangles.filter(r=>(r.floorId??"concourse")===floor.id||index&&r.floorId==="platform"))ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));
-  for(const f of l.FACILITIES.filter(f=>(f.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=f.kind==="tvm"?COLORS.ochre:f.kind==="security"?COLORS.securityEdge:COLORS.green;ctx.fillRect(px(f.pos.x)-5,px(f.pos.y)-8,10,16);ctx.fillStyle=COLORS.ink;ctx.font="11px sans-serif";ctx.fillText(f.id,px(f.pos.x)+7,px(f.pos.y));}
+  for(const f of l.FACILITIES.filter(f=>(f.pos.floorId??"concourse")===floor.id)){const status=opts.replay?.world?.facilities.find(h=>h.id===f.id)?.status??(!opts.replay?engine.world.facility(f.id)?.status:undefined);ctx.fillStyle=status&&status!=="open"?COLORS.brick:f.kind==="tvm"?COLORS.ochre:f.kind==="security"?COLORS.securityEdge:COLORS.green;ctx.fillRect(px(f.pos.x)-5,px(f.pos.y)-8,10,16);ctx.fillStyle=COLORS.ink;ctx.font="11px sans-serif";ctx.fillText(f.id,px(f.pos.x)+7,px(f.pos.y));}
   for(const p of d.props??[]){if(p.pos.floorId!==floor.id||!p.body)continue;ctx.fillStyle=p.assetId.startsWith('plant')?'#537e58':'#88978a';ctx.fillRect(px(p.body.x),px(p.body.y),px(p.body.w),px(p.body.h));}
   for(const detail of d.details.filter(v=>v.pos.floorId===floor.id)){ctx.fillStyle=COLORS.ochre;const r=detail.body;if(r)ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));}
-  for(const item of captureScene(engine).items)if(displayFloor(item.floorId)===floor.id){ctx.fillStyle=COLORS.ochre;ctx.fillRect(px(item.x)-3,px(item.z)-3,6,6);}
+  const shownItems=opts.replay?(opts.replay.motion?.items??[]).map(i=>({x:i.position.x,z:i.position.y,floorId:i.position.floorId})):captureScene(engine).items;
+  for(const item of shownItems)if(displayFloor(item.floorId)===floor.id){ctx.fillStyle=COLORS.ochre;ctx.fillRect(px(item.x)-3,px(item.z)-3,6,6);}
   for(const node of l.NAV_NODES.filter(n=>(n.pos.floorId??"concourse")===floor.id)){ctx.fillStyle=COLORS.inkSoft;ctx.font="9px sans-serif";ctx.fillText(node.label,px(node.pos.x),px(node.pos.y)-8);}
   if(!index)for(const e of d.entrances??[]){const r=e.bounds;ctx.fillStyle=COLORS.stairs;ctx.fillRect(px(r.x),px(r.y),px(r.w),px(r.h));ctx.strokeStyle=COLORS.stairsEdge;ctx.strokeRect(px(r.x),px(r.y),px(r.w),px(r.h));for(let i=0;i<24;i++){const x=e.top.x+e.inward.x*i/4,y=e.top.y+e.inward.y*i/4;line(ctx,{x:x-e.inward.y*e.width/2,y:y+e.inward.x*e.width/2},{x:x+e.inward.y*e.width/2,y:y-e.inward.x*e.width/2});}ctx.fillStyle=COLORS.ink;ctx.fillText(`${e.id}口 ↓ 站厅`,px(e.top.x),px(e.top.y)-8);}
   const snapshot=captureScene(engine);
-  for(const actor of snapshot.actors.values())if(displayFloor(actor.floorId)===floor.id&&!(actor.id==="player"&&opts.replay)){ctx.fillStyle=actor.id==="player"?COLORS.player:COLORS.inkSoft;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z),actor.id==="player"?6:4,0,Math.PI*2);ctx.fill();}
+  if(!opts.replay)for(const actor of snapshot.actors.values())if(displayFloor(actor.floorId)===floor.id){ctx.fillStyle=actor.id==="player"?COLORS.player:COLORS.inkSoft;ctx.beginPath();ctx.arc(px(actor.x),px(actor.z),actor.id==="player"?6:4,0,Math.PI*2);ctx.fill();}
+  for(const g of opts.replay?.motion?.guards??opts.replay?.world?.guards??[])if(displayFloor(g.position.floorId)===floor.id){ctx.save();ctx.translate(px(g.position.x),px(g.position.y));ctx.rotate(g.facing);ctx.fillStyle="#c68a40";ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-6,-5);ctx.lineTo(-6,5);ctx.closePath();ctx.fill();ctx.restore();}
   const trail=opts.replay?.trail??(opts.showTrail?engine.trail:[]);ctx.strokeStyle=COLORS.brick;ctx.beginPath();let drawing=false;for(const p of trail){if(displayFloor(p.floorId)!==floor.id){drawing=false;continue;}if(drawing)ctx.lineTo(px(p.x),px(p.y));else ctx.moveTo(px(p.x),px(p.y));drawing=true;}ctx.stroke();
   const replay=opts.replay?.position;if(replay&&displayFloor(replay.floorId)===floor.id){ctx.fillStyle=COLORS.player;ctx.beginPath();ctx.arc(px(replay.x),px(replay.y),7,0,Math.PI*2);ctx.fill();}
   // Draw the floor label above the map instead of letting equipment rooms cover its text.

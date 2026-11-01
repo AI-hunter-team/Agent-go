@@ -6,6 +6,8 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [PR73-CONFLICT-001](PR73-CONFLICT-001.md) | PR #73 同步 #72 的 CI 稳定性修复、两处文档冲突处理与集成验证 |
+| [BEHAVIOR-LAB-PR-001](BEHAVIOR-LAB-PR-001.md) | 行为实验台001–012整合最新地图/登车主线，软件验证、原调试文件排除与未实机验收边界 |
 | [CI-MAIN-STABILITY-001](CI-MAIN-STABILITY-001.md) | #71合入后Windows展厅与难度会话检查超时；逐资产/通道检查及实际tick后主动结束会话，原预算不变，含两轮本地与远端证据 |
 | [PR-SERIAL-MERGE-002](PR-SERIAL-MERGE-002.md) | #68–#71 串行冲突修复、CI 和合并记录；各轮次实际状态见报告 |
 | [CHARACTER-HOME-PR-001](CHARACTER-HOME-PR-001.md) | 首页与豆包/Idle/失败/问候整合最新PR68，修复门框黄线穿模；904项、类型/构建与生成车站实际成功/失败验证 |

@@ -68,9 +68,15 @@ async function checkContainer() {
     assert.equal((await call("/api/model/enable", { model: "compose-fake-model" }, token)).status, 200);
     assert.equal((await call("/api/health", undefined, token)).data.model, "compose-fake-model");
     const session = await call("/api/session", { guidance: "" }, token);
+    assert.equal(session.status, 200);
     const decision = await call("/api/agent/decide", { sessionId: session.data.sessionId, turn: {
-      triggers: [], lastResult: null, observation: { t: 0, self: { timeLeft: 180 } },
+      triggers: [], lastResult: null, observation: {
+        t: 0, self: { position: { x: 0, y: 0 }, zone: "concourse", nearestNode: "ENTRY", activity: "idle",
+          hasTicket: false, screened: false, passedGate: false, queue: null, elapsed: 0, timeLeft: 150 },
+        facilities: [], guards: [],
+      },
     } }, token);
+    assert.equal(decision.status, 200);
     assert.equal(decision.data.action?.type, "wait");
     assert.equal((await call(`/api/session/${session.data.sessionId}`, undefined, token, "DELETE")).status, 204);
     assert.equal((await call("/api/model/config", undefined, token, "DELETE")).status, 204);

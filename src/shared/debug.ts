@@ -40,6 +40,7 @@ export interface ModelCallDebug {
 }
 
 export interface OperationDebug {
+  planning?: { outputText: string; problem: string | null; source: "model" | "adapted" | "default"; notes: string[] };
   parameters: Record<string, unknown>;
   id: string;
   runId: string | null;

@@ -1,5 +1,5 @@
 import { worldTrainLayout } from "../shared/generatedTrain";
-import type { AlertLevel, ItemKind, FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
+import type { AlertLevel, ItemKind, ItemFlight, FacilityKind, FacilityStatus, PassengerKind } from "../shared/types";
 import type { Engine } from "../sim/engine";
 import { STAIRS_TOP, STAIRS_BOTTOM } from "../sim/layout";
 import type { ReplayFrame } from "../replay/trajectory";
@@ -28,7 +28,7 @@ export interface FacilityFrame {
 }
 export interface SceneSnapshot {
   readonly alerts: readonly {observerId: string; subjectId: string; level: AlertLevel; ring: number}[];
-  readonly items: readonly {id: string; kind: ItemKind; x: number; z: number; floorId?:string; elevation?:number; holderId: string | null}[];
+  readonly items: readonly ItemFrame[];
   readonly speech: readonly {speakerId: string; text: string; t: number}[];
   readonly t: number;
   readonly actors: ReadonlyMap<string, ActorFrame>;
@@ -36,6 +36,7 @@ export interface SceneSnapshot {
   readonly path: readonly { readonly x: number; readonly z: number }[];
   readonly blackout: { readonly active: boolean; readonly remaining: number };
 }
+export interface ItemFrame { readonly id:string; readonly kind:ItemKind; readonly x:number; readonly z:number; readonly floorId?:string; readonly elevation?:number; readonly holderId:string|null; readonly trajectory?:Readonly<ItemFlight> }
 export interface ViewOptions {
   showVision: boolean;
   showTrail: boolean;
@@ -100,8 +101,8 @@ export function captureScene(engine: Engine, previous?: SceneSnapshot): SceneSna
   }
   return Object.freeze({
     alerts: Object.freeze([...engine.alerts.records.values()].filter(r => r.subjectId === "player" && r.level !== "none").map(r => Object.freeze({observerId:r.observerId,subjectId:r.subjectId,level:r.level,ring:r.ring}))),
-    items: Object.freeze([...engine.world.items.items.values()].filter(i => !i.used && (i.location.type === "ground" || i.location.type === "spot" || (i.location.type === "held" && i.location.slot === "hand"))).flatMap(i => {
-      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,floorId:p.floorId,elevation:engine.world.definition.generatorVersion!=="legacy-v0"?(p.elevation??(p.floorId==="platform"?-6:0)):platformElevation(p.x),holderId:engine.world.items.holderId(i)})] : [];
+    items: Object.freeze([...engine.world.items.items.values()].filter(i => !i.used && (i.location.type === "flight" || i.location.type === "ground" || i.location.type === "spot" || (i.location.type === "held" && i.location.slot === "hand"))).flatMap(i => {
+      const p=engine.world.items.position(i); return p ? [Object.freeze({id:i.id,kind:i.kind,x:p.x,z:p.y,floorId:p.floorId,elevation:engine.world.definition.generatorVersion!=="legacy-v0"?(p.elevation??(p.floorId==="platform"?-6:0)):platformElevation(p.x),holderId:engine.world.items.holderId(i),...(i.location.type==="flight"?{trajectory:structuredClone(i.location.trajectory)}:{})})] : [];
     })),
     speech: Object.freeze([...speech.values()].slice(-8)),
     t: engine.t,
@@ -149,6 +150,22 @@ export function actorElevation(engine:Engine, person:Engine["player"]):number {
   if(a.kind==="stairs"||a.kind==="escalator")return -6*(1-a.remaining/(a.duration??(a.kind==="stairs"?6:10)));
   return 0;
 }
+/** Sample the authoritative trajectory at presentation time; no renderer-authored throw. */
+export function sampleItem(buffer: PresentationBuffer, id:string, alpha:number, out:{x:number;y:number;z:number;spin:number}): ItemFrame | undefined {
+  const current=buffer.current.items.find(i=>i.id===id);
+  if (!current) return undefined;
+  const previous=buffer.previous.items.find(i=>i.id===id) ?? current;
+  const time=buffer.time(Math.max(0,Math.min(1,alpha))), flight=current.trajectory ?? previous.trajectory;
+  if (flight && time <= flight.landsAt+1e-9 && time >= flight.startedAt) {
+    const a=Math.max(0,Math.min(1,(time-flight.startedAt)/(flight.landsAt-flight.startedAt)));
+    out.x=flight.from.x+(flight.to.x-flight.from.x)*a; out.z=flight.from.y+(flight.to.y-flight.from.y)*a;
+    out.y=(current.elevation??platformElevation(out.x))+1*(1-a)+.16*a+Math.sin(Math.PI*a)*1.2; out.spin=a*Math.PI*3;
+  } else {
+    out.x=current.x+(current.holderId ? .3:0); out.z=current.z; out.y=platformElevation(out.x)+(current.holderId?1:.16); out.spin=0;
+  }
+  return current;
+}
+
 export interface ActorPose { x: number; y: number; z: number; yaw: number; }
 /** Reuses an output object; no allocation or React state update in the frame loop. */
 export function sampleActor(buffer: PresentationBuffer, id: string, alpha: number, out: ActorPose): ActorFrame | undefined {

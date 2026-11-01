@@ -6,7 +6,9 @@ import { bossContextValid, validatePlan } from "./boss";
 import { dialogueRequestValid, responseFailure, validateResponse } from "./npcDialogue";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
-import { planToNormalized, validPlan, type JourneyInput, type JourneyPreparation, type JourneyPlan } from "../src/shared/journey";
+import { JourneyPlanError, planToNormalized, type JourneyInput, type JourneyPreparation, type JourneyPlan } from "../src/shared/journey";
+import { adaptJourneyPlan, defaultJourneyPlan } from "./journeyPlanning";
+import { reconcileInstruction } from "../src/sim/actions/instructionAudit";
 import { basename, extname, resolve } from "node:path";
 import { countChars, guidanceError } from "../src/shared/guidance";
 import { DEFAULT_GAME_SETTINGS, gameSettingsError } from "../src/shared/gameSettings";
@@ -21,7 +23,7 @@ import type {
 } from "../src/shared/types";
 import { parsePlan } from "../src/sim/intent";
 import type { Session, SessionStore } from "./sessions";
-import { DebugLogger, traceOperation } from "./debug";
+import { DebugLogger, recordPlanningDiagnostic, traceOperation } from "./debug";
 import { ModelConfigError, ModelConfigStore } from "./modelConfig";
 import { assertSafeText, SafetyError, validateNormalized } from "./security";
 import { ReviewFailure, validateDraft, validateReview, validateReviewInput, validateStrategies, type DraftResult, type ReviewInput, type ReviewResult, type ReviewStrategy } from "../src/shared/review";
@@ -80,6 +82,7 @@ const setStaticCacheHeaders = (res: Response, filePath: string) => {
 
 export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new DebugLogger(false), modelParameters = {}, reviewModelParameters = modelParameters, modelConfigs = new ModelConfigStore(), frontendDir }: AppDeps) {
   const app = express();
+  app.use("/api/session/:id/report",express.json({limit:"8mb"}));
   app.use(express.json({ limit: "1mb" }));
   // Sessions, model discovery, health and model responses must never be cached.
   app.use("/api", (_req, res, next) => {
@@ -218,18 +221,26 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
       return void res.status(400).json({ error: "准备请求包含未知字段" });
     }
     try { resolveLoadout(input.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
-    try { requestedMap(input.seed,input.world); } catch { return void res.status(409).json({error:"车站版本或布局已变化，请刷新后重新准备"}); }
+    let planningMap;
+    try { planningMap=requestedMap(input.seed,input.world); } catch { return void res.status(409).json({error:"车站版本或布局已变化，请刷新后重新准备"}); }
     assertSafeText(input.guidance);
     const current = runtime(req);
     if (!requireLlm(current.llm, res)) return;
     if (!current.llm!.prepareJourney) return void res.status(503).json({ error: "当前服务不支持初始规划" });
-    const { value: plan, debug } = await traceOperation({ operation: "normalize", runId: input.runId, sessionId: null },
-      { input, modelParameters: current.parameters }, debugLogger, () => current.llm!.prepareJourney!(input));
-    if (!validPlan(plan, input.autonomous ? "" : input.guidance)) return void res.status(502).json({ error: "初始方案格式无效，请重试" });
-    assertSafeText(JSON.stringify(plan));
-    const normalized = planToNormalized(plan, input.autonomous ? "" : input.guidance);
+    const { value: retained, debug } = await traceOperation({ operation: "normalize", runId: input.runId, sessionId: null },
+      { input, modelParameters: current.parameters }, debugLogger, async () => {
+        try { return adaptJourneyPlan(await current.llm!.prepareJourney!(input),input,planningMap); }
+        catch(error) {
+          if(error instanceof SafetyError)throw error;
+          const draft=defaultJourneyPlan(input,"本次模型规划暂不可用，已保留原指导并提供基础准备稿；尚未完成模型规划，可重新生成。");
+          recordPlanningDiagnostic({outputText:"",problem:error instanceof Error?error.message:"模型规划返回失败",source:"default",notes:draft.preparation!.notes});
+          return draft;
+        }
+      });
+    assertSafeText(JSON.stringify(retained));
+    const normalized = planToNormalized(retained);
     validateNormalized(normalized);
-    const result: JourneyPreparation = { id: randomUUID(), model: current.llm!.model, normalized, plan, debug };
+    const result: JourneyPreparation = { id: randomUUID(), model: current.llm!.model, normalized, plan: retained, debug };
     for (const [id, item] of preparations) if (Date.now() - item.created > 600_000) preparations.delete(id);
     if (preparations.size >= 100) preparations.delete(preparations.keys().next().value!);
     preparations.set(result.id, { result, input: structuredClone(input), runtime: current, created: Date.now() });
@@ -259,6 +270,7 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
     let loadout;
     try { loadout = resolveLoadout(req.body?.loadout); } catch (error) { return void res.status(400).json({ error: (error as Error).message }); }
     let preparationId: string | undefined;
+    let journeyPlan:JourneyPlan|undefined;
     if (req.body?.preparationId !== undefined) {
       const prepared = preparations.get(req.body.preparationId);
       if (!prepared || Date.now() - prepared.created > 600_000 || prepared.runtime.llm !== binding.llm || prepared.runtime.token !== binding.token
@@ -272,6 +284,7 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
         return void res.status(409).json({ error: "方案已过期或条件改变，请重新生成初始方案" });
       }
       normalized = prepared.result.normalized;
+      journeyPlan=structuredClone(prepared.result.plan);
       preparationId = req.body.preparationId;
     }
     const err = guidanceError(guidance);
@@ -287,6 +300,7 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
     try { stationMap=requestedMap(req.body.seed,req.body.world); } catch {return void res.status(409).json({error:"车站版本或布局不匹配，请重新准备"});}
     const s = sessions.create(guidance, normalized, runId(req.body?.runId) ?? undefined, settings, loadout);
     s.publicMap=stationMap;
+    if(journeyPlan)s.journeyPlan=journeyPlan;
     if (preparationId !== undefined) preparations.delete(preparationId);
     bindings.set(s, binding);
     const { llm, parameters: modelParameters } = binding;
@@ -315,18 +329,18 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
     if (!session) return void res.status(404).json({ error: "会话不存在或已结束" });
     const binding = forSession(req, session);
     const { instruction } = req.body;
-    const context={...req.body.context,publicMap:session.publicMap};
-    if (!boundedText(instruction, 200) || !bossContextValid(context)) return void res.status(400).json({ error: "行动或可见上下文无效" });
+    const context: BossContext = {...req.body.context,publicMap:session.publicMap,guidance:session.guidance};
+    if (!boundedText(instruction,1000) || !bossContextValid(context)) return void res.status(400).json({error:"行动或可见上下文无效"});
     assertSafeText(JSON.stringify({ instruction, context }));
     const { value, debug } = await traceOperation({ operation: "interpret", runId: session.runId, sessionId: session.id }, { instruction, context, modelParameters: binding.parameters }, debugLogger, async () => {
       try {
         const plan = await binding.llm?.interpret?.(instruction, context);
         if (plan) {
           const valid = validatePlan(plan, context);
-          if (valid) return { ...valid, source: plan.source, usage: plan.usage, model: plan.model };
+          if (valid) return { ...reconcileInstruction(instruction, valid, context).plan, source: plan.source, usage: plan.usage, model: plan.model };
         }
       } catch (error) { if (error instanceof SafetyError) throw error; }
-      return parsePlan(instruction, context);
+      return reconcileInstruction(instruction, parsePlan(instruction, context), context).plan;
     });
     res.json({ ...value, debug });
   }));
@@ -384,6 +398,7 @@ export function createApp({ llm, reviewLlm = llm, sessions, debugLogger = new De
     }
     if (err instanceof SafetyError) return void res.status(err.status).json({ error: err.message });
     if (err instanceof ModelConfigError) return void res.status(err.status).json({ error: err.message });
+    if (err instanceof JourneyPlanError) return void res.status(502).json({ error: err.message });
     console.error(err);
     res.status(500).json({ error: "服务暂时不可用，请稍后重试" });
   });
