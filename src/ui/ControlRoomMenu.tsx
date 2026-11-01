@@ -8,7 +8,7 @@ interface Props {
   onAppearance:()=>void;onCreate:()=>void;onSelect:(world:SavedWorld)=>void;onContinue:()=>void;
   onRename:(world:SavedWorld,name:string)=>void;onDelete:(id:string)=>void;
 }
-/** 首页三个主入口沿用世界与外观回调，世界列表承接继续准备操作。 */
+/** 首页保留世界与外观流程，联机与排行榜为路演占位入口。 */
 export function ControlRoomMenu(p:Props){
   const lastFocus=useRef<HTMLElement|null>(null);
   const [list,setList]=useState(false),[edit,setEdit]=useState<{world:SavedWorld;mode:"rename"|"delete"}|null>(null),[name,setName]=useState("");
@@ -17,6 +17,8 @@ export function ControlRoomMenu(p:Props){
     <BrandMark className={styles.homeBrand}/>
     <nav className={styles.welcome} aria-label="出发休息室">
       <button className="primary" disabled={!p.loaded} onClick={p.onCreate}><span>创建世界</span><img src="/assets/icons/arrow-forward.svg" alt="" width="40" height="40"/></button>
+      <button type="button"><span>联机大厅</span></button>
+      <button type="button"><span>排行榜</span></button>
       <button aria-label="我的世界" onClick={()=>setList(true)}><span>我的世界</span>{p.worlds.length>0&&<small>{p.worlds.length}</small>}</button>
       <button onClick={p.onAppearance}><span>角色外观</span></button>
       {p.storageError&&<p role="status" className={styles.storageNotice}>{p.storageError}</p>}
