@@ -6,6 +6,7 @@
 
 | 报告 | 性质与适用范围 |
 |---|---|
+| [CI-MAIN-STABILITY-001](CI-MAIN-STABILITY-001.md) | #71合入后Windows展厅聚合检查超时；保留所有目录/材质断言与预算，逐项执行及main CI后续结果 |
 | [PR-SERIAL-MERGE-002](PR-SERIAL-MERGE-002.md) | #68–#71 串行冲突修复、CI 和合并记录；各轮次实际状态见报告 |
 | [CHARACTER-HOME-PR-001](CHARACTER-HOME-PR-001.md) | 首页与豆包/Idle/失败/问候整合最新PR68，修复门框黄线穿模；904项、类型/构建与生成车站实际成功/失败验证 |
 | [HOME-MATCH-001](HOME-MATCH-001.md) | 全实时3D参考首页、菜单与材质取景重建；功能检查通过，严格1:1视觉差异保留 |
