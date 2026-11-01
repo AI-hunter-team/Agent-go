@@ -5,7 +5,7 @@
 ## 目标与分工
 
 - 负责人及集成负责人：本聊天 Codex，串行执行；通过本简报、验证报告及 [PR #73](https://github.com/AI-hunter-team/Agent-go/pull/73) 交接。
-- 授权：用户要求解决 PR #73 冲突，包含提交并推送修复到原 PR 分支；不合并 PR、不部署、不调用付费模型。
+- 授权：用户先要求解决 PR #73 冲突，随后明确要求“合并”；本任务接续修复阻断 CI、提交推送并在检查通过后合并原 PR。不部署、不调用付费模型。
 - 基线：2026-11-01 已 fetch 核实，PR `codex/behavior-lab-review` / `29f2debb84f1949d67a39c76d2949b4fb6b0ae99`；main / `aaf1f0914b7304ba752ba150f0cefb4a1e871be1`。
 - 工作分支/工作区：`codex/pr73-conflict-resolution`，独立 worktree 代号 `agent-go-pr73-conflict-resolution`。原 main 和其他工作区均保留。
 - 依赖：main 的 PR #72 CI 稳定性修复；PR 原功能依据见 [BEHAVIOR-LAB-PR-001](BEHAVIOR-LAB-PR-001.md)。
@@ -17,6 +17,7 @@
 - 共享文件由本负责人串行整合：先保留双方有效变更，再执行检查；不覆盖历史验证，不新增接口或产品规则。
 - 完成条件：main 成为修复分支祖先、无未解决冲突，类型/全量测试/正式与实验台构建及 diff 检查通过，普通推送更新原 PR，核实 GitHub 冲突状态。
 - 范围外发现记录到交接；扩大范围先更新本简报。
+- 合并阶段范围补充：`scripts/smoke-compose.mjs` 的伪观察及 HTTP 状态断言，本简报、验证报告与中央记录。CI 失败的实际原因是旧夹具缺少 `facilities`，新决策历史代码调用 `facilities.flatMap` 前无法处理该不完整观察，接口返回 500；修正夹具满足现有 Observation 契约，不改业务接口或放宽断言。先前推测车站绑定问题已排除：无 world 的会话不要求 publicMap。
 
 ## 验证与交接
 

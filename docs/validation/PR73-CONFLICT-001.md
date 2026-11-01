@@ -30,3 +30,11 @@
 - 本地集成与软件检查完成，提交并普通推送到原 `codex/behavior-lab-review`；禁止强制覆盖远端新增工作。提交前重新核实远端 head 仍为原 PR commit。
 - 未合并 PR、未部署、未调用付费模型，人工审查未进行。既有浏览器/真实模型限制见 [原交付报告](BEHAVIOR-LAB-PR-001.md)。
 - 最终提交、远端冲突与 CI 状态通过 [PR #73](https://github.com/AI-hunter-team/Agent-go/pull/73) 核对；接手者待认领。回退本次合并可对新增提交使用 `git revert -m 1 <commit>`。
+
+## 用户授权合并后的 CI 修复
+
+- 用户随后明确要求“合并”，本任务接续修复 CI 阻断并在检查通过后合并。先前未合并记录为历史快照。
+- 冲突修复提交 `db0701f26799806dc1de8d2f196ff7f5886fd997` 已推送，GitHub 确认 `MERGEABLE`；[Compose 失败](https://github.com/AI-hunter-team/Agent-go/actions/runs/41263776340)出现在预期 wait 的动作断言。旧冒烟夹具仅有 `t`、`self.timeLeft`，缺少 Observation 的 `facilities` 列表，新决策历史读取该列表时失败。无 world 的会话不要求 publicMap，已排除最初车站绑定推测。
+- 仅补全 `scripts/smoke-compose.mjs` 的观察夹具，并在 session/decision 调用后增加 HTTP 200 断言；不修改业务接口，不删除既有动作与容器断言。
+- 本机未安装 Docker：一次性提取原 `checkContainer` 函数，仅移除用户/文件打包断言，在真实本地 Express 服务上执行相同 HTTP/本地伪模型断言。初次临时复验服务遗漏 SessionStore 导致 500，补齐后全部通过，退出码 0；不作为完整容器通过证据。函数原控制台消息包含容器描述，本次实际覆盖仅为 HTTP/伪模型部分。
+- 修复后类型检查、正式构建通过；`npm test -- --maxWorkers=2 --testTimeout=15000` 再次通过，123 文件 / 1379 项、83.08 秒、退出码 0；diff 空白检查通过。上一 head 的 Ubuntu/Windows 已成功；远端新 head 的 Ubuntu/Windows/Compose 检查待完成，通过后按用户授权合并，最终结果见 PR。未调用真实模型、未部署，未冒充人工审核。
