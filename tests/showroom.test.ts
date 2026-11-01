@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { Box3, Mesh, PerspectiveCamera, Vector3 } from "three";
 import { EXHIBITS, SURFACES } from "../src/showroom/catalog";
 import { assembledRoom, exhibitModel, framedPose, localStationKit, materialStudy } from "../src/showroom/models";
@@ -9,16 +9,28 @@ import { generateWorld } from "../src/sim/worldDefinition";
 
 afterEach(()=>vi.unstubAllGlobals());
 describe("standalone asset showroom",()=>{
-  test("every catalogue entry builds finite, non-empty geometry using the same project assets",()=>{
-    const p=createGeneratedPalette(),kit=localStationKit(p);
+  test("catalogue entries retain unique identifiers",()=>{
     expect(new Set(EXHIBITS.map(e=>e.id)).size).toBe(EXHIBITS.length);
-    for(const entry of EXHIBITS){
-      const model=exhibitModel(entry,p,kit),box=new Box3().setFromObject(model.root),size=box.getSize(new Vector3());
-      expect(box.isEmpty(),entry.id).toBe(false);expect([...box.min.toArray(),...box.max.toArray()].every(Number.isFinite),entry.id).toBe(true);
-      expect(box.min.y,entry.id).toBeCloseTo(0,4);expect(size.length(),entry.id).toBeGreaterThan(.01);expect(model.root.scale.toArray()).toEqual([1,1,1]);model.dispose();
-    }
-    for(const surface of SURFACES)for(const channel of ["lit","normal","roughness"] as const){const study=materialStudy(p,surface.id,channel);expect(new Box3().setFromObject(study.root).isEmpty()).toBe(false);study.dispose();}
-    kit.dispose();p.dispose();
+  });
+  describe("catalogue geometry",()=>{
+    let p: ReturnType<typeof createGeneratedPalette>;
+    let kit: ReturnType<typeof localStationKit>;
+    // Reuse the source kit as before; each exhibit still owns and releases its own model handle.
+    beforeAll(()=>{p=createGeneratedPalette();kit=localStationKit(p);});
+    afterAll(()=>{kit?.dispose();p?.dispose();});
+    test.each(EXHIBITS.map(entry=>[entry.id,entry] as const))("%s builds finite, non-empty geometry",(_id,entry)=>{
+      const model=exhibitModel(entry,p,kit);
+      try {
+        const box=new Box3().setFromObject(model.root),size=box.getSize(new Vector3());
+        expect(box.isEmpty(),entry.id).toBe(false);expect([...box.min.toArray(),...box.max.toArray()].every(Number.isFinite),entry.id).toBe(true);
+        expect(box.min.y,entry.id).toBeCloseTo(0,4);expect(size.length(),entry.id).toBeGreaterThan(.01);expect(model.root.scale.toArray()).toEqual([1,1,1]);
+      } finally {model.dispose();}
+    });
+    test.each(SURFACES.flatMap(surface=>(["lit","normal","roughness"] as const).map(channel=>[surface.id,channel] as const)))("%s / %s retains material-study geometry",(surfaceId,channel)=>{
+      const study=materialStudy(p,surfaceId,channel);
+      try {expect(new Box3().setFromObject(study.root).isEmpty()).toBe(false);}
+      finally {study.dispose();}
+    });
   });
   test("shared floor pieces keep every staircase opening clear in all layout rules",()=>{
     for(const seed of [1,2,4]){

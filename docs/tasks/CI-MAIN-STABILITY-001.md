@@ -1,0 +1,31 @@
+# CI-MAIN-STABILITY-001：修复合入后主线展厅及难度会话检查超时
+
+状态：实现及本地软件检查完成，待修复PR及对应main CI验证。用户在串行合并后要求继续解决剩余问题；已核实main最新CI失败，本任务修复并验证主线恢复成功，不以PR检查成功替代主线结果。
+
+## 目标与分工
+
+- 单一负责人及集成负责人：本聊天Codex，串行维护测试及中央记录，未使用并行Agent。
+- 干净基线：已fetch的origin/main，`a492fac0a3043ec3443a0a20147af4a4a6205c6d`（#71合并），2026-11-01，Asia/Shanghai。
+- 独立分支 `codex/ci-main-stability-001`，工作区 `../Agent-go-ci-main-stability-001`；原NPC、首页、生成器、串行合并及其他工作区保留。
+- 失败依据：[主线CI 41252390204](https://github.com/AI-hunter-team/Agent-go/actions/runs/41252390204)，Ubuntu成功；Windows 1005项通过，showroom目录整体几何检查超过原15秒。未发生几何断言差异。
+- 交付：目录及材质检查逐项报告，保留所有资产、材质通道、几何和资源所有权断言；同一修复head完整检查通过，修复PR合入后实际main CI成功。
+- 用户当前“帮我解决”延续此前修复/推送/合并授权；不包含部署、生产数据、付费模型或系统设置修改。
+
+## 路径边界
+
+- 允许修改：`tests/showroom.test.ts`、本简报、`docs/validation/CI-MAIN-STABILITY-001.md`、验证索引及 `docs/开发计划.md` 中本任务登记/主线状态。
+- 排除：生产代码、资产、除下述新增范围外的其他测试、游戏规则、依赖/锁文件、CI工作流及所有超时/并发参数；发现其他失败先记录并扩充简报范围。
+- 共享文件：仅本任务负责人串行更新中央记录和验证索引。生产接口、版本、存档、模型工具均不变。
+
+## 新失败的范围补充
+
+首轮修复head 8804f0b 的 [CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41260146057) 中Windows展厅157项全部通过，但难度会话保持用例耗时17.499秒，超过原15秒预算，其余1157项通过。允许进一步修改 `tests/difficultySession.test.ts`：该用例检查设置在预览、启动、结束报告和同设置重试间保持，不需要等待90秒自然结算；使用相同GameSession、seed4、难度与HeuristicAgent，运行实际tick后主动结束以取终局报告。原设置断言全部保留，补充确实推进时间且得到结束报告的断言。自然截止在difficulty.test.ts、完整对局/报告对照在gameSession.test.ts继续独立覆盖，不改这些测试及任何预算。
+
+## 方案与验证
+
+- 原单一测试在一个15秒窗口内构建全部目录资产及45组材质通道，托管Windows偶发超时；按目录项和材质通道拆分测试，复用与原检查相同的源资产夹具，每个句柄用finally释放。
+- 保持所有原断言、阈值、输入和15秒预算；共享源kit只读借用，模型自身逐项创建/释放，整个夹具最后统一释放；不删条目或以重试掩盖超时。
+- 先记录基线单文件耗时和项目环境，完成相关测试，再执行 `npm run typecheck`、`npm test -- --maxWorkers=2 --testTimeout=15000`、`npm run build`、diff/暂存及本地文档目标检查。
+- 纯测试调整不改变生产页面，浏览器/真实模型/性能复验不适用，不宣称新增实机验收。
+- 提交普通push并创建修复PR，实际CI成功后合入main，并等待对应main检查成功；验证与交接见[报告](../validation/CI-MAIN-STABILITY-001.md)。人工审查未进行，AI核对不能代替人工批准。
+- 回退：正常revert测试/记录提交，无用户数据、接口或资产迁移。

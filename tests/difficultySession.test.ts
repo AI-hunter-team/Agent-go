@@ -27,7 +27,12 @@ test("preview, starting and same-settings retry all retain difficulty", async ()
   expect(session.engine.settings).toEqual(settings);
   session.start(new HeuristicAgent(), offlineClassifier);
   expect(session.engine.seed).toBe(4); expect(session.engine.settings).toEqual(settings);
-  await session.runner!.runToEnd();
+  // This contract concerns settings across the session lifecycle; full deadline and journey tests run separately.
+  await session.runner!.pending;
+  session.tick(.1);
+  session.stop();
+  expect(session.runner!.phase).toBe("ended");
+  expect(session.runner!.report().elapsed).toBeGreaterThan(0);
   expect(session.runner!.report().settings).toEqual(settings);
   session.start(new HeuristicAgent(), offlineClassifier);
   expect(session.engine.settings).toEqual(settings); session.stop();
