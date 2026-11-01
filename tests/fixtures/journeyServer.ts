@@ -9,6 +9,11 @@ const llm: LlmService = {
   async prepareJourney(input) {
     await new Promise((r) => setTimeout(r, 800));
     if (input.guidance.includes("模拟失败")) throw new Error("伪模型失败");
+    if (input.guidance.includes("长方案验收")) return {
+      understanding:input.guidance,
+      actions:Array.from({length:9},(_,i)=>`第${i+1}项：按原指导准备并观察，不假设成功。`),
+      adjustment:"根据现场反应调整，用户原文优先。",
+    };
     return {
       understanding: input.autonomous ? "自主选择通行策略" : input.guidance,
       actions: ["先观察入口附近的设施与队伍", "根据现场情况选择路线"],

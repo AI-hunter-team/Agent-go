@@ -61,7 +61,7 @@ describe("creative strategy boundaries", () => {
     expect(prompt.rules).not.toContain("## 系统默认指导");
     expect(prompt.rules).toContain("以原始指导为准");
     expect(prompt.guidance).toContain("normalized 是辅助整理，不能覆盖或改写原意");
-    expect(JSON.parse(prompt.guidance.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken });
+    expect(JSON.parse(prompt.guidance.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken, sourceRequirements: [{ id: "r1", text: guidance, start: 0, end: guidance.length }] });
     const defaults = buildSystemPrompt("", null);
     expect(defaults.rules).toContain(GAME_OBJECTIVE);
     expect(defaults.rules).not.toContain("正常、守序地通过车站：先买票");
@@ -92,9 +92,12 @@ describe("creative strategy boundaries", () => {
     const plan = { understanding: text, actions: ["先寻找可见目标，再按原策略尝试"], adjustment: "按公开反馈调整，不预设成功" };
     const normalized = { ...preserved, summary: text, rules: [text] };
     const { service, requests } = fake([jsonResponse(plan), jsonResponse(normalized)]);
-    expect(await service.prepareJourney({ sceneId: "metro", seed: 1, settings: { timeLimitSeconds: 150, extraQueuePeople: 3 }, guidance: text, autonomous: false, runId: "game-strategy" })).toEqual(plan);
+    expect(await service.prepareJourney({ sceneId: "metro", seed: 1, settings: { timeLimitSeconds: 150, extraQueuePeople: 3 }, guidance: text, autonomous: false, runId: "game-strategy" })).toMatchObject(plan);
     expect(await service.normalize(text)).toEqual(normalized);
-    expect(requests.map(r => r.body.instructions)).toEqual([buildJourneySystem(150), GUIDANCE_SYSTEM]);
+    expect(requests[0].body.instructions.startsWith(buildJourneySystem(150) + "\n")).toBe(true);
+    expect(requests[0].body.instructions).toContain("原文为权威");
+    expect(requests[0].body.instructions).not.toContain("各字段及行动均不超过1000字符");
+    expect(requests[1].body.instructions).toBe(GUIDANCE_SYSTEM);
     for (const { body } of requests) {
       expect(body.instructions.startsWith(SAFETY_SYSTEM_PROMPT)).toBe(true);
       expect(body.instructions).toContain(PLAYER_STRATEGY_RULES);
@@ -126,13 +129,17 @@ describe("creative strategy boundaries", () => {
     const engine = new Engine(1);
     engine.player.pos = { x: 43, y: 15 };
     engine.player.screened = true;
+    // Preserve the requested stealth condition: this case tests a feasible attempt,
+    // not permission to vault while a visible guard is watching the player.
+    for (const guard of engine.guards.guards) guard.facing = Math.PI;
+    engine.guards.guards[0].pos = { x: 41, y: 15 };
     const runner = new GameRunner(engine, {
       kind: "llm", decide: (turn) => service.decide(session, turn), dispose: async () => {},
     }, offlineClassifier, { guidance, normalizedGuidance: mistaken });
     runner.start();
     await runner.pending;
     expect(instructions).toContain("以原始指导为准");
-    expect(JSON.parse(messages[0].content.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken });
+    expect(JSON.parse(messages[0].content.split("\n").at(-1)!)).toEqual({ guidance, normalized: mistaken, sourceRequirements: [{ id: "r1", text: guidance, start: 0, end: guidance.length }] });
     expect(runner.decisions[0]).toMatchObject({ action: { type: "act" }, result: { ok: true } });
     expect(engine.player.hasTicket).toBe(false);
     expect(engine.player.activity).toMatchObject({ kind: "acting", op: "vault" });

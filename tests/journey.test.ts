@@ -1,7 +1,7 @@
 import { createdWorld } from "../src/ui/worldCreation";
 import { generateWorld, descriptor } from "../src/sim/worldDefinition";
 import { afterEach, expect, test, vi } from "vitest";
-import type { Server } from "node:http";
+import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createApp, type LlmService } from "../server/app";
 import { SessionStore } from "../server/sessions";
@@ -29,6 +29,25 @@ afterEach(() => {
   server?.close();
   vi.restoreAllMocks();
 });
+// OS-assigned test ports may be on fetch's browser unsafe-port list. These tests
+// exercise a loopback HTTP server, so use Node's HTTP transport without that list.
+function postJson(path: string, body: unknown, headers: Record<string, string> = {}) {
+  const port = (server.address() as AddressInfo).port;
+  return new Promise<{ status: number; body: any }>((resolve, reject) => {
+    const req = request({ hostname: "127.0.0.1", port, path, method: "POST", headers: { "content-type": "application/json", ...headers } }, res => {
+      const chunks: Buffer[] = [];
+      res.on("data", chunk => chunks.push(Buffer.from(chunk)));
+      res.on("error", reject);
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode!, body: JSON.parse(Buffer.concat(chunks).toString("utf8")) }); }
+        catch (error) { reject(error); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(10_000, () => req.destroy(new Error("Loopback test request timed out")));
+    req.end(JSON.stringify(body));
+  });
+}
 async function start() {
   const prepareJourney = vi.fn(async () => plan);
   const llm: LlmService = {
@@ -41,17 +60,7 @@ async function start() {
   const sessions = new SessionStore();
   server = createApp({ llm, sessions }).listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
-  const call = async (path: string, body: unknown) => {
-    const res = await fetch(
-      `http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    );
-    return { status: res.status, body: await res.json() };
-  };
+  const call = postJson;
   return { call, sessions, prepareJourney };
 }
 test("autonomous preparation calls model with public inputs and session inherits the returned plan", async () => {
@@ -97,7 +106,7 @@ test.each(["先观察乘客再尝试掏票，不买票", "抢票，避开保安�
   const prepared = await call("/api/journey/prepare", guided);
   expect(prepared.status).toBe(200);
   expect(prepareJourney).toHaveBeenCalledWith(guided);
-  expect(prepared.body.plan).toEqual(strategyPlan);
+    expect(prepared.body.plan).toMatchObject(strategyPlan);
   expect(prepared.body.normalized).toMatchObject({ summary: guidance, rules: [guidance], notExecutable: [], initialPlan: [...strategyPlan.actions, strategyPlan.adjustment] });
   const session = await call("/api/session", { ...guided, preparationId: prepared.body.id });
   expect(session.status).toBe(200);
@@ -157,7 +166,7 @@ test("invalid preparation is rejected before calling model", async () => {
   }
   expect(prepareJourney).not.toHaveBeenCalled();
 });
-test("preparation rejects model plans that exceed session limits before returning an id", async () => {
+test("long initial proposals remain complete and are independent of legacy session summaries", async () => {
   const { call, prepareJourney, sessions } = await start();
   for (const invalid of [
     { ...plan, understanding: "x".repeat(1001) },
@@ -166,15 +175,27 @@ test("preparation rejects model plans that exceed session limits before returnin
   ]) {
     prepareJourney.mockResolvedValueOnce(invalid);
     const prepared = await call("/api/journey/prepare", input);
-    expect(prepared.status).toBe(502);
-    expect(prepared.body.id).toBeUndefined();
-    expect(sessions.size).toBe(0);
+    expect(prepared.status).toBe(200);
+    expect(prepared.body.plan.understanding).toBe(invalid.understanding);
+    expect(prepared.body.plan.actions).toEqual(invalid.actions);
+    const started=await call("/api/session",{...input,preparationId:prepared.body.id});
+    expect(started.status).toBe(200);
+    expect(sessions.get(started.body.sessionId)?.journeyPlan?.actions).toEqual(invalid.actions);
   }
   prepareJourney.mockResolvedValueOnce({ ...plan, understanding: "x".repeat(1000), adjustment: "y".repeat(1000) });
   const prepared = await call("/api/journey/prepare", input);
   expect(prepared.status).toBe(200);
   expect((await call("/api/session", { ...input, preparationId: prepared.body.id })).status).toBe(200);
 });
+test("a planning provider error yields an explicitly labeled basic proposal with the original guidance",async()=>{
+  const {call,prepareJourney}=await start();
+  prepareJourney.mockRejectedValueOnce(new Error("fixture provider unavailable"));
+  const raw="想办法引开保安注意翻越栏杆。不买票。直接抢有票乘客的票";
+  const result=await call("/api/journey/prepare",{...input,autonomous:false,guidance:raw});
+  expect(result.status).toBe(200);expect(result.body.plan.preparation.source).toBe("default");
+  expect(result.body.plan.sourceGuidance).toBe(raw);expect(result.body.debug.planning.problem).toBe("fixture provider unavailable");
+});
+
 test("a session creation failure does not consume a valid preparation", async () => {
   const { call, sessions } = await start();
   const prepared = await call("/api/journey/prepare", input);
@@ -245,11 +266,9 @@ test("Responses planning returns actual structured sections and receives no hidd
   expect(payload).not.toContain("observation");
   expect(requests[0].body.text.format.name).toBe("journey_plan");
   expect(requests[0].body.instructions).toContain("在 180 秒（世界时间）内实际登上地铁");
-  await expect(
-    fake([jsonResponse({ ...plan, actions: [] })]).service.prepareJourney(
-      input,
-    ),
-  ).rejects.toThrow();
+  const supplemented=await fake([jsonResponse({ ...plan, actions: [] })]).service.prepareJourney(input);
+  expect(supplemented.actions.length).toBeGreaterThan(0);
+  expect(supplemented.preparation?.source).toBe("adapted");
 });
 
 test("a no-backpack plan binds the same loadout to the eventual model session", async () => {
@@ -288,20 +307,7 @@ test("changing enabled model under the same token invalidates the old preparatio
     sessions: new SessionStore(),
   }).listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
-  const call = async (path: string, body: unknown) => {
-    const res = await fetch(
-      `http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-model-config": "fixture-token",
-        },
-        body: JSON.stringify(body),
-      },
-    );
-    return { status: res.status, body: await res.json() };
-  };
+  const call = (path: string, body: unknown) => postJson(path, body, { "x-model-config": "fixture-token" });
   const prepared = await call("/api/journey/prepare", input);
   config.llm = modelB;
   expect(

@@ -124,6 +124,14 @@ export class DialogueSystem {
       ok: false,
       text: "没有待处理对话"
     };
+    if (response?.source === "error") {
+      const result = {ok:false,text:"乘客答复暂不可用（接口异常，不代表拒绝，也不消耗对话轮数）；可稍后重试或继续其他行动"};
+      this.bus.endAct(this.world.player!.id);
+      this.pendingDialogue = null;
+      this.world.log("dialogue_error",result.text,true);
+      this.onComplete?.(result);
+      return result;
+    }
     const {
         step
       } = pending,
@@ -141,7 +149,7 @@ export class DialogueSystem {
       const give = response.give ? this.world.items.holdings(npc.id).find(i => i.kind === response.give && !i.used) : undefined;
       if (response.give && !give) error = "对方没有持有回复中承诺的物品";
       if (step.goal === "ask_ticket" && response.give !== "ticket") error = "索票回复未包含真实车票";
-      if (["chat", "yield", "persuade"].includes(step.goal) && response.give) error = "这次对话目标不包含物品交付";
+      if (step.goal === "yield" && response.give) error = "让位对话不包含物品交付，请明确赠送或交换意图";
       if (step.goal === "trade" && !give) error = "交换必须包含对方的实际物品";
       if (step.goal === "yield" || step.goal === "bribe" && !give) error = error ?? this.validateYield?.(npc.id) ?? null;
       if (!error) {
@@ -206,9 +214,11 @@ export class DialogueSystem {
 }
 export function offlineNpcResponse(request: NpcDialogueRequest): NpcResponse {
   const traits = request.npc.traits;
-  const accept = request.goal === "chat" || request.goal === "trade" && request.offer !== null || request.goal === "yield" && request.npc.situation.hurry < .5 && traits.fairness < .7 || request.goal === "ask_ticket" && traits.vanity > .75 && request.npc.situation.hurry < .4;
+  const askingTicket = request.goal === "ask_ticket" || request.goal === "persuade" && /票|ticket/i.test(request.message);
+  const helpful = .45 * (1 - request.npc.situation.hurry) + .35 * (1 - traits.temper) + .2 * traits.vanity > .7;
+  const accept = request.goal === "chat" || request.goal === "trade" && request.offer !== null || request.goal === "yield" && request.npc.situation.hurry < .5 && traits.fairness < .7 || askingTicket && helpful;
   const threatened = request.goal === "threaten" && traits.courage < .4;
-  const give = (request.goal === "ask_ticket" || request.goal === "trade" || threatened) && request.npc.holdings.includes("ticket") ? "ticket" : null;
+  const give = (askingTicket || request.goal === "trade" || threatened) && request.npc.holdings.includes("ticket") ? "ticket" : null;
   return {
     reply: accept ? "可以，请尽快。" : threatened ? "拿去，别靠近。" : "不行，我也需要赶路。",
     decision: threatened ? "comply_under_threat" : accept ? "accept" : "refuse",

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Api } from "../agent/remoteAgent";
+import { loadLocalModel } from "../agent/localModel";
 import { isReasoningEffort, type ReasoningEffort } from "../shared/modelConfig";
 
 interface Props {
@@ -11,12 +12,13 @@ interface Props {
 
 /** 配置模型与思考档位；重新启用只影响之后创建的对局。 */
 export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返回开局设置" }: Props) {
-  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
-  const [apiKey, setApiKey] = useState("");
+  const [saved] = useState(loadLocalModel);
+  const [baseUrl, setBaseUrl] = useState(saved?.baseUrl ?? "https://api.deepseek.com");
+  const [apiKey, setApiKey] = useState(saved?.apiKey ?? "");
   const [showKey, setShowKey] = useState(false);
   const [verified, setVerified] = useState<{ token: string; models: string[] } | null>(null);
-  const [model, setModel] = useState("");
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("none");
+  const [model, setModel] = useState(saved?.model ?? "");
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(saved?.reasoningEffort ?? "none");
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState<"verify" | "enable" | "clear" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
       pendingToken.current = result.token;
       setBaseUrl(result.baseUrl);
       setVerified(result);
-      setModel(health.model && result.models.includes(health.model) ? health.model : result.models.includes("deepseek-flash") ? "deepseek-flash" : result.models.length === 0 ? "deepseek-flash" : "");
+      setModel(saved?.model && (!result.models.length || result.models.includes(saved.model)) ? saved.model : health.model && result.models.includes(health.model) ? health.model : result.models.includes("deepseek-flash") ? "deepseek-flash" : result.models.length === 0 ? "deepseek-flash" : "");
       setManual(result.models.length === 0);
       setApiKey("");
     } catch (e) { setError((e as Error).message); }
@@ -140,7 +142,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
           </label>
           <small className="muted">重新启用后用于新对局；档位不代表固定思考长度。</small>
           <p className="muted">模型列表不代表账号拥有调用权限；图片模型不能驱动角色。启用时会进行一次真实工具调用，验证模型权限和兼容性，可能消耗少量 API 额度。</p>
-          <button className="primary" disabled={busy !== null || !model.trim() || enabled} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型并启用大模型"}</button>
+          <button className="primary" disabled={busy !== null || !model.trim() || enabled} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型、启用并保存本地"}</button>
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}
@@ -148,8 +150,8 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
         <p>返回开局设置，填写指导后即可开始。</p>
         <div className="row"><button className="primary" onClick={onClose}>去开局</button><button onClick={invalidate}>更换配置</button></div>
       </div>}
-      <p className="muted small">Key 不写入浏览器存储或 .env 文件。刷新页面后需重新填写；临时配置闲置 30 分钟后失效。</p>
-      {health.llm && <button className="ghost" disabled={busy !== null} onClick={() => void clear()}>{busy === "clear" ? "正在清除…" : "清除页面配置"}</button>}
+      <p className="muted small">启用后将地址、密钥、模型和思考设置保存到当前浏览器，刷新自动恢复有效连接；会话过期后保留填写内容。清除页面配置也会删除本地保存。</p>
+      {(health.llm || saved) && <button className="ghost" disabled={busy !== null} onClick={() => void clear()}>{busy === "clear" ? "正在清除…" : "清除本地保存与页面配置"}</button>}
     </section>
   );
 }

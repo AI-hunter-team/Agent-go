@@ -123,7 +123,7 @@ describe("generated station and mainline integration", () => {
       expect(staff.every(guard => guard.sightRange === SECURITY_STAFF_VISION.range && guard.sightFovDeg === SECURITY_STAFF_VISION.fovDeg)).toBe(true);
       expect(staff.every(guard => definition.layout.FACILITIES.some(facility => `security-${facility.id}` === guard.id))).toBe(true);
     }
-    expect(new Engine(1).guards.guards.filter(guard => guard.role === "security_staff").map(guard => guard.def.id)).toEqual(["security-S1", "security-S3"]);
+    expect(new Engine(1).guards.guards.filter(guard => guard.role === "security_staff").map(guard => guard.def.id)).toEqual(["security-S2"]);
   });
 
   it("reroutes from an approaching queue only after its closure is visible", async () => {

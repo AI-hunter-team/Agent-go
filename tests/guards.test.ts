@@ -146,7 +146,7 @@ describe("guards", () => {
   });
 
   test("security staff use a local scanning cone instead of patrol guard coverage", () => {
-    const gs = new GuardSystem([SECURITY_STAFF[1]]);
+    const gs = new GuardSystem([{ ...SECURITY_STAFF[0], route: [{ x: 28.5, y: 12.5 }], facing: Math.PI, speed: 0 }]);
     const staff = gs.guards[0];
     expect(staff.def.sightRange).toBe(SECURITY_STAFF_VISION.range);
     expect(staff.def.sightFovDeg).toBe(SECURITY_STAFF_VISION.fovDeg);

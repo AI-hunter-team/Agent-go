@@ -216,10 +216,14 @@ describe("action executor lifecycle", () => {
     e.executor.start(plan({
       op: "drop",
       itemId: coin.id,
-      mode: "throw"
+      mode: "throw",
+      atPosition: { x:e.player.pos.x+1, y:e.player.pos.y }
     }));
     advance(e, 1);
-    expect(e.events.events.find(v => v.kind === "item_thrown")?.loudness).toBe(6);
+    expect(e.events.events.find(v => v.kind === "item_thrown")?.loudness).toBe(0);
+    expect(coin.location.type).toBe("flight");
+    for(let tick=0;tick<6;tick++) e.step();
+    expect(e.events.events.find(v => v.kind === "item_dropped" && v.itemId === coin.id && v.trajectory)?.loudness).toBe(6);
     expect(e.executor.start(plan({
       op: "drop",
       itemId: coin.id,
@@ -273,6 +277,11 @@ describe("action executor lifecycle", () => {
       });
       n.facing = 0;
       n.persona!.traits.courage = 0;
+      if (op === "strike") {
+        // Exercise the defended contest; surprise is tested separately in instructionPipeline.
+        const warning=e.events.emit({t:e.t,kind:"odd_behaviour",severity:"suspicious",actorId:"player",targetId:n.id,pos:{...e.player.pos},loudness:0});
+        e.alerts.records.set(JSON.stringify([n.id,"player"]),{observerId:n.id,subjectId:"player",level:"yellow",ring:0,hiddenFor:0,since:e.t,causeEventId:warning.id,reaction:null});
+      }
       const ticket = e.world.items.holdings(n.id)[0];
       const step: PlanStep = op === "snatch" ? {
         op,
@@ -294,7 +303,11 @@ describe("action executor lifecycle", () => {
         expect(e.player.hasTicket).toBe(true);
         expect(ticket.ownerId).toBe(n.id);
       }
-      if (ok && op === "strike") expect(n.incapacitated).toBe(20);
+      if (ok && op === "strike") {
+        const hit = e.events.events.find(v=>v.kind==="knockout");
+        // This helper advances only the executor, so world wake timers do not tick.
+        expect(n.incapacitated).toBe(hit ? 20 : 0);
+      }
       if (ok && op === "push") expect(n.pos.x).toBeGreaterThan(8);
       if (!ok) expect(e.events.events.some(v => v.kind === "argument")).toBe(true);
     }
@@ -438,7 +451,8 @@ describe("action executor lifecycle", () => {
       if (e.guards.guards[0].incapacitated > 0) {
         found = true;
         expect(e.status).toBe("running");
-        expect(e.guards.guards[0].incapacitated).toBe(20);
+        const hit=e.events.events.find(v=>v.kind==="knockout")!;
+        expect(e.guards.guards[0].incapacitated).toBeCloseTo(20-(e.t-hit.t));
       }
     }
     expect(found).toBe(true);
@@ -456,7 +470,7 @@ describe("action executor lifecycle", () => {
     }], [{
       op: "approach",
       target: null
-    }], Array(5).fill({
+    }], Array(9).fill({
       op: "wait",
       seconds: 1
     })]) expect(e.executor.start({

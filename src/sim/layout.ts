@@ -59,7 +59,7 @@ export const BLACKOUT_SWITCH_REACH = 1.5;
 
 export const ITEM_SPOTS: ItemSpot[] = [
   ...[6,15,24].map((y,i) => ({id:`confiscated-S${i+1}`,label:`${i+1}号安检保管处`,pos:{x:26,y:y+.7},stock:[],takeSeconds:1.5})),
-  { id: "convenience", label: "售票厅便利架", pos: { x: 7, y: 3 }, stock: ["newspaper", "snack", "water_bottle"], takeSeconds: 1.5 },
+  { id: "convenience", label: "售票厅便利架", pos: { x: 7, y: 3 }, stock: ["can", "snack", "water_bottle"], takeSeconds: 1.5 },
   { id: "vending", label: "安检后饮水架", pos: { x: 30, y: 27 }, stock: ["water_bottle"], takeSeconds: 1.5 },
   { id: "lost-property", label: "长椅旁失物", pos: { x: 8, y: 27 }, stock: ["umbrella"], takeSeconds: 1.5 },
 ];

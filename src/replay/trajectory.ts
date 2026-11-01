@@ -1,6 +1,7 @@
 import type { DecisionRecord, GameReport, Vec, TrailPoint } from "../shared/types";
 
 export type ReplayPosition=Vec & Partial<Pick<TrailPoint,"connector"|"connectorId"|"entranceId"|"progress">>;
+import type { ReplayMotionFrame, WorldReviewSnapshot } from "../shared/review";
 
 export interface ReplayFrame {
   t: number;
@@ -10,9 +11,28 @@ export interface ReplayFrame {
   events?: GameReport["worldEvents"];
   alerts?: GameReport["alerts"];
   items?: GameReport["items"];
+  world?: WorldReviewSnapshot;
+  motion?: ReplayMotionFrame;
 }
 
-export function getReplayFrame(report: Pick<GameReport, "elapsed" | "trail" | "decisions" | "worldEvents" | "alerts" | "items">, time: number): ReplayFrame {
+function historical<T extends {t:number}>(frames:T[],t:number):{before:T;after:T;fraction:number}|undefined {
+  let index=frames.length-1;while(index>=0 && frames[index].t>t+1e-9)index--;if(index<0)return;
+  const before=frames[index],after=frames[index+1]??before;
+  return {before,after,fraction:after.t>before.t?Math.max(0,Math.min(1,(t-before.t)/(after.t-before.t))):0};
+}
+function motionAt(frames:ReplayMotionFrame[],t:number):ReplayMotionFrame|undefined {
+  const pair=historical(frames,t);if(!pair)return;
+  const {before,after,fraction:a}=pair;
+  const lerp=(p:Vec,q:Vec)=>({...p,x:p.x+(q.x-p.x)*a,y:p.y+(q.y-p.y)*a});
+  return {t,guards:before.guards.map(g=>{const next=after.guards.find(n=>n.id===g.id)??g;return {...g,position:lerp(g.position,next.position),facing:g.facing+Math.atan2(Math.sin(next.facing-g.facing),Math.cos(next.facing-g.facing))*a};}),
+    items:before.items.map(i=>{
+      if(i.trajectory){const f=i.trajectory,b=Math.max(0,Math.min(1,(t-f.startedAt)/(f.landsAt-f.startedAt)));return {...i,position:{...f.from,x:f.from.x+(f.to.x-f.from.x)*b,y:f.from.y+(f.to.y-f.from.y)*b}};}
+      const next=after.items.find(n=>n.id===i.id);
+      return {...i,position:i.holderId&&next?.holderId===i.holderId?lerp(i.position,next.position):{...i.position}};
+    })};
+}
+
+export function getReplayFrame(report: Pick<GameReport, "elapsed" | "trail" | "decisions" | "worldEvents" | "alerts" | "items" | "worldSnapshots" | "replayMotion">, time: number): ReplayFrame {
   const t = Math.min(Math.max(0, report.elapsed), Math.max(0, Number.isFinite(time) ? time : 0));
   const samples = report.trail.map((point, index) => ({ ...point, t: point.t ?? index * 0.5 }));
   let position: ReplayPosition | null = null;
@@ -34,5 +54,5 @@ export function getReplayFrame(report: Pick<GameReport, "elapsed" | "trail" | "d
   }
   let decision: DecisionRecord | null = null;
   for (const record of report.decisions) if (record.t <= t) decision = record;
-  return { t, position, trail, decision, ...(report.worldEvents ? {events: report.worldEvents.filter(e => e.t <= t)} : {}), ...(report.alerts ? {alerts: report.alerts.filter(e => e.t <= t)} : {}), ...(report.items ? {items: report.items.filter(e => e.t <= t)} : {}) };
+  return { t, position, trail, decision, world:historical(report.worldSnapshots??[],t)?.before,motion:motionAt(report.replayMotion??[],t), ...(report.worldEvents ? {events: report.worldEvents.filter(e => e.t <= t)} : {}), ...(report.alerts ? {alerts: report.alerts.filter(e => e.t <= t)} : {}), ...(report.items ? {items: report.items.filter(e => e.t <= t)} : {}) };
 }

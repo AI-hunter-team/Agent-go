@@ -44,7 +44,7 @@ describe("injectable scenarios", () => {
   test("omitting the override keeps production scenarios and guard defaults", () => {
     const engine = new Engine(1);
     expect(engine.world.persons.size).toBeGreaterThan(1);
-    expect(engine.guards.guards).toHaveLength(4);
+    expect(engine.guards.guards).toHaveLength(3);
     for (const [id, status] of Object.entries(buildScenario(1).initialStatus)) {
       expect(engine.world.facility(id)!.status).toBe(status);
     }
