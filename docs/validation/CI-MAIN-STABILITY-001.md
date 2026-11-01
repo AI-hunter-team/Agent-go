@@ -1,6 +1,6 @@
 # CI-MAIN-STABILITY-001 验证报告
 
-状态：实现及本地软件检查完成，远端待验证；最终PR及main检查待完成，不把旧PR成功当作主线成功。任务见[简报](../tasks/CI-MAIN-STABILITY-001.md)。
+状态：两轮实现及本地软件检查完成；首轮PR的Windows展厅已通过、难度会话检查超时，第二轮PR及main检查待完成，不把旧PR成功当作主线成功。任务见[简报](../tasks/CI-MAIN-STABILITY-001.md)。
 
 ## 版本与故障
 
@@ -22,3 +22,11 @@
 - 本地文档审计范围为本简报、验证及索引/中央记录：检查相对目标存在性，未把它当成仓库已有npm检查命令或外部链接验证。
 - 纯测试组织变化，生产页面/游戏路径未改，浏览器、真实模型和新性能复验不适用；人工审查未进行。
 - 实现、本地软件、远端PR检查、已合入及main复跑分别以实际结果追加，目标为确认最终main CI成功。无部署、付费模型、生产数据或用户世界变更。
+
+## PR #72 第二轮修复（2026-11-01）
+
+- 首轮提交 `8804f0b6ecf980fdf402ed6601c252cf68a7eaa4` 的 [CI 41260146057](https://github.com/AI-hunter-team/Agent-go/actions/runs/41260146057)：Ubuntu成功；Windows展厅157项全部通过，但 `difficultySession` 的预览/启动/重试设置保持用例17.499秒超时，其余1157项通过，Windows整套355.36秒。此失败保留，不把第一轮本地通过当作远端恢复。
+- 该用例原为设置保持检查而等待整局自然结束。改为等待同一离线Agent的初次请求、推进真实tick再主动停止，读取结束报告，并新增phase已结束和elapsed大于0的断言；原种子、设置及预览/启动/报告/重试断言保留。该用例现在验证主动结束路径，不宣称仍覆盖自然结束；`difficulty.test.ts` 的真实截止结算及 `gameSession.test.ts` 六组完整双对局报告对照保持原样。
+- 第二轮专项：`npm test -- tests/difficultySession.test.ts tests/difficulty.test.ts tests/showroom.test.ts --maxWorkers=2 --testTimeout=15000`，3文件/174项通过；难度会话3项31毫秒，自然截止等难度14项427毫秒，展厅157项3.696秒。
+- 第二轮完整检查：`npm run typecheck`通过；`npm test -- --maxWorkers=2 --testTimeout=15000`：112文件/1158项通过，93.67秒；`npm run build`通过。所有测试超时、并发和CI工作流不变。diff、暂存及本地文档目标检查在提交前执行。
+- 变更限定为测试与任务记录，未修改生产代码、游戏规则、依赖或资产。最终合入SHA、PR及main CI实际结果在 [PR #72](https://github.com/AI-hunter-team/Agent-go/pull/72) 中追加，仓库本报告为第二轮推送前快照。
