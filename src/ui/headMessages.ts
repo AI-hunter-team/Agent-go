@@ -52,7 +52,7 @@ export function getHeadMessageDeadlines(session: GameSession, nowMs = performanc
   return lifetimes.get(session)?.deadlines ?? [];
 }
 
-/** One foreground utterance and at most two background indicators, timed in real milliseconds. */
+/** Foreground dialogue takes priority over returned decisions; messages expire in real milliseconds. */
 export function getSessionHeadMessage(session: GameSession, actorId: string, mode: HeadMessageMode, phase?: HeadMessageInput["phase"], nowMs = performance.now()): HeadMessage | null {
   if (mode === "hidden") return null;
   let lifetime = lifetimes.get(session);
@@ -94,10 +94,18 @@ export function getSessionHeadMessage(session: GameSession, actorId: string, mod
   if (lifetime.seen.size > 256) lifetime.seen.delete(lifetime.seen.keys().next().value!);
   const expiresAt = (candidate: SceneSpeech) => lifetime.seen.get(candidate.key)! + (candidate.key === latest?.key && candidate.foreground ? 4000 : 2500);
   const visible = selected.filter(candidate => nowMs < expiresAt(candidate));
-  lifetime.deadlines = [...new Set(visible.map(expiresAt))].sort((a, b) => a - b);
+  const decision = session.runner?.phase === "running" ? session.runner.decisions.at(-1) : undefined;
+  const decisionKey = `decision:${decision?.index}`;
+  const decisionText = decision?.thinking?.trim() || decision?.action?.reason.trim();
+  const currentDecision = decision && decisionText && recent(decision.t, decisionKey);
+  if (currentDecision && !lifetime.seen.has(decisionKey)) lifetime.seen.set(decisionKey, nowMs);
+  const decisionDeadline = currentDecision ? lifetime.seen.get(decisionKey)! + 4000 : 0;
+  const decisionVisible = nowMs < decisionDeadline;
+  lifetime.deadlines = [...new Set([...visible.map(expiresAt), ...(decisionVisible ? [decisionDeadline] : [])])].sort((a, b) => a - b);
   const own = visible.find(candidate => candidate.actorId === actorId);
   if (own) return { kind: "speech", text: mode === "full" && own.key === latest?.key && own.foreground ? short(own.text) : null, pending: false };
   if (actorId !== "player" || visible.some(candidate => candidate.foreground)) return null;
   if (phase) return { kind: "thought", text: null, pending: phase === "thinking" };
+  if (decisionVisible) return { kind: "thought", text: mode === "full" ? decisionText! : null, pending: false };
   return null;
 }

@@ -29,6 +29,7 @@ export function DialogueDock({ session }: { session: GameSession }) {
   const turns = getConversationTurns(session), current = turns.at(-1);
   const key = `${session.generation}:${current?.id}:${current?.status}`;
   const speechRevision = session.presentation.current.speech.map(line => `${line.speakerId}:${line.t}:${line.text}`).join("|");
+  const decisionRevision = `${session.runner?.phase}:${session.runner?.decisions.at(-1)?.index}`;
   const [idleKey, setIdleKey] = useState("");
   const [manual, setManual] = useState<{ key: string; collapsed: boolean } | null>(null);
   const dock = useRef<HTMLElement>(null);
@@ -45,7 +46,7 @@ export function DialogueDock({ session }: { session: GameSession }) {
     };
     schedule();
     return () => clearTimeout(timer);
-  }, [session, session.generation, key, speechRevision]);
+  }, [session, session.generation, key, speechRevision, decisionRevision]);
   useEffect(() => {
     if (!current || current.status === "pending") return;
     const timer = setTimeout(() => {
