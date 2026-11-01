@@ -99,13 +99,13 @@ export const GUARDS: GuardDef[] = [
 ];
 
 export const SECURITY_STAFF: GuardDef[] = [
-  { id: "security-S1", label: "1号安检员", role: "security_staff", route: [{ x: 28.5, y: 3.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
-  { id: "security-S2", label: "2号安检员", role: "security_staff", route: [{ x: 28.5, y: 12.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
-  { id: "security-S3", label: "3号安检员", role: "security_staff", route: [{ x: 28.5, y: 26.5 }], facing: Math.PI, speed: 0.9, pauseSeconds: 0, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
+  // One roaming officer replaces three permanent west-facing sight cones.
+  // Kept on the concourse side: actual collision, noise, watch and return logic still applies.
+  { id: "security-S2", label: "安检巡逻员", role: "security_staff", route: [{ x: 28.5, y: 4.5 }, { x: 28.5, y: 25.5 }], facing: Math.PI / 2, speed: 0.9, pauseSeconds: 2, sightRange: SECURITY_STAFF_VISION.range, sightFovDeg: SECURITY_STAFF_VISION.fovDeg },
 ];
 
 /** Production balance: the middle lane remains usable, but its service still works normally. */
-export const SECURITY_STAFF_BALANCED: GuardDef[] = [SECURITY_STAFF[0], SECURITY_STAFF[2]];
+export const SECURITY_STAFF_BALANCED: GuardDef[] = [...SECURITY_STAFF];
 
 export interface NpcSpawn {
   t: number;
@@ -168,14 +168,16 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}, l
   const brokenGate = failures.pick(FACILITIES.filter((f) => f.kind === "gate"));
   const brokenTvm = failures.pick(FACILITIES.filter((f) => f.kind === "tvm"));
   const tvmFailureTime = 20 + Math.floor(failures.range(0, 21));
-  // A separate stream preserves the existing gate/TVM schedule for saved seeds.
-  const securityEvents = failures.fork("security-closure");
-  const securityLanes = FACILITIES.filter((f) => f.kind === "security");
-  const closedSecurity = securityEvents.pick(securityLanes);
-  const recheckSecurity = closedSecurity.id === "S2"
-    ? securityEvents.pick(securityLanes.filter((f) => f.id !== closedSecurity.id)).id
-    : "S2";
-  const initialStatus: Record<string, FacilityStatus> = { [brokenGate.id]: "broken" };
+  const initialStatus: Record<string, FacilityStatus> = failures.chance(.5) ? { [brokenGate.id]: "broken" } : {};
+  const events: Scenario["events"] = [];
+  if (failures.chance(.5)) events.push({t:tvmFailureTime,type:"status",facility:brokenTvm.id,status:"broken",note:"故障停用",broadcast:null});
+  if (failures.chance(.5)) {
+    const security = failures.pick(FACILITIES.filter(f=>f.kind==="security"));
+    events.push({t:35+Math.floor(failures.range(0,26)),type:"status",facility:security.id,status:"closed",note:"临时停用",broadcast:`广播：${security.label}临时停用，请排队乘客改走其他安检通道。`});
+  }
+  const closedSecurity = events.find(e => e.type === "status" && e.status === "closed");
+  const recheckLanes = FACILITIES.filter(f => f.kind === "security" && !(closedSecurity && "facility" in closedSecurity && f.id === closedSecurity.facility));
+  if (failures.chance(.5) && recheckLanes.length) events.push({t:50+Math.floor(failures.range(0,26)),type:"recheck",facility:failures.pick(recheckLanes).id,extra:[10,15]});
   const crowd = new Rng(seed ^ 0x4d43f9a1);
   for (const f of FACILITIES) {
     if (initialStatus[f.id] && initialStatus[f.id] !== "open") continue;
@@ -189,18 +191,8 @@ export function buildScenario(seed: number, input: Partial<GameSettings> = {}, l
     initialStatus,
     // A gate that starts broken must not receive the original starting crowd either.
     spawns: spawns.filter((s) => !s.startQueue || !initialStatus[s.startQueue] || initialStatus[s.startQueue] === "open"),
-    events: [
-      { t: tvmFailureTime, type: "status", facility: brokenTvm.id, status: "broken", note: "故障停用", broadcast: null },
-      {
-        t: 40,
-        type: "status",
-        facility: closedSecurity.id,
-        status: "closed",
-        note: "临时停用",
-        broadcast: `广播：${closedSecurity.label}临时停用，请排队乘客改走其他安检通道。`,
-      },
-      { t: 55, type: "recheck", facility: recheckSecurity, extra: [10, 15] },
-    ],
+    // No default outage. Explicit lab scenarios may still test power/recovery.
+    events: events.sort((a,b)=>a.t-b.t),
   };
 }
 

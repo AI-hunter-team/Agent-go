@@ -1,7 +1,7 @@
 import * as legacyLayout from "./layout";
 import type { StationLayout } from "../shared/world";
-import type { FacilityObservation, Observation, Vec } from "../shared/types";
-import { compass, dist, lineOfSight } from "./geometry";
+import type { FacilityObservation, GuardObservation, Observation, Vec } from "../shared/types";
+import { angleDiff, angleTo, compass, dist, lineOfSight } from "./geometry";
 import type { GuardSystem } from "./guards";
 import { BOARDING_INTERVAL, ESCALATOR_SECONDS, STAIRS_SECONDS, ZONE_LABEL } from "./layout";
 import { PROFILES, RULES, multiplierOf } from "./scenario";
@@ -49,6 +49,7 @@ function observeFacility(world: World, f: Facility, from: Vec): FacilityObservat
     queue: visibleQueue.map(traitOf),
     people: visibleQueue.filter((p) => !p.isPlayer).map((p) => ({ id: p.id, trait: traitOf(p), distance: round1(dist(from, p.pos)) })),
     serving: f.serving && serving && playerCanSee(from, serving.pos, world.lightAt, world.layout) ? traitOf(serving) + (f.serving.recheck ? "（复检中）" : "") : null,
+    ...(f.serving && serving && playerCanSee(from,serving.pos,world.lightAt,world.layout) ? {servingPersonId:serving.id} : {}),
     note: f.note,
   };
 }
@@ -95,6 +96,8 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
   const node = world.navigation.nearestNode(p.pos);
   const q = world.queuePosition(p);
   return {
+    ...(world.observedSceneEvents.length ? {recentEvents:structuredClone(world.observedSceneEvents)} : {}),
+    ...(world.personSearch ? {targetSearch:structuredClone(world.personSearch)} : {}),
     t: round1(world.t),
     self: {
       inventory: world.items.holdings(p.id).map((i) => ({ id: i.id, kind: i.kind, slot: world.items.slot(i) })),
@@ -119,6 +122,8 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       distance: round1(dist(p.pos,other.pos)), doing: other.incapacitated ? "倒地不动" : describeActivity(world,other),
       towardYou: other.activity.kind === "reacting" && other.activity.subjectId === p.id ? describeActivity(world,other) : null,
       holding: world.items.holdings(other.id).filter((i) => world.items.slot(i) === "hand").map((i) => i.kind),
+      position:{...other.pos},
+      evidence:structuredClone(world.observedSceneEvents.filter(e=>e.personId===other.id).slice(-6)),
     })),
     facilities: visibleFacilities(world, p.pos).map((f) => observeFacility(world, f, p.pos)),
     attractions: world.layout.ATTRACTIONS.filter(a => p.screened && !p.passedGate && playerCanSee(p.pos, a.approach, world.lightAt, world.layout)).map(a => ({
@@ -131,16 +136,24 @@ export function buildObservation(world: World, guards: GuardSystem): Observation
       { id: "escalator" as const, label: "扶梯", node: "ESCALATOR_TOP", position: world.layout.ESCALATOR_APPROACH, travelSeconds: ESCALATOR_SECONDS,
         queueLength: world.transit.queue.filter(id => { const person = world.persons.get(id); return person && playerCanSee(p.pos, person.pos, world.lightAt, world.layout); }).length, boardingInterval: BOARDING_INTERVAL },
     ]).filter(r => p.passedGate && playerCanSee(p.pos, r.position, world.lightAt, world.layout)).map(r => ({ ...r, position: { ...r.position }, distance: round1(dist(p.pos, r.position)) })),
-    guards: guards.guards
-      .filter((g) => playerCanSee(p.pos, g.pos, world.lightAt, world.layout))
+    guards: observeGuards(world, guards),
+  };
+}
+
+/** Relative sight geometry, without revealing guards outside the character's sight. */
+export function observeGuards(world: World, guards: GuardSystem): GuardObservation[] {
+  const p = world.player!;
+  return guards.guards
+      .filter((g) => playerCanSee(p.pos, g.pos, world.lightAt,world.layout))
       .map((g) => ({
         id: g.def.id,
         doing: g.incapacitated > 0 ? "倒地不动" : g.mode === "watch" ? "盯着目标" : g.mode === "investigate" ? "前往动静处查看" : "巡逻",
         position: { x: round1(g.pos.x), y: round1(g.pos.y) },
         facing: `面朝${compass(g.facing)}`,
         distance: round1(dist(p.pos, g.pos)),
-      })),
-  };
+        sight: { facingDegrees: round1((g.facing * 180 / Math.PI + 360) % 360), directionToYou: compass(angleTo(g.pos, p.pos)),
+          angleToYouDegrees: round1(angleDiff(g.facing, angleTo(g.pos, p.pos)) * 180 / Math.PI), fieldOfViewDegrees: g.def.sightFovDeg??RULES.guardFovDeg, canSeeYou: guards.canSee(g, p.pos) },
+      }));
 }
 
 /** One-line summary for the decision log. */

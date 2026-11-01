@@ -1,4 +1,4 @@
-import type { AgentAction, ActionResult, DecisionUsage, FacilityStatus, GameEvent, GameReport, Observation, TimeBreakdown, Vec } from "./types";
+import type { AgentAction, ActionResult, DecisionUsage, FacilityStatus, GameEvent, GameReport, ItemFlight, ItemKind, Observation, TimeBreakdown, Vec } from "./types";
 import { countChars, guidanceError } from "./guidance";
 
 export interface WorldReviewSnapshot {
@@ -7,6 +7,12 @@ export interface WorldReviewSnapshot {
   facilities: { id: string; status: FacilityStatus; queue: string[]; serving: { personId: string; remaining: number } | null }[];
   guards: { id: string; position: Vec; facing: number }[];
   transit?: { queue: string[]; riders: { id: string; remaining: number }[] };
+}
+/** Post-run display only. Never supplied to the live role or the review model. */
+export interface ReplayMotionFrame {
+  t:number;
+  guards:{id:string;position:Vec;facing:number;mode?:string}[];
+  items:{id:string;kind:ItemKind;position:Vec;holderId:string|null;trajectory?:ItemFlight}[];
 }
 export interface ReviewInput {
   status: "failed";

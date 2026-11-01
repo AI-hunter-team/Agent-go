@@ -4,13 +4,17 @@ import { respond } from "./npcDialogue";
 import type { AgentTurn, CreativeClassification, NormalizedGuidance, Observation, DecisionResult, CutInDialogueRequest, NpcReply } from "../src/shared/types";
 import type { LlmService } from "./app";
 import type { JourneyInput, JourneyPlan } from "../src/shared/journey";
-import { validPlan } from "../src/shared/journey";
+import { guidanceSources } from "../src/shared/guidanceSources";
+import { publicActionKnowledge } from "./actionKnowledge";
+import { adaptJourneyPlan, defaultJourneyPlan } from "./journeyPlanning";
+import { recordPlanningDiagnostic } from "./debug";
 import { normalizeBaseUrl, type ModelSettings } from "./modelSettings";
 import { buildSystemPrompt, renderTurn } from "./prompts";
+import { compactDecisionHistory, decisionStage, prepareDecisionMemory } from "./decisionMemory";
 import type { Session } from "./sessions";
 import { buildJourneySystem, CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, GUIDANCE_SCHEMA, GUIDANCE_SYSTEM, NPC_SCHEMA, NPC_SYSTEM } from "./structured";
 import { agentTools, parseToolUse } from "./tools";
-import { assertSafeText, untrustedData, validateNormalized } from "./security";
+import { assertSafeText, SafetyError, untrustedData, validateNormalized } from "./security";
 import { readResponsesStream } from "./responsesStream";
 import { modelHttpError } from "./modelError";
 import { assertCompleted, parseResponse, responseOutput, responseText, responseThinking, responseUsage, type ModelResponse } from "./responsesTypes";
@@ -53,7 +57,7 @@ export class ResponsesClient {
 /** 只重放协议完整的已知条目；失败输出仍在报告里保留原文。 */
 function rememberResponse(session: Session, response: ModelResponse): string[] {
   const calls = response.output.filter((item) => item.type === "function_call");
-  const ids = new Set(session.responseItems.filter((item) => item.type === "function_call").map((item) => item.call_id));
+  const ids = session.seenCallIds ??= new Set(session.responseItems.filter((item) => item.type === "function_call").map((item) => item.call_id!));
   for (const call of calls) {
     if (typeof call.call_id !== "string" || !call.call_id.trim() || ids.has(call.call_id)
       || typeof call.name !== "string" || !call.name.trim() || typeof call.arguments !== "string") {
@@ -95,19 +99,20 @@ export class ResponsesLlmService implements LlmService {
   async decide(session: Session, turn: AgentTurn): Promise<DecisionResult> {
     const started = Date.now();
     const result: DecisionResult = { action: null, thinking: null, usage: null, model: null, latencyMs: 0, error: null };
-    const content = renderTurn(turn);
+    const content = renderTurn(turn)+"\n"+prepareDecisionMemory(session,turn);
     if (session.pendingCallIds.length) {
       for (const call_id of session.pendingCallIds) session.responseItems.push({ type: "function_call_output", call_id, output: content });
       session.pendingCallIds = [];
     } else {
       session.responseItems.push({ type: "message", role: "user", content });
     }
-    const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings, session.publicMap);
+    const prompt = buildSystemPrompt(session.guidance, session.normalized, session.settings, session.publicMap, session.journeyPlan);
+    const earlierFacts = compactDecisionHistory(session);
     let currentCalls: string[] = [];
     try {
       const response = await this.client.create({
         ...this.parameters(), instructions: prompt.rules,
-        input: [{ type: "message", role: "user", content: prompt.guidance }, ...session.responseItems],
+        input: [{ type: "message", role: "user", content: prompt.guidance+(earlierFacts?"\n"+earlierFacts:"") }, ...session.responseItems],
         tools: agentTools(session.publicMap), tool_choice: "required", parallel_tool_calls: false,
       });
       result.model = response.model ?? this.model;
@@ -125,6 +130,7 @@ export class ResponsesLlmService implements LlmService {
       const parsed = parseToolUse(calls[0].name!, input, session.publicMap);
       if ("error" in parsed) throw new Error(parsed.error);
       result.action = parsed.action;
+      session.lastAction={t:turn.observation.t,stage:decisionStage(turn),action:structuredClone(parsed.action)};
       session.pendingCallIds = currentCalls;
     } catch (error) {
       result.error = error instanceof Error ? error.message : String(error);
@@ -202,20 +208,38 @@ export class ResponsesLlmService implements LlmService {
 
   async prepareJourney(input: JourneyInput): Promise<JourneyPlan> {
     assertSafeText(input.guidance);
-    const world = input.world ? restoreWorld(input.seed, input.world) : undefined;
-    if (input.world && !world) throw new Error("地图摘要不一致");
+    const world = input.world ? restoreWorld(input.seed,input.world) : undefined;
+    if(input.world && !world) throw new Error("地图摘要不一致");
+    const original = input.autonomous ? "" : input.guidance;
     const schema = { type: "object", additionalProperties: false, properties: {
       understanding: { type: "string" }, actions: { type: "array", items: { type: "string" } }, adjustment: { type: "string" },
-    }, required: ["understanding", "actions", "adjustment"] };
-    const data = await this.structured(buildJourneySystem(input.settings.timeLimitSeconds), untrustedData("本局玩家游戏策略与公开设置", {
-      guidance: input.autonomous ? "" : input.guidance, autonomous: input.autonomous,
+      coverage: { type: "array", items: { type: "object", additionalProperties: false, properties: {
+        sourceId: { type: "string" }, kind: { type: "string", enum: ["goal", "preference", "condition", "prohibition", "sequence", "method", "other"] },
+        handling: { type: "string", enum: ["planned", "needs_clarification", "unsupported"] }, steps: { type: "array", items: { type: "integer" } }, explanation: { type: "string" },
+      }, required: ["sourceId", "kind", "handling", "steps", "explanation"] } },
+    }, required: ["understanding", "actions", "adjustment", "coverage"] };
+    const prompt = buildJourneySystem(input.settings.timeLimitSeconds)+"\n"+`为地铁通行游戏生成初始策略。用户只需自由填写自然语言，不需要提供字段、步骤或固定格式。把指导融入默认规划原则：尽快到站台并登车、按公开地图选择路径、依据现场观察准备和调整。默认原则只补充用户没写的部分，明确要求优先。保留原文全部目标、偏好、否定、先后、条件和方法，不把“不买票”等明确要求弱化为“偏向”，不加相反的购票/守序兜底。sourceRequirements各id可在coverage说明性质、对应步骤及处理方式；无法确认写待澄清，不猜测已满足。understanding、actions、adjustment仅为提案，原文为权威。初始方案不受动作执行器八步限制，也没有每段1000字的业务要求，按表达需要写清即可；初始方案保持用户原文的具体程度：用户未指定的道具、地点和新增招数，不提前展开为固定准备步骤；可以写必要时分散注意力等条件策略。不要把运行时能自主选择的易拉罐等示例写成必经流程。用户明确指定的细节完整保留，具体准备在游戏现场自主决定。不知道当前队伍、隐藏性格或未来事件，只使用公开机制，不假称已观察或保证成功。自主模式coverage为空。\n${publicActionKnowledge("planning", input.guidance, world?publicMap(world):undefined)}`;
+    let data:unknown,outputText="",problem:string|null=null,completed=false;
+    try { data = await this.structured(prompt, untrustedData("公开规则与指导", {
+      guidance: original, sourceRequirements: guidanceSources(original), autonomous: input.autonomous,
       timeLimitSeconds: input.settings.timeLimitSeconds, goal: "登上地铁并进入车厢", extraQueuePeople: input.settings.extraQueuePeople,
+      ...(world?{publicMap:publicMap(world)}:{}),
       backpack: input.loadout?.backpack ?? true,
-      ...(world ? { publicMap: publicMap(world) } : {}),
-    }), schema, "journey_plan");
-    if (!validPlan(data)) throw new Error("初始方案格式无效，请重试");
-    assertSafeText(JSON.stringify(data));
-    return data;
+    }), schema, "journey_plan", response=>{
+      completed=response.status === "completed" && !response.error && !response.output.some(i=>i.status === "incomplete" || Array.isArray(i.content) && i.content.some(p=>p.type === "refusal"));
+      try { outputText=responseText(response); } catch { /* Missing proposal is diagnosed without reading reasoning. */ }
+    }); } catch(error) {
+      if(error instanceof SafetyError)throw error;
+      problem=error instanceof Error?error.message:"模型规划返回失败";
+      if(completed && outputText.trim()) {
+        const candidate=outputText.trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"");
+        try { data=JSON.parse(candidate); } catch { if(!/^[{[]/.test(candidate))data=candidate; }
+      }
+    }
+    const plan=data === undefined ? defaultJourneyPlan(input,"模型本次未完成可读取的方案，已保留原指导并提供基础准备稿；这不是成功生成的模型方案，可继续修改或重新生成。") : adaptJourneyPlan(data,input,world?publicMap(world):undefined);
+    assertSafeText(JSON.stringify(plan));
+    recordPlanningDiagnostic({outputText,problem,source:plan.preparation?.source??"model",notes:plan.preparation?.notes??[]});
+    return plan;
   }
 
   /** 将创意意图归入现有环境机制，不代替模拟器结算。 */

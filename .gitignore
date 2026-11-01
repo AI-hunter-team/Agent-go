@@ -34,3 +34,5 @@ Thumbs.db
 
 # Local API diagnostics: scripts, credentials and reports stay off GitHub
 /api-debug/
+/scripts/debug-journey.ts
+/scripts/debug-strategy.ts

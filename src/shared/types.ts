@@ -132,6 +132,7 @@ export interface FacilityObservation {
   /** Visible traits of the people in the queue, front to back. */
   queue: string[];
   serving: string | null;
+  servingPersonId?: string;
   note: string | null;
   /** Individually identifiable passengers visible in this queue, in queue order. */
   people?: { id: string; trait: string; distance?: number }[];
@@ -143,10 +144,14 @@ export interface GuardObservation {
   position: Vec;
   facing: string;
   distance: number;
+  /** Geometry derived only for a currently visible guard; not hidden attention or intent. */
+  sight?: { facingDegrees: number; directionToYou: string; angleToYouDegrees: number; fieldOfViewDegrees: number; canSeeYou: boolean };
 }
 
 export interface Observation {
   publicMap?: import("./world").PublicStationMap;
+  recentEvents?: import("./interaction").ObservedSceneEvent[];
+  targetSearch?: import("./interaction").PersonSearchState;
   people?: PersonObservation[];
   items?: ItemObservation[];
   t: number;
@@ -336,6 +341,7 @@ export interface GameReport {
   journey?: import("./journey").JourneyMetadata;
   /** Global history, exposed only after the run ends. Older reports may omit it. */
   worldSnapshots?: WorldReviewSnapshot[];
+  replayMotion?: import("./review").ReplayMotionFrame[];
   review?: ReviewResult;
   reviewDraft?: DraftResult;
   reviewDraftHistory?: DraftResult[];

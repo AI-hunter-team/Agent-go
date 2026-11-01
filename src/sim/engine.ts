@@ -1,7 +1,7 @@
 import type { WorldDefinition } from "../shared/world";
 import { legacyWorld, publicMap } from "./worldDefinition";
 import { resolveLoadout } from "../shared/interaction";
-import { playerCanSee } from "./observation";
+import { observeGuards, playerCanSee } from "./observation";
 import type {
   ActionResult,
   ActionPlan,
@@ -22,6 +22,9 @@ import { PerceptionSystem, type Observer } from "./perception";
 import { AlertSystem } from "./alert";
 import { CreativeSystem } from "./actions/legacy";
 import { ActionExecutor } from "./actions/executor";
+import { physicalActionPlan } from "./actions/physical";
+import { ITEM_DEFS } from "./content/items";
+import { reconcileInstruction } from "./actions/instructionAudit";
 import { DialogueSystem } from "./dialogue";
 import { buildIntentContext, parsePlan } from "./intent";
 import { GuardSystem } from "./guards";
@@ -33,6 +36,7 @@ import { NpcBrain } from "./npcBrain";
 import { buildObservation, visibleFacilities } from "./observation";
 import { DT, RULES, STATUS_LABEL, buildScenario, type Scenario } from "./scenario";
 import { World, round1, type Person } from "./world";
+import { PersonSearch } from "./personSearch";
 import { resolveGameSettings, type GameSettings } from "../shared/gameSettings";
 
 /**
@@ -52,6 +56,7 @@ export class Engine {
   readonly executor: ActionExecutor;
   readonly dialogue: DialogueSystem;
   readonly player: Person;
+  readonly personSearch: PersonSearch;
 
   status: GameStatus = "running";
   failReason: string | null = null;
@@ -83,6 +88,29 @@ export class Engine {
     this.executor = new ActionExecutor({world:this.world,guards:this.guards,bus:this.events,alerts:this.alerts,brain:this.npcBrain,dialogue:this.dialogue});
     this.creative = new CreativeSystem(this.world, this.guards, this.events, () => this.resolveInteractions(0),this.executor);
     this.player = this.world.addPerson("player", this.world.layout.ENTRANCE, { isPlayer: true });
+    this.personSearch = new PersonSearch(this.world);
+    this.world.onSceneEvent = event => {
+      if(event.personId===this.player.id || !playerCanSee(this.player.pos,event.position,this.world.lightAt,this.world.layout)) return;
+      this.world.observedSceneEvents.push(structuredClone(event));
+      if(this.world.observedSceneEvents.length>80) this.world.observedSceneEvents.shift();
+      if(this.personSearch.pending && !this.executor.busy) this.world.notifyPlayer("noticed",event.text);
+    };
+    this.world.items.onTransfer = transfer => {
+      if(transfer.how==="spawn") return;
+      // A bag's concealed contents moving with it are not separately witnessed items.
+      if(transfer.from.startsWith("container:")||transfer.to.startsWith("container:")) return;
+      const from=transfer.from.split(":")[0], to=transfer.to.split(":")[0];
+      if(transfer.how==="used") {
+        const p=this.world.persons.get(to);
+        if(p) this.world.sceneEvent({kind:"ticket_used",personId:p.id,position:{...p.pos},itemKind:transfer.kind,text:`看到 ${p.id} 使用了${ITEM_DEFS[transfer.kind].label}`});
+        return;
+      }
+      if(from===to) return;
+      for(const [id,kind] of [[from,"item_released"],[to,"item_received"]] as const) {
+        const p=this.world.persons.get(id); if(!p) continue;
+        this.world.sceneEvent({kind,personId:p.id,position:{...p.pos},itemKind:transfer.kind,text:`看到 ${p.id} ${kind==="item_received"?"取得":"交出/放下"}${ITEM_DEFS[transfer.kind].label}`});
+      }
+    };
     if (!scenarioOverride) {
       this.world.transit.startCrowd();
       const entrance=definition.entrances?.[0];if(entrance)this.world.entry.begin(this.player,entrance);
@@ -149,6 +177,13 @@ export class Engine {
     for (const person of w.persons.values()) w.tickStarts.set(person.id, { ...person.pos });
     w.collisionGuards = this.guards.guards.map((g) => ({ id: g.def.id, pos: g.pos, radius: personRadius("guard") }));
     this.executor.step();
+    for (const {item,trajectory} of w.items.landFlights()) {
+      const landed = this.events.emit({ t:w.t, kind:"item_dropped", severity:"odd", actorId:trajectory.actorId, itemId:item.id, pos:{...trajectory.to}, loudness:ITEM_DEFS[item.kind].dropNoise*1.5, causeId:trajectory.causeId, trajectory });
+      const target=trajectory.targetId ? w.persons.get(trajectory.targetId) ?? this.guards.guards.find(g=>g.def.id === trajectory.targetId) : undefined;
+      if (target && Math.hypot(target.pos.x-trajectory.to.x,target.pos.y-trajectory.to.y) <= .6) this.events.emit({t:w.t,kind:"collision",severity:"affecting",actorId:trajectory.actorId,targetId:trajectory.targetId,itemId:item.id,pos:{...trajectory.to},loudness:4,causeId:landed.id});
+      w.log("item_landed", `${ITEM_DEFS[item.kind].label}（${item.id}）已落在（${trajectory.to.x}, ${trajectory.to.y}）`, true);
+      if (playerCanSee(this.player.pos, trajectory.to, w.lightAt)) w.notifyPlayer("noticed", `${ITEM_DEFS[item.kind].label}已落地，请观察保安实际反应后再决定下一步`);
+    }
     if(this.executor.pendingDialogue) {
       const red=this.resolveInteractions(0);
       if(red?.subjectId==="player") this.failForGuard(red.guardId,red.causeEventId);
@@ -278,7 +313,9 @@ export class Engine {
     const position = stationSwitch(this.world.definition).position;
     const distance = Math.hypot(this.player.pos.x - position.x, this.player.pos.y - position.y);
     const sameFloor = this.world.definition.generatorVersion === "legacy-v0" || (this.player.pos.floorId ?? "concourse") === "concourse";
-    return { ...buildObservation(this.world, this.guards), ...(this.world.definition.generatorVersion !== "legacy-v0" ? { publicMap: publicMap(this.world.definition) } : {}), blackout: { active: remaining > 0, remaining, switchDistance: round1(distance), canOperate: sameFloor && distance <= BLACKOUT_SWITCH_REACH } };
+    const observation=buildObservation(this.world,this.guards);
+    this.personSearch.refresh(observation,this.executor.busy);
+    return { ...observation,...(this.world.personSearch?{targetSearch:structuredClone(this.world.personSearch)}:{}), ...(this.world.definition.generatorVersion !== "legacy-v0" ? { publicMap: publicMap(this.world.definition) } : {}), blackout: { active: remaining > 0, remaining, switchDistance: round1(distance), canOperate: sameFloor && distance <= BLACKOUT_SWITCH_REACH } };
   }
 
   /** Validate and start an action. `mechanic` is required for attempt_creative. */
@@ -300,19 +337,31 @@ export class Engine {
 
     switch (action.type) {
       case "act":
+      case "physical_action":
       case "take":
       case "give":
       case "drop":
       case "talk": {
         let plan: ActionPlan;
-        if (action.type === "act") {
+        if (action.type === "physical_action") {
+          plan = physicalActionPlan(action);
+          const first = plan.steps[0];
+          if (first?.op === "talk") {
+            const speechError = this.dialogue.validate(first, false);
+            if (speechError) {
+              plan.steps.shift();
+              w.log("speech_skipped", `先行交谈未执行：${speechError}；独立肢体动作仍按规则尝试`, true);
+            }
+          }
+        } else if (action.type === "act") {
           plan = interpreted ?? parsePlan(action.instruction, buildIntentContext(w, this.guards));
+          plan = reconcileInstruction(action.instruction, plan, buildIntentContext(w, this.guards)).plan;
         } else {
           let step: PlanStep;
           switch (action.type) {
             case "give": step = { op: "give", itemId: action.itemId, toId: action.npcId }; break;
             case "take": step = { op: "take", itemId: action.itemId }; break;
-            case "drop": step = { op: "drop", itemId: action.itemId, mode: action.mode }; break;
+            case "drop": step = { op: "drop", itemId: action.itemId, mode: action.mode, ...(action.atPosition ? {atPosition:action.atPosition} : {}) }; break;
             case "talk": step = { op: "talk", npcId: action.npcId, message: action.message, goal: action.goal, offerItemId: action.offerItemId }; break;
           }
           plan = { status: "plan", summary: "开始行动", reason: "", source: "keywords", steps: [step] };
@@ -327,9 +376,12 @@ export class Engine {
       }
       case "observe": {
         const n = w.persons.get(action.targetId);
-        if (!n || n.isPlayer || !playerCanSee(p.pos, n.pos, w.lightAt, w.layout)) return {ok:false,text:"目标不在可见范围"};
+        const guard = observeGuards(w, this.guards).find(g => g.id === action.targetId);
+        if (!guard && (!n || n.isPlayer || !playerCanSee(p.pos, n.pos, w.lightAt,w.layout))) return {ok:false,text:"目标不在可见范围"};
         if (p.activity.kind === "idle" || p.activity.kind === "waiting") p.activity = { kind: "waiting", remaining: 1 };
         else this.wakeAt = round1(w.t + 1);
+        if (guard) return { ok: true, text: `${guard.id}：${guard.doing}；${guard.facing}；你在其${guard.sight?.directionToYou}方向；${guard.sight?.canSeeYou ? "当前视线覆盖你" : "当前视线未覆盖你"}。这只说明当前可见情况，不保证后续动作不被发现。` };
+        if (!n) return { ok: false, text: "目标不在可见范围" };
         const holding = w.items.holdings(n.id).filter(i => w.items.slot(i) === "hand").map(i => i.kind).join("、") || "无";
         return {ok:true,text: `${n.id}：${n.persona ? Object.values(n.persona.look).flat().join("、") : n.kind}；${n.activity.kind}；手持：${holding}`} ;
       }
@@ -418,6 +470,8 @@ export class Engine {
 
 function resolveTarget(id: string, world: World, person: Person): { pos: Vec; label: string } | null {
   const layout = world.layout;
+  const spot=layout.ITEM_SPOTS.find(s=>s.id===id&&!s.id.startsWith("confiscated-"));
+  if(spot)return {pos:spot.pos,label:spot.label};
   const node = publicMap(world.definition).nodes.find(n => n.id === id);
   if (node) return { pos: node.pos, label: node.label };
   const f = layout.FACILITIES.find((d) => d.id === id);

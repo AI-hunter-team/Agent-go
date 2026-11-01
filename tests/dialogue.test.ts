@@ -30,6 +30,21 @@ function setup() {
   };
 }
 describe("simulator dialogue settlement", () => {
+  test.each(["persuade", "chat"] as const)("an accepted %s can transfer a real voluntarily gifted ticket", goal => {
+    const { e, n } = setup();
+    const ticket = e.world.items.holdings(n.id).find(i => i.kind === "ticket")!;
+    expect(e.applyAction({ type: "talk", npcId: n.id, message: "我真的很需要这张车票，能帮帮我吗", goal, reason: "测试赠送" }).ok).toBe(true);
+    expect(e.dialogue.apply(reply()).ok).toBe(true);
+    expect(e.player.hasTicket).toBe(true); expect(n.hasTicket).toBe(false);
+    expect(ticket.ownerId).toBe("player"); expect(e.world.items.holderId(ticket)).toBe("player");
+    expect(e.world.items.transfers.some(t => t.itemId === ticket.id && t.how === "dialogue")).toBe(true);
+  });
+  test("refusing persuasion leaves goods and legal ownership unchanged", () => {
+    const { e, n } = setup(); const ticket = e.world.items.holdings(n.id).find(i => i.kind === "ticket")!;
+    e.applyAction({ type: "talk", npcId: n.id, message: "请送我票", goal: "persuade", reason: "测试" });
+    e.dialogue.apply(reply({ decision: "refuse", give: null }));
+    expect(e.player.hasTicket).toBe(false); expect(ticket.ownerId).toBe(n.id); expect(e.world.items.holderId(ticket)).toBe(n.id);
+  });
   test("queued conversation and a refused yield keep the player's original place", () => {
     const { e, n } = setup();
     const f = e.world.facility("TVM-2")!;

@@ -4,6 +4,7 @@ import { legacyWorld } from "../sim/worldDefinition";
 import { Engine as ReplayEngine } from "../sim/engine";
 import { hydrateWorld } from "../sim/worldDefinition";
 import { EVENT_LABEL } from "./interactionLabels";
+import {ITEM_DEFS} from "../sim/content/items";
 import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { GameReport } from "../shared/types";
 import { getReplayFrame } from "../replay/trajectory";
@@ -107,7 +108,9 @@ export function TrajectoryReplay({ report, optionsRef, seekRequest, onInspectDec
       {frame.position&&<div style={{maxWidth:320,marginBlock:16}}><StationMapWidget atlas={atlas} frame={mapFrame} replay/></div>}
       <div className="replay-context">
         {!!frame.events?.length && <details open><summary>截至此时的交互事件</summary>{frame.events.slice(-12).map(e => <p key={e.id}>{e.t.toFixed(1)}s {EVENT_LABEL[e.kind]} · {e.actorId ?? "环境"} → {e.targetId ?? "周围"}</p>)}</details>}
-        <p className="muted">警戒变化 {frame.alerts?.length ?? 0} 条 · 物品转移 {frame.items?.length ?? 0} 条。地图中的乘客与设施为终局位置；角色轨迹和上述记录按回放时间展示。</p>
+        <p className="muted">警戒变化 {frame.alerts?.length ?? 0} 条 · 物品转移 {frame.items?.length ?? 0} 条（含生成、取用与车票使用）。{frame.motion?"角色、保安及道具按历史时间回放；设施采用当时状态。乘客运动未记录。":"旧报告缺少细粒度物品/保安运动，按已有轨迹与快照展示，不补造动作。"}</p>
+        {frame.motion && <p className="muted">{frame.motion.guards.map(g=>`${g.id}：${g.mode==="investigate"?"前往动静处查看":g.mode==="watch"?"注视目标":g.mode==="return"?"返岗":"巡逻"}`).join(" · ")}</p>}
+        {frame.motion?.items.filter(i=>frame.items?.some(v=>v.itemId===i.id&&v.how==="throw")).map(i=><p key={i.id} className="muted">{ITEM_DEFS[i.kind].label} {i.id}：{i.trajectory&&frame.t<i.trajectory.landsAt?"飞行中":i.holderId?"已被拿起":"已落地"}（{i.position.x.toFixed(2)}, {i.position.y.toFixed(2)}）</p>)}
         <h3>当时的决策</h3>
         {frame.decision ? onInspectDecision ? <div className="replay-decision"><p>{frame.decision.action?.reason ?? frame.decision.error ?? "未形成有效行动"}</p><p className="muted">{frame.decision.result?.text ?? "未执行"}</p><button onClick={() => onInspectDecision(frame.decision!.index)}>分析这次决策 →</button></div> : <DecisionLog decisions={[frame.decision]} /> : <p className="muted">此时还没有决策记录。</p>}
       </div>

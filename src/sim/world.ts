@@ -81,6 +81,13 @@ export class World {
   readonly layout;
   readonly spatial;
   readonly navigation;
+  readonly observedSceneEvents: import("../shared/interaction").ObservedSceneEvent[] = [];
+  personSearch: import("../shared/interaction").PersonSearchState | null = null;
+  onSceneEvent: ((event: import("../shared/interaction").ObservedSceneEvent) => void) | null = null;
+  private nextSceneEvent = 1;
+  sceneEvent(event: Omit<import("../shared/interaction").ObservedSceneEvent, "id" | "t">) {
+    this.onSceneEvent?.({...structuredClone(event), id:`scene-${this.nextSceneEvent++}`,t:round1(this.t)});
+  }
   t = 0;
   readonly outages = new Map<Zone, number>();
   blackoutUntil = 0;
@@ -133,6 +140,15 @@ export class World {
   private readonly detourCache=new Map<string,{target:Vec;waypoint:Vec;until:number}>();
   readonly tickStarts = new Map<string, Vec>();
   readonly cutInReservations = new Map<string, { facility: string; npcId: string }>();
+  readonly restraints = new Map<string, { holderId: string; until: number; causeId?: string }>();
+  isRestrained(id: string): boolean {
+    const r = this.restraints.get(id), holder = r && this.persons.get(r.holderId), target = this.persons.get(id);
+    if (!r) return false;
+    if (r.until <= this.t || !holder || holder.incapacitated || !target || dist(holder.pos, target.pos) > 1.8) {
+      this.restraints.delete(id); this.log("restraint_ended", `${id} 的身体控制已结束`, true); return false;
+    }
+    return true;
+  }
 
   collisionBodies(exceptId: string): MovingBody[] {
     return [...this.persons.values()].filter((p) => p.id !== exceptId).map<MovingBody>((p) => ({ id: p.id, pos: p.pos, from: this.tickStarts.get(p.id), radius: personRadius(p.kind) })).concat(this.collisionGuards.filter((g) => g.id !== exceptId));
@@ -213,6 +229,7 @@ export class World {
 
   /** Move toward a waypoint with body-sized queue/fixture avoidance and swept collision checks. */
   movePerson(p: Person, target: Vec, stride: number, detour = true, avoidSingleQueue = false): boolean {
+    if (this.isRestrained(p.id)) return false;
     const bodies = this.collisionBodies(p.id);
     // Approach an occupied final queue slot directly, then wait instead of circling it.
     // Safe forward progress still matters: stopping early can obstruct the surrounding traffic.
@@ -370,7 +387,10 @@ export class World {
     this.transit.remove(p);
     for (const f of this.facilities.values()) {
       const i = f.queue.indexOf(p.id);
-      if (i >= 0) f.queue.splice(i, 1);
+      if (i >= 0) {
+        f.queue.splice(i, 1);
+        this.sceneEvent({kind:"queue_exit",personId:p.id,position:{...p.pos},facilityId:f.def.id,text:`${p.id} 离开 ${f.def.id} 队伍；离队不代表办理成功`});
+      }
     }
   }
 
@@ -476,6 +496,7 @@ export class World {
       this.onWorldEvent?.({ t: this.t, kind: "power_restored", actorId: "player", severity: "odd", pos: { x: 13, y: 15 }, loudness: 4 });
       this.log("power_restored", "车站恢复照明", true);
     }
+    for (const id of this.restraints.keys()) this.isRestrained(id);
     for (const [zone, until] of this.outages) if (until <= this.t) {
       this.outages.delete(zone);
       const pos = this.zoneCenter(zone);
@@ -699,6 +720,7 @@ export class World {
     switch (f.def.kind) {
       case "tvm":
         this.items.spawn("ticket", { type: "held", personId: p.id, slot: "pocket" }, p.id);
+        this.sceneEvent({kind:"purchase_completed",personId:p.id,position:{...p.pos},facilityId:f.def.id,itemKind:"ticket",text:`看到 ${p.id} 在 ${f.def.id} 完成购票，取得车票后收起`});
         p.pos = { x: f.def.head.x, y: f.def.head.y + 1.3 };
         p.activity = { kind: "idle" };
         this.personEvent(p, "service_done", `在 ${f.def.id} 买到单程票`);
@@ -724,6 +746,7 @@ export class World {
         this.personEvent(p, "service_done", `刷票通过 ${f.def.id}，到达上层平台；可选择楼梯或扶梯下行进入站台`);
         break;
     }
+    this.sceneEvent({kind:"queue_exit",personId:p.id,position:{...p.pos},facilityId:f.def.id,text:`看到 ${p.id} 完成 ${f.def.id} 办理后离开`});
     return true;
   }
 }

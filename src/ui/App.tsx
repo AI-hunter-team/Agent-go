@@ -283,6 +283,7 @@ export function App() {
                 }
               >
                 <GameScene
+                  showInteractionBadges={watching && !ended}
                   session={session}
                   camera={j.camera}
                   greetingRequest={flow.stage === "character" ? `${j.camera.reset}:${selectionGreeting}` : undefined}
@@ -622,10 +623,24 @@ export function App() {
                 ) : (
                   flow.prepared && (
                     <>
+                      {flow.prepared.plan.preparation && <section className={styles.planPart} role="status">
+                        <h3>{flow.prepared.plan.preparation.source === "default" ? "基础准备稿" : "方案补充说明"}</h3>
+                        {flow.prepared.plan.preparation.notes.map((note,index)=><p key={index}>{note}</p>)}
+                      </section>}
                       <section className={styles.planPart}>
                         <h3>我的理解</h3>
                         <p>{flow.prepared.plan.understanding}</p>
                       </section>
+                      {flow.prepared.plan.sourceGuidance && <section className={styles.planPart}>
+                        <h3>你的原始指导（完整保留）</h3>
+                        <p style={{ whiteSpace: "pre-wrap" }}>{flow.prepared.plan.sourceGuidance}</p>
+                        <details><summary>逐项要求与方案对应</summary><ol>
+                          {flow.prepared.plan.requirements?.map(r => <li key={r.id}>
+                            <q>{r.text}</q> — {r.handling === "planned" ? "已安排" : r.handling === "unsupported" ? "需另选方法" : r.handling === "needs_clarification" ? "需要澄清" : "尚未核对"}
+                            {r.steps.length ? `（方案第 ${r.steps.join("、")} 项）` : "（全局要求或待确认）"}：{r.explanation}
+                          </li>)}
+                        </ol><p className="small muted">对应说明仍可能判断有误；原文优先，条件未满足不能视为已完成。</p></details>
+                      </section>}
                       <section className={styles.planPart}>
                         <h3>准备尝试</h3>
                         <ol>

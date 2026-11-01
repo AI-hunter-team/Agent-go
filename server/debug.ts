@@ -7,6 +7,10 @@ import { join } from "node:path";
 import type { ModelCallDebug, OperationDebug } from "../src/shared/debug";
 
 const context = new AsyncLocalStorage<OperationDebug>();
+/** Assistant proposal text only, never hidden reasoning or credentials; logger redaction still applies. */
+export function recordPlanningDiagnostic(planning:NonNullable<OperationDebug["planning"]>) {
+  const current=context.getStore(); if(current)current.planning=planning;
+}
 /** 计算非负耗时。 */
 const elapsed = (start: number) => Math.max(0, performance.now() - start);
 /** 只记录真实数值，缺失字段保留未知。 */

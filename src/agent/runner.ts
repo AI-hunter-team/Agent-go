@@ -1,6 +1,7 @@
 import { serializableWorld } from "../sim/worldDefinition";
 import type { ActionPlan, BossRecord, NpcDialogueRequest, NpcResponse } from "../shared/types";
 import { buildIntentContext, parsePlan } from "../sim/intent";
+import { reconcileInstruction } from "../sim/actions/instructionAudit";
 import { offlineNpcResponse } from "../sim/dialogue";
 import { HeuristicAgent } from "./heuristicAgent";
 import type {
@@ -24,6 +25,8 @@ import type { Agent, Classifier, NpcNegotiator, Interpreter, NpcResponder } from
 import { summarizeDebug, type DebugAttempt, type OperationDebug, type RunDebug } from "../shared/debug";
 import { prepareCutIn } from "../sim/negotiation";
 import { ReviewRecorder } from "./reviewRecorder";
+import { personQuery } from "../sim/personSearch";
+import { explicitPhysicalIntent } from "../shared/physicalIntent";
 import { DialogueFollowThrough } from "./dialogueFollowThrough";
 
 function combineResults(first: DecisionResult, next: DecisionResult): DecisionResult {
@@ -206,7 +209,10 @@ export class GameRunner {
     const t = engine.t;
     const attempts: DecisionAttempt[] = [];
 
-    let result = await this.timed(turn, attempts);
+    const originalSearch=engine.personSearch.pending ? engine.world.personSearch!.instruction : this.opts.guidance && personQuery(this.opts.guidance) && explicitPhysicalIntent(this.opts.guidance) ? this.opts.guidance : "";
+    let searchStep=originalSearch ? engine.personSearch.next(originalSearch,observation) : null;
+    if(searchStep && !searchStep.action) {engine.personSearch.markDispatched();this.lastResult={ok:false,text:searchStep.state.detail};}
+    let result:DecisionResult=searchStep?.action ? {action:searchStep.action,thinking:null,usage:null,model:null,latencyMs:0,error:null} : await this.timed(turn, attempts);
     if (!result.action && engine.status === "running") {
       const retry = await this.timed({ ...turn, retry: true }, attempts);
       result = combineResults(result, retry);
@@ -240,8 +246,12 @@ export class GameRunner {
 
     if (action) {
       this.consecutiveFailures = 0;
+      if(!searchStep && action.type==="act" && personQuery(action.instruction)) {
+        searchStep=engine.personSearch.next(action.instruction,observation);
+        if(searchStep?.action) action=searchStep.action;
+      }
       if (action.type === "act") {
-        const context = buildIntentContext(engine.world, engine.guards);
+        const context = buildIntentContext(engine.world, engine.guards, this.opts.guidance ?? "");
         const record = this.beginAttempt("interpret",turn);
         let plan: ActionPlan;
         try {
@@ -254,6 +264,7 @@ export class GameRunner {
         record.usage = plan.usage ?? null;
         this.endAttempt(record);
         if (engine.status !== "running") return;
+        plan = reconcileInstruction(action.instruction, plan, context).plan;
         const issue = dialogueFollowThrough?.status === "pending" ? this.followThrough.check(plan, engine) : null;
         outcome = issue ? { ok: false, text: issue } : engine.applyAction(action, undefined, plan);
         this.bossPlans.push({t:engine.t,instruction:action.instruction,plan:structuredClone(plan),outcomes:outcome.ok ? engine.executor.outcomes : [{...outcome,eventIds:[]}]});
@@ -281,6 +292,7 @@ export class GameRunner {
       } else {
         outcome = engine.applyAction(action);
       }
+      if(outcome.ok && action.type==="act" && engine.world.personSearch?.phase==="confirmed" && engine.world.personSearch.instruction===action.instruction) engine.personSearch.markDispatched();
     } else {
       fallback = true;
       if (!guidanceFailure) this.consecutiveFailures++;
@@ -490,7 +502,7 @@ export class GameRunner {
         return summary;
       }, {}),
       ...(this.journey ? { journey: structuredClone(this.journey) } : {}),
-      ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot() } : {}),
+      ...(this.phase === "ended" ? { worldSnapshots: this.reviewRecorder.snapshot(), replayMotion: this.reviewRecorder.motionSnapshot() } : {}),
       debug: this.snapshotDebug(),
       ...(e.world.definition.generatorVersion!=="legacy-v0"?{world:serializableWorld(e.world.definition)}:{}),
       seed: e.seed,

@@ -1,6 +1,6 @@
 import { resolveLoadout } from "../src/shared/interaction";
 import { randomUUID } from "node:crypto";
-import type { NormalizedGuidance } from "../src/shared/types";
+import type { AgentAction, ActionResult, Trigger, NormalizedGuidance, ObservedSceneEvent } from "../src/shared/types";
 import type { ResponseItem } from "./responsesTypes";
 import { assertSafeText, validateNormalized } from "./security";
 import { resolveGameSettings, type GameSettings } from "../src/shared/gameSettings";
@@ -14,7 +14,14 @@ export interface Session {
   runId: string;
   guidance: string;
   normalized: NormalizedGuidance | null;
+  /** Full server-prepared proposal, independent of legacy normalization size limits. */
+  journeyPlan?: import("../src/shared/journey").JourneyPlan;
   responseItems: ResponseItem[];
+  actionMemory?: {t:number;stage:string;action:AgentAction;result:ActionResult|null;triggers:Trigger[]}[];
+  lastAction?: {t:number;stage:string;action:AgentAction};
+  previousStage?: string;
+  seenCallIds?: Set<string>;
+  witnessedEvents?: Record<string,ObservedSceneEvent>;
   /** Every tool id must be answered, even when a batched response is rejected. */
   pendingCallIds: string[];
   lastUsed: number;

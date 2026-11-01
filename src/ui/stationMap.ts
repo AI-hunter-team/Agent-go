@@ -17,7 +17,8 @@ export interface RouteSegment { floorId:string; points:readonly MapPoint[] }
 export interface MapFrame {
   player:MapPoint & {yaw:number}; route:readonly RouteSegment[]; target:(MapPoint & {label:string})|null;
   transition?:{label:string;toFloor:string;progress:number};
-  people:readonly (MapPoint & {id:string;guard:boolean})[];
+  people:readonly (MapPoint & {id:string;guard:boolean;facing?:number})[];
+  items?:readonly (MapPoint & {id:string;flying:boolean})[];
   facilities:readonly {id:string;status:string}[];
 }
 const cache=new WeakMap<WorldDefinition,StationAtlas>();
@@ -150,7 +151,10 @@ export function replayMapFrame(atlas:StationAtlas,frame:import("../replay/trajec
   return{...point(v,atlas.floors[0].id),floorId:connection?.from.floorId??(atlas.floors.some(f=>f.id===v.floorId)?v.floorId!:atlas.floors[0].id)};
  };
  const position=resolve(frame.position??{x:0,y:0}),last=frame.trail.at(-2),yaw=last?Math.atan2(position.x-last.x,position.y-last.y):0;
- return{player:{...position,yaw},route:splitRoute(frame.trail.map(resolve)),target:null,people:[],facilities:[]};
+ return{player:{...position,yaw},route:splitRoute(frame.trail.map(resolve)),target:null,
+  people:(frame.motion?.guards??frame.world?.guards??[]).map(g=>({...resolve(g.position),id:g.id,guard:true,facing:g.facing})),
+  items:(frame.motion?.items??[]).map(i=>({...resolve(i.position),id:i.id,flying:!!i.trajectory&&frame.t<i.trajectory.landsAt})),
+  facilities:frame.world?.facilities.map(f=>({id:f.id,status:f.status}))??[]};
 }
 
 export type MiniMapMode="auto"|"whole"|"nearby";

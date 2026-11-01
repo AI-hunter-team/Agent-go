@@ -60,7 +60,7 @@ describe("generated station contracts",()=>{
  it("separates floors for collision, items, sight, hearing and actions",()=>{
   const d=generateWorld(2),w=new World(2,150,undefined,d),p=w.addPerson("player",{x:8,y:15,floorId:"concourse"},{isPlayer:true}),n=w.addPerson("normal",{x:8,y:15,floorId:"platform"});
   expect(w.spatial.clearOfPeople(p.pos,p.pos,.32,w.collisionBodies(p.id))).toBe(true);
-  const item=w.items.spawn("newspaper",{type:"ground",pos:n.pos},null);expect(w.items.visibleItems(p.pos).some(i=>i.id===item.id)).toBe(false);
+  const item=w.items.spawn("can",{type:"ground",pos:n.pos},null);expect(w.items.visibleItems(p.pos).some(i=>i.id===item.id)).toBe(false);
   const bus=new EventBus(),perception=new PerceptionSystem(bus,id=>w.persons.get(id),w.lightAt,w.layout);
   bus.emit({t:0,kind:"item_dropped",severity:"odd",actorId:n.id,pos:n.pos,loudness:20});
   expect(perception.step([{id:p.id,role:"npc",pos:p.pos,facing:0}])).toHaveLength(0);

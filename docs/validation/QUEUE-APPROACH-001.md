@@ -50,3 +50,10 @@
 - 本次已 fetch `origin`；远端 `main` 与修复基线相同，仍为 `aaf1f0914b7304ba752ba150f0cefb4a1e871be1`。代码与已通过 1162 项、构建及浏览器检查的补丁一致；此阶段仅补充授权与交接文档。
 - 按原路径边界仅交付 4 个文件，不纳入现有部署/迁移文档或其他开放 PR #73。提交前复核完整 diff、新文档相对链接及暂存空白检查。
 - Ubuntu / Windows CI 和 Compose 的结果、AI 审查核对及合并 commit 将记录于实际创建的 PR；本段为推送前快照，不提前声称远端检查或合并成功。人工审查未进行。
+
+## PR #74 与最新主线复验（2026-11-01）
+
+- [PR #74](https://github.com/AI-hunter-team/Agent-go/pull/74) 原修复 head 为 `3c474add158b0c8edf4790914eb0f00c55714008`；该 head 的 [Ubuntu / Windows CI](https://github.com/AI-hunter-team/Agent-go/actions/runs/41264323272) 和 [Compose](https://github.com/AI-hunter-team/Agent-go/actions/runs/41264323175) 均通过。自动代码审查完成，`has_any_findings=false`，没有未解决线程；这不是人工批准。
+- 远端 main 在等待期间推进至 #73 合并 commit `7d5974757116796f910e8f3e899ab35abcbe1623`，故没有直接合并旧基线。重新 fetch 后将该 main 合入任务分支，无内容冲突；核对 `world.ts` 同时保留身体控制、场景事件及本次队尾修复。相对 main 的实际 diff 仍只有本任务 4 文件。
+- 整合版本本地 `npm run typecheck`、`npm test -- --maxWorkers=2 --testTimeout=15000`（123 文件 / 1383 项，87.82 秒）、`npm run build`、`git diff --check` 和暂存空白检查通过；没有改变源测试断言、种子、产品时限或依赖。新增数量来自已合入 #73，并非本任务额外扩展范围。
+- 组合版本未重复浏览器或真实模型验收；原 seed 1 / 87.8 秒浏览器成绩仅对应初始修复版本。当前记录为集成提交推送前快照，最新 head 的远端 CI 与实际合并结果以 PR #74 的后续交付记录为准。
