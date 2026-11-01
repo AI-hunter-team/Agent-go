@@ -10,6 +10,74 @@ const input = (changes: Partial<HeadMessageInput> = {}): HeadMessageInput => ({
   actorId: "player", t: 12, mode: "full", speech: [], ...changes,
 });
 
+async function returnedDecision(thinking: string | null = "售票机队伍较短，先去买票。") {
+  const session = new GameSession(1);
+  session.start({
+    kind: "llm",
+    async decide() {
+      return { action: { type: "wait" as const, seconds: 20, reason: "等候当前办理完成" }, thinking,
+        usage: null, model: "test", latencyMs: 0, error: null };
+    },
+    async dispose() {},
+  }, async intent => classifyByKeywords(intent));
+  await session.runner!.pending;
+  return session;
+}
+
+test.each([
+  ["售票机队伍较短，先去买票。", "售票机队伍较短，先去买票。"],
+  [null, "等候当前办理完成"],
+  ["   ", "等候当前办理完成"],
+])("the scene shows returned thinking or the action reason when the record is collapsed (%s)", async (thinking, expected) => {
+  const session = await returnedDecision(thinking);
+  expect(getSessionHeadMessage(session, "player", "full", null, 100))
+    .toEqual({ kind: "thought", text: expected, pending: false });
+  expect(getSessionHeadMessage(session, "player", "icons", null, 200))
+    .toEqual({ kind: "thought", text: null, pending: false });
+  expect(getSessionHeadMessage(session, "player", "full", null, 300)?.text).toBe(expected);
+  expect(getSessionHeadMessage(session, "n1", "full", null, 300)).toBeNull();
+  expect(getSessionHeadMessage(session, "player", "hidden", null, 300)).toBeNull();
+});
+
+test("a returned thought expires in real time while paused or at 4x without replaying on mode changes", async () => {
+  const session = await returnedDecision();
+  expect(getHeadMessageDeadlines(session, 100)).toEqual([4100]);
+  session.setPaused(true);
+  expect(getSessionHeadMessage(session, "player", "full", null, 1000)?.text).toBe("售票机队伍较短，先去买票。");
+  session.setSpeed(4);
+  session.engine.world.t = 16;
+  expect(getSessionHeadMessage(session, "player", "full", null, 1100)?.text).toBe("售票机队伍较短，先去买票。");
+  expect(getSessionHeadMessage(session, "player", "icons", null, 4100)).toBeNull();
+  expect(getSessionHeadMessage(session, "player", "full", null, 4200)).toBeNull();
+  expect(getHeadMessageDeadlines(session, 4200)).toEqual([]);
+});
+
+test("a new decision replaces the old thought even when both finish at the same world time", async () => {
+  const session = await returnedDecision();
+  expect(getSessionHeadMessage(session, "player", "full", null, 100)).not.toBeNull();
+  expect(getSessionHeadMessage(session, "player", "full", null, 4100)).toBeNull();
+  session.engine.notify("action_failed", "重新评估");
+  session.runner!.advance(0);
+  expect(getSessionHeadMessage(session, "player", "full", "thinking", 4200))
+    .toEqual({ kind: "thought", text: null, pending: true });
+  expect(getSessionHeadMessage(session, "player", "full", null, 4200)).toBeNull();
+  await session.runner!.pending;
+  expect(getSessionHeadMessage(session, "player", "full", null, 4300)?.text).toBe("售票机队伍较短，先去买票。");
+  expect(getHeadMessageDeadlines(session, 4300)).toEqual([8300]);
+  session.preview(2);
+  expect(getSessionHeadMessage(session, "player", "full", null, 4400)).toBeNull();
+  expect(getHeadMessageDeadlines(session, 4400)).toEqual([]);
+});
+
+test("current NPC dialogue keeps priority over the returned player thought", async () => {
+  const session = await returnedDecision();
+  session.runner!.interactionDialogues.push({ t: 0, request: dialogueFixture(), response: {
+    reply: "请沿标识去售票机。", decision: "refuse", give: null, want: null, reason: "指路", source: "offline",
+  } });
+  expect(getSessionHeadMessage(session, "player", "full", null, 100)).toBeNull();
+  expect(getSessionHeadMessage(session, "n1", "full", null, 100)?.text).toBe("请沿标识去售票机。");
+});
+
 test("speech belongs to its speaker and takes priority over an earlier decision", () => {
   const speech = [{ speakerId: "p1", text: "我还在等人", t: 11 }, { speakerId: "player", text: "能让我先过吗？", t: 12 }];
   expect(getHeadMessage(input({ speech, decision: { t: 10, thinking: "选择沟通", action: null } })))
