@@ -10,11 +10,11 @@ import type { ReasoningEffort } from "../shared/modelConfig";
 import type { JourneyInput, JourneyPreparation } from "../shared/journey";
 import type { DraftResult, ReviewInput, ReviewResult, ReviewStrategy } from "../shared/review";
 import { ReviewFailure } from "../shared/review";
-import { loadLocalModel, saveLocalModel, clearLocalModel } from "./localModel";
+import { getLocalModel, saveLocalModel, clearLocalModel } from "./localModel";
 import { classifyByKeywords } from "../sim/intent";
 import type { Agent, Classifier, Interpreter, NpcResponder } from "./agent";
 
-let activeModelToken: string | null = loadLocalModel()?.token ?? null;
+let activeModelToken: string | null = getLocalModel()?.token ?? null;
 const verifiedCredentials = new Map<string, { baseUrl: string; apiKey: string }>();
 const sessionTokens = new Map<string, string | null>();
 const tokenUsers = new Map<string, number>();
@@ -146,24 +146,25 @@ export const Api = {
     return result;
   },
   /** 释放尚未使用的配置；活跃对局的凭据保留到局后。 */
-  discardModel: (token: string) => discardUnused(token),
+  discardModel: (token: string) => { verifiedCredentials.delete(token); return discardUnused(token); },
   /** 启用所选模型与思考档位，只改变后续请求的默认配置。 */
-  enableModel: async (token: string, model: string, reasoningEffort: ReasoningEffort = "none") => {
+  enableModel: async (token: string, model: string, reasoningEffort: ReasoningEffort = "none", rememberKey = false) => {
     const health = await api<{ llm: boolean; model: string | null }>("/api/model/enable", { body: { model, reasoningEffort }, configToken: token });
     const previous = activeModelToken;
     activeModelToken = token;
     await discardUnused(previous);
     const credentials = verifiedCredentials.get(token);
-    if (credentials) { saveLocalModel({ ...credentials, model, reasoningEffort, token }); verifiedCredentials.delete(token); }
-    return health;
+    const persistence = credentials ? saveLocalModel({ ...credentials, model, reasoningEffort, token }, rememberKey) : undefined;
+    verifiedCredentials.delete(token);
+    return { ...health, storageWarning: persistence?.warning };
   },
   /** 清除新对局的页面默认配置，保留已运行对局。 */
   clearModel: async () => {
-    clearLocalModel();
+    const persistence = clearLocalModel();
     const previous = activeModelToken;
     activeModelToken = null;
     await discardUnused(previous);
-    return Api.health();
+    return { ...await Api.health(), storageWarning: persistence.warning };
   },
   /** 查询当前默认模型状态，不发起供应商请求。 */
   health: async () => {
@@ -172,8 +173,8 @@ export const Api = {
       if (!activeModelToken) throw error;
       if (!(error instanceof Error) || !/失效|过期|请先验证|重新验证|配置不存在/.test(error.message)) throw error;
       activeModelToken = null;
-      const saved = loadLocalModel(); if (saved) saveLocalModel({ ...saved, token: undefined });
-      throw new Error("已保存的连接会话已失效；地址、密钥和模型仍在本地，请打开模型连接重新启用。刷新不会自动产生模型费用。");
+      const saved = getLocalModel(); if (saved) saveLocalModel({ ...saved, token: undefined }, saved.rememberKey);
+      throw new Error("连接会话已失效，请打开模型连接重新启用。刷新不会自动产生模型费用。");
     }
   },
   /** 以当前配置整理开局指导。 */

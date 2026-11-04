@@ -25,6 +25,6 @@ export default defineConfig({
   cacheDir: "node_modules/.vite-behavior-lab",
   plugins: [labEntry, react()],
   define: { __LAB_COMMIT__: JSON.stringify(execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim()) },
-  server: { host: "127.0.0.1", port: 5175, strictPort: true, proxy: { "/api": `http://127.0.0.1:${process.env.PORT ?? 8790}` } },
+  server: { host: "127.0.0.1", port: 5175, strictPort: true, watch: { ignored: ["**/tmp/**", "**/temp/**", "**/logs/**", "**/build/**"] }, proxy: { "/api": `http://127.0.0.1:${process.env.PORT ?? 8790}` } },
   build: { outDir: "tmp/behavior-lab-build", rollupOptions: { input: resolve("lab.html") } },
 });

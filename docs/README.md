@@ -1,5 +1,7 @@
 # 文档导航
 
+面向使用者：[中文入口](../README.md)、[English](../README.en.md)、[使用指南](USAGE.md)、[贡献指南](../CONTRIBUTING.md)、[安全说明](../SECURITY.md)、[许可与第三方声明](../THIRD_PARTY_NOTICES.md)。开源准备与待补来源见 [OPEN_SOURCE](OPEN_SOURCE.md)。
+
 新开发者与开发 Agent 的阅读顺序：[根规则](../AGENTS.md) → 本页 → [开发流程](DEVELOPMENT.md) → [路线图](ROADMAP.md) → [中央工作记录](开发计划.md)。本地运行从 [根 README](../README.md) 开始。
 
 ## 权威来源与状态
@@ -35,7 +37,9 @@ HTTP JSON、动作工具及共享数据目前是应用内部接口，复用 [技
 
 ## 历史和专题材料
 
-- [PROJECT.md](../PROJECT.md)：早期产品基线与决策过程，保留证据；旧的阶段范围、选型待定与运行状态不适用于当前实现。
+- [历史材料索引](archive/README.md)：归档的项目基线、阶段进度/待办和首页设计 QA；保持原记录及其日期边界。
+
+- [PROJECT.md](archive/PROJECT.md)：早期产品基线与决策过程，保留证据；旧的阶段范围、选型待定与运行状态不适用于当前实现。
 - [第一轮](../design/ui-concepts/README.md)、[第二轮](../design/ui-concepts-v2/README.md)、[第三轮视觉探索](../design/ui-concepts-v3/README.md)：概念与历史候选技术。第三轮已选方向用于后续三维探索，当前二维 MVP 范围仍由方案 1.1 决定。图片未入库，历史文件名不能当作可用附件。
 - 小任务只需简报和验证报告；只有大型功能或重构才按需建立 `docs/<专题>/`，保存范围、设计、阶段与验收，不创建空文件套装。独立协议确有维护需求时再设单独文档并更新本页。
 

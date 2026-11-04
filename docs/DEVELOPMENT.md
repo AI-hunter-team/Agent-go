@@ -42,7 +42,7 @@
 | `tests/` | Vitest 自动化与使用伪响应的模型接口测试；不是付费模型整局验收 |
 | `design/`、`docs/` | 视觉历史、产品/技术说明、任务与验证证据；按导航区分现行和历史 |
 
-实际依赖与脚本唯一来源是 [package.json](../package.json)，解析版本由 [package-lock.json](../package-lock.json) 固定。使用 npm，安装用 `npm ci`，不新增第二套锁文件。README 建议 Node.js 24 LTS；仓库没有 `engines` 或 Node 版本固定文件，报告需记录本机 `node --version`、`npm --version`，不将旧设计的 Node 20+ 写成已验证矩阵。
+实际依赖与脚本唯一来源是 [package.json](../package.json)，解析版本由 [package-lock.json](../package-lock.json) 固定。使用 npm，安装用 `npm ci`，不新增第二套锁文件。`.node-version`、package engines、Docker 与 CI 统一采用 Node.js 24；报告记录本机 `node --version`、`npm --version`，不将旧设计的 Node 20+ 写成已验证矩阵。
 
 依赖变更需在允许范围内说明原因，同步 manifest 与 npm 锁文件，并验证可复现安装。根配置、共享类型、API/动作工具、导出格式及共用测试数据变动由集成负责人协调消费者与修改顺序。
 
@@ -93,13 +93,13 @@ GitHub Actions 配置在 [ci.yml](../.github/workflows/ci.yml)：面向 `main` �
 
 容器改动另由 [compose.yml](../.github/workflows/compose.yml) 在相关路径的 PR 或手动触发时，使用 Linux Docker 构建并启动健康的 Compose 实例，检查前端资源、API、非 root/生产依赖、伪模型配置与正常停止，最后清理容器。它不调用真实模型、不部署外部环境；具体结果见 [Compose 任务验证](validation/DEPLOY-COMPOSE-001.md)。
 
-CI 使用 `npm test -- --maxWorkers=2 --testTimeout=15000`，与已验收整局模拟命令保持一致：限制并发并为单项测试提供 15 秒等待预算，避免托管机器上的完整对局触及 Vitest 默认 5 秒。测试内容、断言和产品时限不变；`npm test` 脚本自身仍为 `vitest run`。此调整的实际阻塞与结果见 [ALL-LOCAL-001](validation/ALL-LOCAL-001.md)。
+本地与 CI 均使用 `npm test`；Vite 测试配置统一 `maxWorkers: 2`、`testTimeout: 15000`，保留整局测试自身的较长预算。此前 CI 独立传参的历史阻塞与结果见 [ALL-LOCAL-001](validation/ALL-LOCAL-001.md)，此次统一与 Vitest 4.1.12 迁移见 [OSS-001](validation/OSS-001.md)。
 
 `gameSession.test.ts` 的六个种子报告对照分别串行执行两个完整对局，在两局之间及循环中让出事件循环，并单独设置45秒墙钟预算以适应托管机器运行波动；其余用例除下述双整局场景外仍使用上述默认预算，完整报告比较与产品时限不变。原30秒预算的失败及修复证据见 [CI-SESSION-001](validation/CI-SESSION-001.md)，调整为45秒的后续修复（PR #62）见 [IV2-PR-001](validation/IV2-PR-001.md#合入后的-ci-后续修复)。
 
 `heuristicAgent.test.ts` 中固定拥挤场景的失败/可行路线用例同样连续运行两个完整对局，单独使用30秒墙钟预算，其两个种子、全部断言和游戏截止保持不变；其他离线策略用例沿用默认预算。Windows超过15秒的实际失败及修复验证见 [ONBOARD-PR-001](validation/ONBOARD-PR-001.md#合入前windows检查与修复)。
 
-当前仍无 lint、格式化、Markdown 链接检查、浏览器自动验收或统一 `check` 脚本。文档可使用一次性本地链接审计，但需记录其方法，不能声称仓库已有相应 npm 命令；需要新增工具时另开任务。
+`npm run docs:check` 检查仓库 Markdown 的本地文件链接、标题锚点及个人机器路径；跳过代码围栏，不联网检查外链。`npm run check` 依次执行文档检查、类型检查、完整测试及构建。生产前端构建附带项目 LICENSE 和安装依赖的许可/声明文本。当前没有统一 lint/格式化或自动浏览器验收；相关验证仍须单独记录。
 
 ## 6. 提交、审查、集成与交接
 

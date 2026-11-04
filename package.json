@@ -1,6 +1,13 @@
 {
   "name": "agent-go",
   "private": true,
+  "description": "A simulated metro station where your guidance drives an AI agent.",
+  "license": "GPL-3.0-only",
+  "author": "AI-hunter-team contributors",
+  "repository": { "type": "git", "url": "https://github.com/AI-hunter-team/Agent-go.git" },
+  "bugs": { "url": "https://github.com/AI-hunter-team/Agent-go/issues" },
+  "homepage": "https://github.com/AI-hunter-team/Agent-go#readme",
+  "engines": { "node": ">=24 <25" },
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -8,12 +15,14 @@
     "dev:web": "vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "tsc --noEmit && npm run build:web && npm run build:server",
-    "build:web": "vite build",
+    "build:web": "vite build && node scripts/license-notices.mjs",
     "build:server": "esbuild server/index.ts --bundle --platform=node --target=node24 --format=esm --packages=external --outfile=build/server.js",
     "start": "node build/server.js",
     "start:api": "tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "docs:check": "node scripts/check-docs.mjs",
+    "check": "npm run docs:check && npm run typecheck && npm test && npm run build",
     "test:model": "tsx scripts/test-model.ts",
     "test:compose": "node scripts/smoke-compose.mjs"
   },
@@ -40,6 +49,6 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^6.4.5",
-    "vitest": "^3.2.7"
+    "vitest": "4.1.12"
   }
 }

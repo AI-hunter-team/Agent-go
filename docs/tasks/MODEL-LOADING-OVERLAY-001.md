@@ -11,7 +11,7 @@
 | 单一负责人 | 本次 Codex 会话（实现与验证） |
 | 集成负责人 | 本次 Codex 会话；已在中央记录登记本任务状态 |
 | 基线 | `origin/main`，`45e7964a1c806faa43093cd6e536ce4b938df1bb`，2026-10-31；原工作区存在与本任务无关的未提交改动，保留不动 |
-| 任务分支与工作区 | `codex/model-loading-overlay`；`/Users/mac/.codex/worktrees/model-loading-overlay/agent go`；仅修改本简报允许范围内的 UI、相关测试和验证文档 |
+| 任务分支与工作区 | `codex/model-loading-overlay`；独立工作区（个人机器路径已移除）；仅修改本简报允许范围内的 UI、相关测试和验证文档 |
 | 前置任务与资源 | 现有 React/R3F/Drei UI 与资源加载实现；无需外部凭据 |
 | 规范与接口依据 | `docs/README.md`、`docs/DEVELOPMENT.md`、`src/ui` 与 `src/ui/scene/resources.ts` 的现行实现 |
 
