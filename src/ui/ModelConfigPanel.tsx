@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Api } from "../agent/remoteAgent";
-import { loadLocalModel } from "../agent/localModel";
+import { getLocalModel, rememberLocalModel } from "../agent/localModel";
+import { ModelRememberControl } from "./ModelRememberControl";
 import { isReasoningEffort, type ReasoningEffort } from "../shared/modelConfig";
 
 interface Props {
   health: { llm: boolean; model: string | null };
-  onEnabled: (health: Props["health"]) => void;
+  onEnabled: (health: Props["health"], keepOpen?: boolean) => void;
   onClose: () => void;
   closeLabel?: string;
 }
 
 /** 配置模型与思考档位；重新启用只影响之后创建的对局。 */
 export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返回开局设置" }: Props) {
-  const [saved] = useState(loadLocalModel);
+  const [saved] = useState(getLocalModel);
+  const [rememberKey, setRememberKey] = useState(saved?.rememberKey ?? false);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState(saved?.baseUrl ?? "https://api.deepseek.com");
   const [apiKey, setApiKey] = useState(saved?.apiKey ?? "");
   const [showKey, setShowKey] = useState(false);
@@ -61,10 +64,11 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
     setBusy("enable");
     setError(null);
     try {
-      const result = await Api.enableModel(verified.token, model.trim(), reasoningEffort);
+      const result = await Api.enableModel(verified.token, model.trim(), reasoningEffort, rememberKey);
       pendingToken.current = null;
       setEnabled(true);
-      onEnabled(result);
+      setStorageWarning(result.storageWarning ?? null);
+      onEnabled({ llm: result.llm, model: result.model }, Boolean(result.storageWarning));
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }
   };
@@ -77,7 +81,9 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
       const result = await Api.clearModel();
       invalidate();
       setApiKey("");
-      onEnabled(result);
+      setRememberKey(false);
+      setStorageWarning(result.storageWarning ?? null);
+      onEnabled({ llm: result.llm, model: result.model }, Boolean(result.storageWarning));
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }
   };
@@ -142,7 +148,7 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
           </label>
           <small className="muted">重新启用后用于新对局；档位不代表固定思考长度。</small>
           <p className="muted">模型列表不代表账号拥有调用权限；图片模型不能驱动角色。启用时会进行一次真实工具调用，验证模型权限和兼容性，可能消耗少量 API 额度。</p>
-          <button className="primary" disabled={busy !== null || !model.trim() || enabled} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型、启用并保存本地"}</button>
+          <button className="primary" disabled={busy !== null || !model.trim() || enabled} onClick={() => void enable()}>{busy === "enable" ? "正在验证模型…" : "验证模型并启用"}</button>
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}
@@ -150,7 +156,10 @@ export function ModelConfigPanel({ health, onEnabled, onClose, closeLabel = "返
         <p>返回开局设置，填写指导后即可开始。</p>
         <div className="row"><button className="primary" onClick={onClose}>去开局</button><button onClick={invalidate}>更换配置</button></div>
       </div>}
-      <p className="muted small">启用后将地址、密钥、模型和思考设置保存到当前浏览器，刷新自动恢复有效连接；会话过期后保留填写内容。清除页面配置也会删除本地保存。</p>
+      <ModelRememberControl checked={rememberKey} disabled={busy !== null} warning={storageWarning} onChange={checked => {
+        setRememberKey(checked);
+        setStorageWarning(rememberLocalModel(checked).warning ?? null);
+      }} />
       {(health.llm || saved) && <button className="ghost" disabled={busy !== null} onClick={() => void clear()}>{busy === "clear" ? "正在清除…" : "清除本地保存与页面配置"}</button>}
     </section>
   );

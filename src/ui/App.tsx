@@ -380,7 +380,7 @@ export function App() {
                       health={health}
                       closeLabel="收起设置"
                       onClose={() => j.setDrawer(false)}
-                      onEnabled={j.enabled}
+                      onEnabled={(value, keepOpen) => { j.enabled(value); if (keepOpen) j.setDrawer(true); }}
                     />
                   </details>
                   {!ended && <>

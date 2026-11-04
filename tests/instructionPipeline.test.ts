@@ -86,8 +86,8 @@ describe("browser-local model settings",()=>{
   test("restore, overwrite and clear without leaking credentials into run data",()=>{
     const data=new Map<string,string>();vi.stubGlobal("localStorage",{getItem:(k:string)=>data.get(k)??null,setItem:(k:string,v:string)=>data.set(k,v),removeItem:(k:string)=>data.delete(k)});
     const saved={baseUrl:"https://example.invalid",apiKey:"fixture-key",model:"fixture",reasoningEffort:"none" as const,token:"fixture-token"};
-    saveLocalModel(saved);expect(loadLocalModel()).toEqual(saved);
-    saveLocalModel({...saved,model:"another"});expect(loadLocalModel()!.model).toBe("another");
+    saveLocalModel(saved,true);expect(loadLocalModel()).toEqual({...saved,rememberKey:true});
+    saveLocalModel({...saved,model:"another"},true);expect(loadLocalModel()!.model).toBe("another");
     clearLocalModel();expect(loadLocalModel()).toBeNull();
   });
 });

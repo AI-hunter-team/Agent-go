@@ -19,13 +19,16 @@ logs/
 tmp/
 temp/
 
-# This repository currently tracks core text files only
+# Generated media stays local; reviewed documentation screenshots are explicit exceptions.
 *.png
 *.jpg
 *.jpeg
 *.webp
 *.mp4
 *.zip
+!docs/assets/*.webp
+!docs/assets/*.png
+!docs/assets/*.jpg
 
 # OS/editor local state
 .DS_Store

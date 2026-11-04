@@ -33,7 +33,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: '24'
+          node-version-file: '.node-version'
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -43,8 +43,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Check documentation links
+        run: npm run docs:check
+
       - name: Test
-        run: npm test -- --maxWorkers=2 --testTimeout=15000
+        run: npm test
 
       - name: Build frontend
         run: npm run build

@@ -9,12 +9,15 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 5173,
+      watch: { ignored: ["**/tmp/**", "**/temp/**", "**/logs/**", "**/build/**"] },
       proxy: { "/api": `http://127.0.0.1:${apiPort}` },
     },
     build: { rollupOptions: { input: { main: fileURLToPath(new URL("./index.html", import.meta.url)), showroom: fileURLToPath(new URL("./showroom.html", import.meta.url)), validation: fileURLToPath(new URL("./validation.html", import.meta.url)) } } },
     test: {
       include: ["tests/**/*.test.ts"],
       environment: "node",
+      maxWorkers: 2,
+      testTimeout: 15000,
     },
   };
 });

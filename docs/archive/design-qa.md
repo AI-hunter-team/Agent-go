@@ -1,5 +1,7 @@
 # HOME-MATCH-001 Design QA
 
+> 归档说明：保留原任务与日期的历史证据；当前状态以文档导航、中央记录和对应验证报告为准。
+
 - Source visual truth: `artifacts/home-match/reference.png`，1672×941。
 - Implementation: `artifacts/home-match/desktop.png`，生产预览5201；首页、标准画质、默认大肥鱼。CSS视口1672×941，实际截图1671×941；只校正一像素宽度后进行同尺寸比较。
 - Combined full-view evidence: `artifacts/home-match/comparison.png`，左参考、右实现。

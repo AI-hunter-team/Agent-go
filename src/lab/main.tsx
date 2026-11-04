@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Api } from "../agent/remoteAgent";
-import { loadLocalModel, clearLocalModel } from "../agent/localModel";
+import { getLocalModel, rememberLocalModel } from "../agent/localModel";
+import { ModelRememberControl } from "../ui/ModelRememberControl";
 import { drawStation, MAP_PX } from "../ui/render";
 import { ITEM_DEFS } from "../sim/content/items";
 import { LabController, type LabMode, type LabRun } from "./controller";
@@ -20,7 +21,9 @@ const groups = [...new Set(LAB_SCENARIOS.map(s => s.group))];
 const itemLabel = (kind: keyof typeof ITEM_DEFS) => ITEM_DEFS[kind].label;
 
 function Connection({ onChange, close }: { onChange: (value: { llm: boolean; model: string | null }) => void; close: () => void }) {
-  const [saved] = useState(loadLocalModel);
+  const [saved] = useState(getLocalModel);
+  const [rememberKey, setRememberKey] = useState(saved?.rememberKey ?? false);
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [base, setBase] = useState(saved?.baseUrl ?? "https://api.deepseek.com"), [key, setKey] = useState(saved?.apiKey ?? ""), [model, setModel] = useState(saved?.model ?? "deepseek-flash");
   const [effort, setEffort] = useState<"none" | "low" | "high" | "max">(saved?.reasoningEffort ?? "none");
   const [verified, setVerified] = useState<{ token: string; models: string[] } | null>(null);
@@ -39,16 +42,26 @@ function Connection({ onChange, close }: { onChange: (value: { llm: boolean; mod
   const enable = async () => {
     if (!verified) return;
     setBusy(true); setError("");
-    try { onChange(await Api.enableModel(verified.token, model, effort)); token.current = null; close(); }
+    try {
+      const result = await Api.enableModel(verified.token, model, effort, rememberKey);
+      onChange({ llm: result.llm, model: result.model }); token.current = null;
+      setStorageWarning(result.storageWarning ?? null);
+      if (!result.storageWarning) close();
+    }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   return <section className="connection" aria-label="模型连接"><div className="row"><strong>连接测试模型</strong><button disabled={busy} onClick={close}>收起</button></div>
     {!verified ? <><label>基础地址<input type="url" value={base} onChange={e => setBase(e.target.value)} /></label><label>接口密钥<input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} /></label><button disabled={busy || !key || !base} onClick={() => void verify()}>验证连接并获取模型</button></> : <>
       <label>模型<input value={model} list="model-list" onChange={e => setModel(e.target.value)} /><datalist id="model-list">{verified.models.map(m => <option key={m} value={m} />)}</datalist></label>
       <label>思考强度<select value={effort} onChange={e => setEffort(e.target.value as typeof effort)}><option value="none">关闭</option><option value="low">低</option><option value="high">高</option><option value="max">最高</option></select></label>
-      <button disabled={busy || !model.trim()} onClick={() => void enable()}>验证模型、用于测试并保存本地</button></>}
-    <p className="muted">启用后自动保存到当前浏览器，包括密钥；刷新会恢复有效连接。启用验证会消耗少量额度，刷新不会自动调用模型。</p>
-    <button disabled={busy} onClick={() => { clearLocalModel(); setKey(""); void Api.clearModel().then(onChange).catch(e => setError(e.message)); }}>清除本地保存与当前连接</button>{error && <p role="alert" className="error">{error}</p>}
+      <button disabled={busy || !model.trim()} onClick={() => void enable()}>验证模型并用于测试</button></>}
+    <ModelRememberControl checked={rememberKey} disabled={busy} warning={storageWarning} onChange={checked => {
+      setRememberKey(checked); setStorageWarning(rememberLocalModel(checked).warning ?? null);
+    }} />
+    <p className="muted">启用验证会消耗少量额度，刷新不会自动调用模型。</p>
+    <button disabled={busy} onClick={() => { setKey(""); setRememberKey(false); void Api.clearModel().then(result => {
+      setStorageWarning(result.storageWarning ?? null); onChange({ llm: result.llm, model: result.model });
+    }).catch(e => setError(e.message)); }}>清除本地保存与当前连接</button>{error && <p role="alert" className="error">{error}</p>}
   </section>;
 }
 
