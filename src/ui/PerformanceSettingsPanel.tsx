@@ -1,14 +1,15 @@
 import type { Dispatch, SetStateAction } from "react";
-import { DEFAULT_PERFORMANCE_SETTINGS, ECONOMY_SETTINGS, type PerformanceSettings } from "./performanceSettings";
+import { DEFAULT_PERFORMANCE_SETTINGS, ECONOMY_SETTINGS, MOBILE_PERFORMANCE_SETTINGS, type PerformanceSettings } from "./performanceSettings";
 
 /** 提供即时生效的显示选项与节能预设，所有选项只影响观战展示。 */
-export function PerformanceSettingsPanel({ settings, onChange, reducedMotion }: {
+export function PerformanceSettingsPanel({ settings, onChange, reducedMotion, mobile = false }: {
   settings: PerformanceSettings;
   onChange: Dispatch<SetStateAction<PerformanceSettings>>;
   reducedMotion: boolean;
+  mobile?: boolean;
 }) {
   return <>
-    <div className="row"><button onClick={() => onChange({ ...ECONOMY_SETTINGS })}>使用节能预设</button><button className="ghost" onClick={() => onChange({ ...DEFAULT_PERFORMANCE_SETTINGS })}>恢复默认</button></div>
+    <div className="row"><button onClick={() => onChange({ ...ECONOMY_SETTINGS })}>使用节能预设</button><button className="ghost" onClick={() => onChange({ ...(mobile ? MOBILE_PERFORMANCE_SETTINGS : DEFAULT_PERFORMANCE_SETTINGS) })}>恢复默认</button></div>
     <label className="field"><span>画面质量</span><select value={settings.quality} onChange={(event) => onChange((value) => ({ ...value, quality: event.target.value as PerformanceSettings["quality"] }))}><option value="standard">标准 · 动态阴影</option><option value="low">低画质 · 关闭阴影、降低分辨率</option></select></label>
     <label className="field"><span>目标帧率</span><select value={settings.targetFps} onChange={(event) => onChange((value) => ({ ...value, targetFps: Number(event.target.value) as PerformanceSettings["targetFps"] }))}><option value="60">60 FPS</option><option value="30">30 FPS · 节能</option><option value="15">15 FPS · 最低开销</option></select></label>
     <label className="check"><input type="checkbox" checked={settings.simpleCrowd} onChange={(event) => onChange((value) => ({ ...value, simpleCrowd: event.target.checked }))} />简化乘客外观</label>

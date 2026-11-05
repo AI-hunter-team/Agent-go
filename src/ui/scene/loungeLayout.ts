@@ -3,7 +3,8 @@ export const LOUNGE={
  actor:[-5.9,0,3.12] as [number,number,number],seat:[-5.35,0,.75] as [number,number,number],table:[-6.75,0,.68] as [number,number,number],
  brand:[-9.59,1.75,.425] as [number,number,number],brandWidth:3.65,door:[-3.03,0,2.1] as [number,number,number],
  eye:[-8,1.8,6] as [number,number,number],target:[-6.2,1,1] as [number,number,number],
- narrowEye:[-2.65,2.7,7.25] as [number,number,number],narrowTarget:[-6.81,.4,2.39] as [number,number,number],
+ // Keep the portrait camera inside the east wall (x=-2.91), including its path from the desktop shot.
+ narrowEye:[-5.3,2.5,8] as [number,number,number],narrowTarget:[-5.9,.55,3.12] as [number,number,number],
  route:[[-5.9,0,3.12],[-4.6,0,2.1],[-2,0,2.1],[0,0,3.5],[0,0,0]] as [number,number,number][],
 } as const;
 
